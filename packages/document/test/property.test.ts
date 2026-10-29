@@ -367,7 +367,7 @@ describe('primitive sequences (fast-check)', () => {
 
 describe('primitive sequences: regressions', () => {
   // Seed -1817638724 on comments.yml: the remove emptied `test`, then `jobs`, and took the comment above `test`.
-  it('lets a remove that empties jobs rewrite jobs, with the comment in it that no job owns', () => {
+  it('keeps the comment in jobs that no job owns when a remove empties jobs', () => {
     const doc = open(
       "name: comments\n\njobs:\n    # After a blank line: nobody's.\n  test:\n    runs-on: ubuntu-latest\n  # Dangling.\n",
     );
@@ -375,7 +375,7 @@ describe('primitive sequences: regressions', () => {
     const result = plan(doc, op);
     if (!result.ok) expect.unreachable(result.message);
     const next = result.documents[PATH]!;
-    expect(next.text).toBe('name: comments\n\njobs:\n  # Dangling.\n');
+    expect(next.text).toBe("name: comments\n\njobs:\n    # After a blank line: nobody's.\n  # Dangling.\n");
     expect(check(doc, op, result.value, next)).toBeUndefined();
   });
 });
