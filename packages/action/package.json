@@ -1,6 +1,6 @@
 {
   "name": "@simulci/action",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "The simulci GitHub Action: route tests with annotations, a job summary and JUnit, or the plan for a scenario.",
   "license": "MIT",

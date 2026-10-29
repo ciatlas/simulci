@@ -1,6 +1,6 @@
 {
   "name": "@simulci/engine",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "The simulci engine: scenario, run settings, triggers, mocks, planner and RunPlan.",
   "license": "MIT",
