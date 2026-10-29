@@ -7,10 +7,14 @@ import {
   filterFiles,
   isKeptFile,
   isProjectFile,
+  isReadFile,
+  isSnapshotFile,
   isTestFile,
   mayHoldProjectFiles,
   normalizePath,
+  snapshotFiles,
 } from '../src/input/filter';
+import { snapshotPath } from '../src/lib/snapshot-path';
 import { LIMITS, overLimit } from '../src/input/limits';
 
 /** Every file under a directory, as a browser walk would hand them over: relative path → text. */
@@ -44,6 +48,10 @@ const SYNTHETIC = [
   '.github/simulci/tests/__snapshots__/ci.test.snap.json',
   '.github/simulci/tests/__snapshots__/odd.test.yml',
   '.github/simulci/tests/nested/__snapshots__/deep.test.yml',
+  '.github/simulci/tests/nested/deep/__snapshots__/release.test.snap.json',
+  '.github/simulci/tests/__snapshots__/__snapshots__/inner.test.snap.json',
+  '.github/simulci/tests/__snapshots__/notes.json',
+  '.github/simulci/__snapshots__/outside.test.snap.json',
   '.github/simulci/other.test.yml',
   'tests/ci.test.yml',
   'action.yml',
@@ -123,9 +131,27 @@ describe('the browser file filter', () => {
     expect(mayHoldProjectFiles('node_modules')).toBe(false);
     expect(mayHoldProjectFiles('.github/simulci')).toBe(true);
     expect(mayHoldProjectFiles('.github/simulci/tests/nested/deep')).toBe(true);
-    expect(mayHoldProjectFiles('.github/simulci/tests/__snapshots__')).toBe(false);
+    expect(mayHoldProjectFiles('.github/simulci/tests/__snapshots__')).toBe(true);
+    expect(mayHoldProjectFiles('.github/simulci/tests/nested/__snapshots__')).toBe(true);
+    expect(mayHoldProjectFiles('.github/simulci/tests/__snapshots__/deep')).toBe(false);
+    expect(mayHoldProjectFiles('.github/simulci/tests/__snapshots__/__snapshots__')).toBe(false);
+    expect(mayHoldProjectFiles('.github/simulci/__snapshots__')).toBe(false);
     expect(mayHoldProjectFiles('.github/simulci/other')).toBe(false);
     expect(mayHoldProjectFiles('.github/workflowsx')).toBe(false);
+  });
+
+  it('reads the snapshots simulci test keeps beside the tests, and no other', () => {
+    const snapshots = Object.keys(snapshotFiles(everyFile(tmp))).sort();
+    expect(snapshots).toEqual([
+      '.github/simulci/tests/__snapshots__/ci.test.snap.json',
+      '.github/simulci/tests/nested/deep/__snapshots__/release.test.snap.json',
+    ]);
+    // Each is where simulci test reads the snapshot of a test the filter keeps.
+    const tests = testsOf(filterFiles(everyFile(tmp)));
+    expect(snapshots.every((p) => tests.some((t) => snapshotPath(t) === p))).toBe(true);
+    // Read, never kept: they are not the project's or the tests'.
+    expect(snapshots.every((p) => isReadFile(p) && !isKeptFile(p))).toBe(true);
+    expect(isSnapshotFile('./.github\\simulci\\tests\\__snapshots__\\ci.test.snap.json')).toBe(true);
   });
 
   it('refuses sources over the limits with the reason', () => {

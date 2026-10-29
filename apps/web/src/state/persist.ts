@@ -8,7 +8,7 @@ import type { BaseDiff, Source } from './store';
  * with no handle, so they are stored as buffers too. Buffers keep the meta they were read with: their text no longer
  * shows a BOM or the bytes that were not UTF-8, and unlike a folder there is no disk to read them from again.
  * Pasted buffers keep the texts their edits were made to as well, so edits stay unsaved across a reload and
- * replacing them still asks (§ 5.7).
+ * replacing them still asks (§ 5.7). A chosen folder's copy keeps its tests' snapshots too (`files.readonly`).
  */
 
 export type StoredSource =
@@ -28,6 +28,8 @@ export type StoredSource =
       name: string;
       buffers: { path: string; text: string }[];
       meta?: Record<string, FileMeta>;
+      /** The route tests' snapshots, read-only beside the buffers. */
+      readonly?: Record<string, string>;
     };
 
 export const DB_NAME = 'simulci-web';
@@ -41,6 +43,7 @@ export interface SourceStore {
     files: Record<string, string>,
     meta?: Record<string, FileMeta>,
     base?: Record<string, string>,
+    readonly?: Record<string, string>,
   ): Promise<void>;
   clear(): Promise<void>;
 }
@@ -55,8 +58,8 @@ export function sourceStore(kv: KeyValueStore = openKeyValue(DB_NAME, STORE_NAME
         return undefined;
       }
     },
-    save: async (source, files, meta, base) => {
-      const stored = toStored(source, files, meta, base);
+    save: async (source, files, meta, base, readonly) => {
+      const stored = toStored(source, files, meta, base, readonly);
       try {
         if (stored) await kv.set(CURRENT_KEY, stored);
         else await kv.delete(CURRENT_KEY);
@@ -79,6 +82,7 @@ export function toStored(
   files: Record<string, string>,
   meta?: Record<string, FileMeta>,
   base?: Record<string, string>,
+  readonly?: Record<string, string>,
 ): StoredSource | undefined {
   if (source.kind === 'sample') return { kind: 'sample', name: source.name };
   if (source.kind === 'paste') {
@@ -95,7 +99,7 @@ export function toStored(
     return { kind: 'folder', name: source.name, handle: source.handle };
   if (source.kind === 'folder') {
     const buffers = Object.entries(files).map(([path, text]) => ({ path, text }));
-    return { kind: 'copy', name: source.name, buffers, ...(meta && { meta }) };
+    return { kind: 'copy', name: source.name, buffers, ...(meta && { meta }), ...(readonly && { readonly }) };
   }
   return undefined;
 }
@@ -143,10 +147,16 @@ function withMeta(stored: StoredSource): StoredSource {
   if (stored.kind !== 'paste' && stored.kind !== 'copy') return stored;
   const meta: Record<string, FileMeta> = {};
   for (const [path, m] of Object.entries(stored.meta ?? {})) if (isFileMeta(m)) meta[path] = m;
-  if (stored.kind === 'copy') return { ...stored, meta };
+  if (stored.kind === 'copy') {
+    const { readonly, ...rest } = stored;
+    return isTexts(readonly) ? { ...rest, meta, readonly } : { ...rest, meta };
+  }
   const { base, ...rest } = stored;
   return isBaseDiff(base) ? { ...rest, meta, base } : { ...rest, meta };
 }
+
+const isTexts = (value: unknown): value is Record<string, string> =>
+  typeof value === 'object' && value !== null && Object.values(value).every((v) => typeof v === 'string');
 
 const isBaseDiff = (value: unknown): value is BaseDiff =>
   typeof value === 'object' &&

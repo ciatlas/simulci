@@ -182,7 +182,7 @@ describe('the web app as it builds', () => {
   }, 60_000);
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('splits the page, the YAML pane, the edit runtime, the dialogs, the catalog and the two workers, and no chunk they share', () => {
+  it('splits the page, the YAML pane, the edit runtime, the dialogs, the catalog, the Tests tab and the two workers, and no chunk they share', () => {
     // A module two lazy chunks share that the page does not hold goes to a chunk of its own, named after it; so does
     // the page's when rolldown cannot leave it there: a name outside this list is that.
     expect(chunks.map((f) => f.replace(/-[\w-]{8}\.js$/, '')).sort()).toEqual([
@@ -193,6 +193,7 @@ describe('the web app as it builds', () => {
       'engine.worker',
       'index',
       'layout.worker',
+      'tests',
     ]);
     for (const chunk of chunks) expect(chunkProblems(chunk, sourcesOf(chunk))).toEqual([]);
   });
@@ -264,6 +265,20 @@ describe('the web app as it builds', () => {
     const code = readFileSync(join(dir, 'assets', page), 'utf8');
     expect(code).toContain(`import(\`./${dialogs}\`)`);
     expect(code).not.toMatch(new RegExp(`from\\s*["'\`]\\./${dialogs.replace('.', '\\.')}`));
+  });
+  it('puts the Tests tab in a chunk of its own, reaching no page module but leaves, which the page loads only on demand', () => {
+    const tests = chunks.find((f) => f.startsWith('tests-'))!;
+    const page = chunks.find((f) => f.startsWith('index-'))!;
+    // The page hands the tab its state and actions, so the chunk shares no store, provider or panel kit with the page.
+    const app = sourcesOf(tests).filter((s) => s.includes('/src/'));
+    expect(app.map((s) => s.replace(/.*\/src\//, 'src/')).sort()).toEqual([
+      'src/panels/tests/tests.tsx',
+      'src/panels/tests/words.ts',
+    ]);
+    expect(sourcesOf(page).some((s) => s.endsWith('src/panels/tests/tests.tsx'))).toBe(false);
+    const code = readFileSync(join(dir, 'assets', page), 'utf8');
+    expect(code).toContain(`import(\`./${tests}\`)`);
+    expect(code).not.toMatch(new RegExp(`from\\s*["'\`]\\./${tests.replace('.', '\\.')}`));
   });
 });
 

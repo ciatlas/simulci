@@ -27,16 +27,24 @@ import type {
   Outline,
   RefsRequest,
   SimulateRequest,
+  TestRequest,
 } from './protocol';
 import { refsOf } from './refs';
-import { withTests } from './tests';
+import { runRouteTests, withTests } from './tests';
 
 /**
  * The worker's state: one loaded project, numbered so a reply can be told from a stale one, and what its files' texts
  * gave, for the next load (worker/cache.ts).
  */
 export interface WorkerState {
-  project?: { version: number; loaded: LoadedProject; outline: Outline };
+  /** With the route tests and the snapshots of its load, which the `test` request runs. */
+  project?: {
+    version: number;
+    loaded: LoadedProject;
+    outline: Outline;
+    tests: Record<string, string>;
+    readonly: Record<string, string>;
+  };
   nextVersion: number;
   cache: FileCache;
 }
@@ -62,6 +70,7 @@ export function handle(
       };
     }
     if (request.type === 'refs') return { state, response: refs(state.project, request) };
+    if (request.type === 'test') return { state, response: test(state.project, request) };
     const invalid = validate(request);
     if (invalid) return { state, response: invalid };
     return {
@@ -86,7 +95,17 @@ function load(state: WorkerState, request: LoadRequest): { state: WorkerState; r
     const outline = withTests(outlineOf(loaded, cache), request.tests);
     const version = state.nextVersion;
     return {
-      state: { project: { version, loaded, outline }, nextVersion: version + 1, cache },
+      state: {
+        project: {
+          version,
+          loaded,
+          outline,
+          tests: request.tests ?? {},
+          readonly: request.readonly ?? {},
+        },
+        nextVersion: version + 1,
+        cache,
+      },
       response: {
         id: request.id,
         type: 'loaded',
@@ -162,6 +181,11 @@ function plan(project: NonNullable<WorkerState['project']>, request: SimulateReq
     text,
     ms: { simulate: simulated - started, derive: performance.now() - simulated },
   };
+}
+
+function test(project: NonNullable<WorkerState['project']>, request: TestRequest): EngineResponse {
+  const started = performance.now();
+  return { ...runRouteTests(project, request, project.version), ms: performance.now() - started };
 }
 
 function refs(project: NonNullable<WorkerState['project']>, request: RefsRequest): EngineResponse {

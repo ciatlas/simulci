@@ -40,6 +40,7 @@ function inlineClient(): EngineClient & { sent: EngineRequest[] } {
     simulate: (body) => ask({ ...body, type: 'simulate' }),
     case: (body) => ask({ ...body, type: 'case' }),
     refs: (body) => ask({ ...body, type: 'refs' }),
+    test: (body) => ask({ ...body, type: 'test' }),
     onRestart: () => undefined,
     onFailure: () => undefined,
     restarts: () => 0,

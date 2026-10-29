@@ -13,7 +13,7 @@ import { canSave } from './saver';
 
 /**
  * The page's keys outside the canvas (synthesis § 11): `t` switches between the graph and the text, `f` fits, `.`
- * centres the selection, `0` shows 100 %; `r` jumps to the Reasons tab and `1`–`4` open a tab of the right panel;
+ * centres the selection, `0` shows 100 %; `r` jumps to the Reasons tab and `1`–`5` open a tab of the right panel;
  * `[`, `]` and `\` close and open the scenario column, the right panel and the YAML pane; `c` opens Copy as test
  * case while there is a plan and a focused workflow; `e` turns edit mode on and off, and in edit mode `i` puts the
  * focus in the selected job's or step's Run if, `a` adds a job after the selected one (or to the workflow), `n` opens
@@ -73,6 +73,7 @@ const COMMANDS = new Map<string, PageCommand>([
   ['2', 'panel:unknowns'],
   ['3', 'panel:node'],
   ['4', 'panel:problems'],
+  ['5', 'panel:tests'],
   ['[', 'pane:left'],
   [']', 'pane:right'],
   ['\\', 'pane:yaml'],

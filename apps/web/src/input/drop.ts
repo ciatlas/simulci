@@ -1,4 +1,4 @@
-import { isKeptFile, mayHoldProjectFiles } from './filter';
+import { isReadFile, mayHoldProjectFiles } from './filter';
 import { LIMITS, readWithin, type Walked } from './limits';
 
 /**
@@ -116,7 +116,7 @@ async function walkHandle(
     const path = prefix ? `${prefix}/${entryName}` : entryName;
     if (h.kind === 'directory') {
       if (mayHoldProjectFiles(path)) await walkHandle(h, path, depth + 1, walked);
-    } else if (isKeptFile(path)) await readWithin(await h.getFile(), path, walked);
+    } else if (isReadFile(path)) await readWithin(await h.getFile(), path, walked);
   }
 }
 
@@ -152,6 +152,6 @@ async function walkEntry(
     if (entry.isDirectory) {
       if (mayHoldProjectFiles(path))
         await walkEntry(entry as FileSystemDirectoryEntry, path, depth + 1, walked);
-    } else if (isKeptFile(path)) await readWithin(await fileOf(entry as FileSystemFileEntry), path, walked);
+    } else if (isReadFile(path)) await readWithin(await fileOf(entry as FileSystemFileEntry), path, walked);
   }
 }
