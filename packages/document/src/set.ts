@@ -707,7 +707,10 @@ function blockAddKey(
   );
   if (!lines)
     return refusals.unsupported(doc.path, path, `${refusals.describe(path)} cannot hold this value`);
-  return { edits: [placeKey(doc, map, key, lines, column, order)], label: `Add ${refusals.describe(path)}` };
+  return {
+    edits: [placeKey(doc, map, key, lines, column, order)],
+    label: `Added ${refusals.describe(path)}`,
+  };
 }
 
 function flowAddKey(
@@ -729,7 +732,7 @@ function flowAddKey(
     );
   return {
     edits: [flowInsert(doc, map, map.items.length, text)],
-    label: `Add ${refusals.describe([...mapPath, key])}`,
+    label: `Added ${refusals.describe([...mapPath, key])}`,
   };
 }
 

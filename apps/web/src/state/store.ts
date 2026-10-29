@@ -67,7 +67,7 @@ export interface PlanState {
 export interface Change {
   seq: number;
   cause: 'pin' | 'edit';
-  /** What the author did, as the sentence opens: `pinned`, `Edited ci.yml`, `Undo Typing in ci.yml`, an op's label. */
+  /** What the author did, as the sentence opens: `pinned`, `Edited ci.yml`, `Undo Typed in ci.yml`, an op's label. */
   label: string;
   /**
    * The plan the change was made over, until the answering plan settled it: then only what it changed is kept. While
@@ -1008,6 +1008,9 @@ export function createSessionStore(initial: SessionState = initialSessionState()
 
 type StepOutcome = history.Step | history.Refusal | undefined;
 
+/** How an undo or a redo the hash guard stopped starts its notice. */
+const STOPPED = { undo: 'Undo', redo: 'Redo' } as const;
+
 /**
  * What a step of the history does to the store: its texts and its history in one patch, the source's buffers with
  * them. A refused step changes nothing, but an undo or a redo the hash guard stopped clears the history and says so:
@@ -1017,14 +1020,14 @@ function committed(
   s: SessionState,
   outcome: StepOutcome,
   said: Said,
-  stopped?: { verb: string; id: number },
+  stopped?: { verb: 'undo' | 'redo'; id: number },
   after?: history.SelectionRef,
 ): { patch: Partial<SessionState>; outcome: EditOutcome } {
   if (outcome === undefined) return { patch: s, outcome: { ok: false } };
   if ('refused' in outcome) {
     if (outcome.refused !== 'desync' || !stopped)
       return { patch: s, outcome: { ok: false, refusal: outcome } };
-    const text = `${stopped.verb} stopped: ${fileLabel(outcome.path)} changed outside the history`;
+    const text = `${STOPPED[stopped.verb]} stopped: ${fileLabel(outcome.path)} changed outside the history`;
     return {
       patch: { edit: clearedHistory(s.edit), notices: [...s.notices, { id: stopped.id, text }] },
       outcome: { ok: false, refusal: outcome },

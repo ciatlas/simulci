@@ -129,7 +129,7 @@ test('typing if: false turns the deploy card skipped, and undoing everything giv
   await expect(jobNode(page, 'deploy')).toHaveAttribute('aria-label', /^skipped deploy/);
   await expect(page.getByRole('button', { name: /^Undo/ })).toHaveAttribute(
     'aria-label',
-    'Undo Typing in ci.yml',
+    'Undo Typed in ci.yml',
   );
 });
 

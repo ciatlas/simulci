@@ -32,7 +32,7 @@ export function removeDraft(
   const orphan = orphanedIn(doc, itemSpan(doc.tree, hop.parent, hop.index), path);
   if (orphan) return orphan;
   const expect = (js: unknown) => entryEquivalents(doc, path).reduce((j, p) => deleteIn(j, p, emptied), js);
-  const label = `Remove ${refusals.describe(path)}`;
+  const label = `Removed ${refusals.describe(path)}`;
   if (hop.parent.items.length === 1) {
     const emptiedDraft = emptyCollection(doc, path, emptied, options);
     return isRefusal(emptiedDraft) ? emptiedDraft : { ...emptiedDraft, expect, label };

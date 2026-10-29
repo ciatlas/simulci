@@ -82,7 +82,7 @@ describe('edits through the store', () => {
     expect(store.getState().edit).toMatchObject({
       past: [],
       lastOrigin: 'pane',
-      group: { label: 'Typing in ci.yml' },
+      group: { label: 'Typed in ci.yml' },
     });
     a.closeGroup();
     expect(store.getState().edit.past).toHaveLength(1);
@@ -108,7 +108,7 @@ describe('edits through the store', () => {
     expect(store.getState().files.byPath[CI]).toBe('#on: push\n!');
     expect(store.getState().edit).toMatchObject({ past: [], future: [] });
     expect(store.getState().notices.map((n) => n.text)).toEqual([
-      'undo stopped: ci.yml changed outside the history',
+      'Undo stopped: ci.yml changed outside the history',
     ]);
   });
 

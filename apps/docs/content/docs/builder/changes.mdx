@@ -7,7 +7,7 @@ description: What each edit changed in the plan, one undo history for every view
 
 After each edit the status line says what it did to the plan, once the new plan is in:
 
-- `Add job lint: new job lint runs`
+- `Added job lint: new job lint runs`
 - `Set deploy's if: deploy is now skipped`
 - `Set push's branches: CI is no longer triggered`
 
@@ -22,7 +22,7 @@ One history holds every edit: typing in the pane, fields, canvas gestures, trigg
 taking the disk version and added test cases. Undo and redo work on files, so an edit that touched two files comes back
 whole.
 
-- **The top bar's Undo and Redo** are named by the entry they would take back: "Undo Add job lint". Mod+Z, Mod+Shift+Z
+- **The top bar's Undo and Redo** are named by the entry they would take back: "Undo Added job lint". Mod+Z, Mod+Shift+Z
   and Mod+Y do the same.
 - **Typing** is grouped: a pause, a jump of the cursor, a paste or a new line starts a new entry.
 - **A field's writes** during one visit are one entry.
@@ -32,7 +32,7 @@ whole.
   [saving](/docs/builder/saving#reloads-and-crashes)).
 
 If a file changed outside the history, undo stops instead of writing the wrong bytes, and the history starts over:
-`undo stopped: ci.yml changed outside the history`.
+`Undo stopped: ci.yml changed outside the history`.
 
 ## Changes and the patch
 

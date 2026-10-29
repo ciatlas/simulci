@@ -46,7 +46,7 @@ export function insertDraft(
   return {
     ...draft,
     expect: (js: unknown) => equivalents(doc, seqPath).reduce((j, p) => insertIn(j, p, index, value), js),
-    label: `Add to ${refusals.describe(seqPath)}`,
+    label: `Added to ${refusals.describe(seqPath)}`,
     select: [...seqPath, index],
   };
 }
@@ -165,7 +165,7 @@ export function moveDraft(
       'and its items cannot be moved',
     );
   const expect = (js: unknown) => equivalents(doc, seqPath).reduce((j, p) => moveIn(j, p, from, to), js);
-  const draft = { label: `Move ${refusals.describe([...seqPath, from])}`, expect, select: [...seqPath, to] };
+  const draft = { label: `Moved ${refusals.describe([...seqPath, from])}`, expect, select: [...seqPath, to] };
   if (from === to) return { ...draft, edits: [] };
   const order = anchorOrder(doc, seq, seqPath, from, to);
   if (order) return order;

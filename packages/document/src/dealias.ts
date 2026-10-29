@@ -37,7 +37,7 @@ export function dealiasDraft(doc: WorkflowDocument, path: YamlPath): Draft | Ref
   const edits = copyInto(doc, use);
   return isRefusal(edits)
     ? edits
-    : { edits, expect: (js) => js, label: `Copy \`&${use.name}\` into ${refusals.describe(path)}` };
+    : { edits, expect: (js) => js, label: `Copied \`&${use.name}\` into ${refusals.describe(path)}` };
 }
 
 /**
@@ -65,7 +65,7 @@ export function dealiasAnchorDraft(doc: WorkflowDocument, name: string, line?: n
     edits.push(...copy);
   }
   const n = def.aliases.length;
-  return { edits, expect: (js) => js, label: `Copy \`&${name}\` into its ${n} use${n === 1 ? '' : 's'}` };
+  return { edits, expect: (js) => js, label: `Copied \`&${name}\` into its ${n} use${n === 1 ? '' : 's'}` };
 }
 
 /** `key: &name value` → `key: value`; `key: &name` before a line break or a comment → `key:`. */

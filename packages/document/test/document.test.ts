@@ -220,7 +220,7 @@ describe('status', () => {
       reason: 'generated',
       line: 1,
       message: "ci.yml says 'DO NOT EDIT' on line 1: it is generated, and your edits would be overwritten.",
-      fixes: [{ kind: 'unlock', label: 'Edit it anyway' }],
+      fixes: [{ kind: 'unlock', label: 'Edit anyway' }],
     });
     expect(open(text, { generated: 'DO NOT EDIT', unlocked: true }).status).toEqual({ editable: true });
     const lock = refusalOf(

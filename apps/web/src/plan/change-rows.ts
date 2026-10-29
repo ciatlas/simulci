@@ -195,7 +195,7 @@ const NAMED_KINDS: ReadonlySet<RowKind> = new Set(['workflow', 'job', 'check']);
  * What the status line says of an edit (synthesis § 7.4): what the author did, then the workflows and jobs added,
  * removed or turned and the check names added, removed or turned, up to three, then how many more Details has. A
  * renamed check is the classic required-check footgun, so check names are named like jobs. "Changed push branches:
- * CI is no longer triggered", "Edited ci.yml: new job lint runs; 2 more in Details", "Undo Typing in ci.yml: no
+ * CI is no longer triggered", "Edited ci.yml: new job lint runs; 2 more in Details", "Undo Typed in ci.yml: no
  * verdict changed".
  */
 export function changeSentence(rows: readonly ChangeRow[], label: string): string {

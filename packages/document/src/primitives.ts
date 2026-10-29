@@ -112,7 +112,7 @@ export function renameKeyDraft(
         (j, p) => setIn(j, p, key),
         entryEquivalents(doc, path).reduce((j, p) => renameIn(j, p, key), js),
       ),
-    label: `Rename ${refusals.describe(path)} to ${key}`,
+    label: `Renamed ${refusals.describe(path)} to ${key}`,
     select: [...path.slice(0, -1), key],
   };
 }
@@ -163,7 +163,7 @@ export function replaceAtDraft(
     );
   const at = reach(doc, doc.pathAt(span.from), options);
   if (isRefusal(at)) return at;
-  return { edits: [{ from: span.from, to: span.to, insert: text }], label: 'Replace a reference' };
+  return { edits: [{ from: span.from, to: span.to, insert: text }], label: 'Replaced a reference' };
 }
 
 /** The whole file to one line ending, one splice per line break that changes; the value does not change. */
@@ -176,5 +176,10 @@ export function convertEolDraft(doc: WorkflowDocument, eol: Eol): Draft | Refusa
     if (eol === '\n' && crlf) edits.push({ from: at - 1, to: at, insert: '' });
     if (eol === '\r\n' && !crlf) edits.push({ from: at, to: at, insert: '\r' });
   }
-  return { edits, expect: (js) => js, label: `Convert line endings to ${eol === '\n' ? 'LF' : 'CRLF'}`, eol };
+  return {
+    edits,
+    expect: (js) => js,
+    label: `Converted line endings to ${eol === '\n' ? 'LF' : 'CRLF'}`,
+    eol,
+  };
 }

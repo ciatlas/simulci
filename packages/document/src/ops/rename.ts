@@ -41,7 +41,7 @@ export function renameJob(
 ): Draft | Refusal {
   const missing = jobMissing(doc, op.job);
   if (missing) return missing;
-  const label = `Rename job ${op.job} to ${op.to}`;
+  const label = `Renamed job ${op.job} to ${op.to}`;
   if (op.to === op.job) return { edits: [], label };
   const others = doc.jobs().flatMap((j) => (j.id === op.job ? [] : [j.id]));
   const bad = checkId(doc, 'job', op.to, others, (to) => ({ ...op, to }));
@@ -81,7 +81,7 @@ export function renameStepId(
   const step = ['jobs', op.job, 'steps', op.index];
   const steps = doc.jobs().find((j) => j.id === op.job)!.steps;
   const old = steps[op.index]!.id;
-  const label = `Rename the id of ${refusals.describe(step)} to ${op.to}`;
+  const label = `Renamed the id of ${refusals.describe(step)} to ${op.to}`;
   if (old === op.to) return { edits: [], label };
   const taken = steps.flatMap((s, i) => (i === op.index || s.id === undefined ? [] : [s.id]));
   const bad = checkId(doc, 'step', op.to, taken, (to) => ({ ...op, to }));

@@ -278,14 +278,14 @@ describe('primitive goldens', () => {
     const doc = open(fixture('events.yml'));
     expect(set(doc, ['jobs', 'build', 'if'], 'x', { order: JOB })).toMatchObject({
       select: { file: PATH, path: ['jobs', 'build', 'if'] },
-      label: "Add build's `if`",
+      label: "Added build's `if`",
     });
     expect(insert(doc, ['jobs', 'build', 'steps'], 0, { run: 'x' })).toMatchObject({
       select: { path: ['jobs', 'build', 'steps', 0] },
     });
     expect(move(doc, ['jobs', 'build', 'steps'], 0, 2)).toMatchObject({
       select: { path: ['jobs', 'build', 'steps', 2] },
-      label: "Move build's step 1",
+      label: "Moved build's step 1",
     });
   });
 });
