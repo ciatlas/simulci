@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { ScenarioInput } from '@simulci/engine';
 
 /**
- * The browser pass's Node helpers beside this file (node-case.ts, node-plan.ts), run with the engine's root entry, so
+ * The browser pass's Node helpers beside this file (node-case.ts, node-plan.ts, node-test.ts), run with the engine's root entry, so
  * what the page wrote is checked by the CLI's code and not by the page's worker.
  */
 
@@ -27,6 +27,17 @@ export interface NodeCase {
 
 /** A test file's text checked against TestFileSchema and run as `simulci test --ci` runs it, in Node. */
 export const nodeCase = (text: string): NodeCase => JSON.parse(runNode('node-case.ts', [], text)) as NodeCase;
+
+/** What e2e/node-test.ts prints for a checkout: its route tests as `simulci test --ci` reports them. */
+export interface NodeTests {
+  exitCode: number;
+  summary: NodeCase['summary'];
+  files: { path: string; status: string; failures: string[]; cases: NodeCase['cases'] }[];
+}
+
+/** A checkout's route tests run as `simulci test --ci` runs them, in Node. */
+export const nodeTests = (root: string): NodeTests =>
+  JSON.parse(runNode('node-test.ts', [root])) as NodeTests;
 
 /** The starter's plan for a scenario as `simulci plan` prints it, computed in Node (e2e/node-plan.ts). */
 export const nodePlan = (scenario: ScenarioInput): string =>

@@ -11,6 +11,8 @@
     "apps/web/e2e/node-plan.ts",
     // Run in Node by apps/web/e2e/case.spec.ts: the copied case checked against TestFileSchema and run as `simulci test`.
     "apps/web/e2e/node-case.ts",
+    // Run in Node by apps/web/e2e/tests.spec.ts: the fixture's route tests run as `simulci test --ci`.
+    "apps/web/e2e/node-test.ts",
     // The docs pages, which apps/docs/lib/source.ts loads by glob (fumadocs-mdx).
     "apps/docs/content/**/*.mdx",
   ],

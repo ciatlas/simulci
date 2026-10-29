@@ -9,6 +9,7 @@ import {
   type LoadResult,
   type SimulateResult,
   type RefsResult,
+  type TestResult,
   type WorkerLike,
 } from '../src/worker/client';
 import {
@@ -17,6 +18,7 @@ import {
   PROTOCOL,
   type ReadyResponse,
   SUPPORTED_RUN_PLAN,
+  type TestRequest,
 } from '../src/worker/protocol';
 
 /** A client whose answers the test hands out in order. */
@@ -30,6 +32,9 @@ function fakeClient() {
     resolve: (r: SimulateResult) => void;
   }[] = [];
   const cases: { body: Omit<CaseRequest, 'id' | 'type'>; resolve: (r: CaseResult) => void }[] = [];
+  const runs: { body: Omit<TestRequest, 'id' | 'type'>; resolve: (r: TestResult) => void }[] = [];
+  /** What each load sent as read-only files. */
+  const readonly: (Record<string, string> | undefined)[] = [];
   let readyResolve!: (r: ReadyResponse) => void;
   let readyReject!: (e: Error) => void;
   const restartListeners: ((n: number, project: number | undefined) => void)[] = [];
@@ -44,10 +49,12 @@ function fakeClient() {
         loads.push(resolve);
         loaded.push(body.files);
         tested.push(body.tests);
+        readonly.push(body.readonly);
       }),
     simulate: (body) => new Promise<SimulateResult>((resolve) => simulates.push({ body, resolve })),
     case: (body) => new Promise<CaseResult>((resolve) => cases.push({ body, resolve })),
     refs: () => new Promise<RefsResult>(() => undefined),
+    test: (body) => new Promise<TestResult>((resolve) => runs.push({ body, resolve })),
     onRestart: (l) => restartListeners.push(l),
     onFailure: (l) => failureListeners.push(l),
     restarts: () => 0,
@@ -58,7 +65,19 @@ function fakeClient() {
     readyReject(new Error(message));
     for (const l of failureListeners) l(message);
   };
-  return { client, loads, loaded, tested, simulates, cases, readyResolve, fail, restartListeners };
+  return {
+    client,
+    loads,
+    loaded,
+    tested,
+    readonly,
+    simulates,
+    cases,
+    runs,
+    readyResolve,
+    fail,
+    restartListeners,
+  };
 }
 
 /** A worker for the real client that answers only when the test says. */
@@ -809,6 +828,83 @@ describe('the session’s edit cadence and the hold', () => {
     store.getState().setEdit(false);
     await vi.advanceTimersByTimeAsync(100);
     expect(f.simulates.map((x) => x.body.planUntriggered)).toEqual([undefined, [CI], [RELEASE], undefined]);
+  });
+
+  it('runs the route tests after a plan of new files, once per project and setting, with the snapshots sent', async () => {
+    const store = createSessionStore();
+    const f = fakeClient();
+    createSession({ store, client: f.client, debounceMs: 100 });
+    const TEST = '.github/simulci/tests/ci.test.yml';
+    const SNAP = '.github/simulci/tests/__snapshots__/ci.test.snap.json';
+    store
+      .getState()
+      .setFiles(
+        { [CI]: 'on: push', [TEST]: 'workflow: ci.yml' },
+        { kind: 'sample', name: 'x' },
+        undefined,
+        undefined,
+        {
+          [SNAP]: '{}',
+        },
+      );
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.readonly[0]).toEqual({ [SNAP]: '{}' });
+    const tested: Outline = {
+      ...outline,
+      files: [...outline.files, { path: TEST, kind: 'test', errors: [] }],
+    };
+    f.loads[0]!({ id: 1, type: 'loaded', project: 1, outline: tested, ms: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    // The plan first: the tests wait for it.
+    expect(f.runs).toHaveLength(0);
+    f.simulates[0]!.resolve(plan(1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.runs.map((r) => r.body)).toEqual([{ project: 1, ci: true }]);
+    expect(store.getState().tests.status).toBe('running');
+    // Busy is the plan's: a test run under way does not count.
+    expect(store.getState().engine.busy).toBe(false);
+    const summary = { passed: 1, failed: 0, invalid: 0, skipped: 0 };
+    f.runs[0]!.resolve({ id: 2, type: 'tested', project: 1, files: [], summary, exitCode: 0, ms: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    const run = store.getState().tests.run!;
+    expect(store.getState().tests.status).toBe('done');
+    expect(run.summary).toEqual(summary);
+    expect(run.for).toMatchObject({ project: 1, files: 1, ci: true });
+    expect(run.for.digest).toMatch(/^[0-9a-f]{7}$/);
+    // Another scenario plans again, but the project is the same: the tests do not run again.
+    store.getState().patchScenario({ branch: 'dev' });
+    await vi.advanceTimersByTimeAsync(100);
+    f.simulates[1]!.resolve(plan(1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.runs).toHaveLength(1);
+    // "As CI" off runs them again, off CI.
+    store.getState().setTestsCi(false);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.runs.map((r) => r.body.ci)).toEqual([true, false]);
+  });
+
+  it('loads again when Reload brings other snapshots, and clears the tab for a project with no tests', async () => {
+    const store = createSessionStore();
+    const f = fakeClient();
+    createSession({ store, client: f.client, debounceMs: 100 });
+    const SNAP = '.github/simulci/tests/__snapshots__/ci.test.snap.json';
+    store.getState().setFiles({ [CI]: 'on: push' }, { kind: 'folder', name: 'repo', readAt: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    f.loads[0]!({ id: 1, type: 'loaded', project: 1, outline, ms: 1 });
+    await vi.advanceTimersByTimeAsync(0);
+    f.simulates[0]!.resolve(plan(1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.runs).toHaveLength(0);
+    expect(store.getState().tests).toEqual({ ci: true, status: 'idle' });
+    const { epoch } = store.getState().files;
+    store.getState().setReadonly(epoch, { [SNAP]: '{"schemaVersion":1,"cases":{}}' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.loads).toHaveLength(2);
+    expect(f.readonly[1]).toEqual({ [SNAP]: '{"schemaVersion":1,"cases":{}}' });
+    // The same snapshots again change nothing.
+    store.getState().setReadonly(epoch, { [SNAP]: '{"schemaVersion":1,"cases":{}}' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.loads).toHaveLength(2);
   });
 
   it('never sends a route test to the engine', async () => {

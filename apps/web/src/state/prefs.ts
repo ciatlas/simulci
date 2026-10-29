@@ -1,7 +1,13 @@
 /** The right panel's tabs. */
-export type PanelTab = 'reasons' | 'unknowns' | 'node' | 'problems';
+export type PanelTab = 'reasons' | 'unknowns' | 'node' | 'problems' | 'tests';
 
-const PANEL_TABS: ReadonlySet<PanelTab> = new Set<PanelTab>(['reasons', 'unknowns', 'node', 'problems']);
+const PANEL_TABS: ReadonlySet<PanelTab> = new Set<PanelTab>([
+  'reasons',
+  'unknowns',
+  'node',
+  'problems',
+  'tests',
+]);
 
 /** Layout preferences in localStorage: nothing that decides a result, nothing another viewer needs. */
 export interface Prefs {

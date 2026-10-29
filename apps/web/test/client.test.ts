@@ -296,6 +296,31 @@ describe('the engine client', () => {
     expect(workers).toHaveLength(4);
   });
 
+  it('runs the route tests beside a plan, never superseding it, and gives them and what waits behind them longer', async () => {
+    const client = createEngineClient({ spawn });
+    const w = workers[0]!;
+    w.ready();
+    await client.ready;
+    const tested = client.test({ project: 1, ci: true });
+    const planned = client.simulate({ project: 1, scenario: { event: 'push' }, assume: [], detail: 'steps' });
+    // Each has its own slot: both are posted, neither answered superseded.
+    expect(w.sent.map((m) => m.type)).toEqual(['test', 'simulate']);
+    // The simulate waits behind the test run in the worker: past its own watchdog, nothing restarts yet.
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(workers).toHaveLength(1);
+    const summary = { passed: 0, failed: 0, invalid: 0, skipped: 0 };
+    w.reply({ id: 1, type: 'tested', project: 1, files: [], summary, exitCode: 0, ms: 2900 });
+    w.reply(plan(2));
+    expect(await tested).toMatchObject({ type: 'tested' });
+    expect(await planned).toMatchObject({ type: 'plan' });
+    // A test run alone may take 30 s before the worker counts as stalled.
+    void client.test({ project: 1, ci: false });
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(workers).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(workers).toHaveLength(2);
+  });
+
   it('rejects ready on a protocol mismatch and when the worker never starts', async () => {
     const client = createEngineClient({ spawn });
     workers[0]!.ready({ protocol: 2 as never });
