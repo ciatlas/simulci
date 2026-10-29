@@ -10,7 +10,8 @@ import { fromStore } from './extensions';
  * What makes a file's state writable in edit mode (synthesis § 4.3): CodeMirror's editing keys without its history,
  * whose undo is the page's one history in the store; the file's indent; and the listener that hands each change the
  * author makes to the store. A change that came from the store (`fromStore`) is never handed back. The browser's own
- * undo (`beforeinput` historyUndo and historyRedo, from the Edit menu or a gesture) goes to the store too.
+ * undo (`beforeinput` historyUndo and historyRedo, from the Edit menu or a gesture) goes to the store too, and a key
+ * typed over a selection is applied here, not by the browser.
  */
 
 export interface EditHandlers {
@@ -39,6 +40,26 @@ export function aloneOf(tr: Transaction): Alone | undefined {
 }
 
 /**
+ * A key typed over a selection, made a transaction here instead of by the browser. Chrome keeps the look of the text it
+ * deletes for the text typed in its place, as a `style` attribute on the new line (a bold key's `font-weight`), which
+ * the CSP (`style-src 'self'`) refuses with a console error before CodeMirror rereads the line. A key typed at a cursor
+ * deletes nothing, and composition goes on through the browser, so both are left to it. The input handlers run as
+ * they would for the browser's change.
+ */
+function typedOverSelection(event: InputEvent, view: EditorView): boolean {
+  const text = event.data;
+  if (text === null || event.isComposing || view.composing || view.state.selection.main.empty) return false;
+  event.preventDefault();
+  const { from, to } = view.state.selection.main;
+  const insert = (): Transaction =>
+    view.state.update(view.state.replaceSelection(text), { userEvent: 'input.type', scrollIntoView: true });
+  if (!view.state.facet(EditorView.inputHandler).some((handler) => handler(view, from, to, text, insert))) {
+    view.dispatch(insert());
+  }
+  return true;
+}
+
+/**
  * The extensions of a writable file: editable, keyed, indented, and listened to. Its content is a tab stop by its
  * attribute, as a read-only file's is: the browser tabs into an editing host anyway, but axe counts the scroller as
  * reachable by the keyboard only through a `tabindex`.
@@ -61,7 +82,8 @@ export function writableExtensions(path: string, indent: number, on: EditHandler
         else on.undo();
         return true;
       },
-      beforeinput: (event) => {
+      beforeinput: (event, view) => {
+        if (event.inputType === 'insertText') return typedOverSelection(event, view);
         if (event.inputType !== 'historyUndo' && event.inputType !== 'historyRedo') return false;
         event.preventDefault();
         if (event.inputType === 'historyUndo') on.undo();
