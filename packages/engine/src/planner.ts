@@ -60,6 +60,7 @@ import type {
   StepPlan,
   Tri,
   Unknown,
+  UnknownId,
   UnknownKind,
   Value,
   WorkflowPlan,
@@ -486,7 +487,10 @@ class Planner {
     if (!said) this.diagnostics.push(d);
   }
 
-  /** Fail-fast: once a leg fails, the other legs are cancelled or finish first; `needs` reads the job as failed either way. */
+  /**
+   * Fail-fast: once a leg fails, the other legs are cancelled or finish first; `needs` reads the job as failed either way.
+   * Whether a step of such a leg finished before the cancel is the same race (lab 6), so its conclusion is that race too.
+   */
   private failFast(plan: JobPlan): void {
     if (!plan.matrix?.failFast.known || !plan.matrix.failFast.value) return;
     if (!plan.legs.some((l) => l.result.known && l.result.value === 'failure')) return;
@@ -495,6 +499,7 @@ class Planner {
       const id = `race:fail-fast:${leg.id}`;
       this.note([id]);
       leg.result = unknown([id], ['success', 'cancelled']);
+      raceSteps(leg.steps ?? [], id);
     }
   }
 
@@ -1296,6 +1301,19 @@ function orSkipped(result: Value<Result>, cond: Value<boolean>, at: 'first' | 'l
 }
 
 const outputUnknown = (sid: NodeId, name: string): Value<string> => unknown([`${sid}.outputs.${name}`]);
+
+/** A step that may succeed in a leg fail-fast may cancel: the cancel may come before it finishes (lab 6). */
+function raceSteps(steps: StepPlan[], race: UnknownId): void {
+  for (const step of steps) {
+    const c = step.conclusion;
+    const options = candidates(c);
+    if (!options || options.includes('success')) {
+      const ids = [race, ...(c.known ? [] : c.unknowns)];
+      step.conclusion = unknown(ids, options && [...options, 'cancelled']);
+    }
+    if (step.composite) raceSteps(step.composite.steps, race);
+  }
+}
 
 /** The link of a leg in a location: its job, with the leg's values (`?` for an unknown one) when it has a matrix. */
 function legLinkOf(job: JobDecl, leg: LegPlan): LocationLink {

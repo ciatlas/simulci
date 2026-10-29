@@ -298,8 +298,6 @@ function gradeProbes(t: Tally, where: string, job: LabJob, leg: LegPlan | undefi
 const GITHUB_STEP = /^(Set up job|Complete job|Post .+)$/;
 
 function gradeSteps(t: Tally, where: string, job: LabJob, leg: LegPlan | undefined) {
-  // Whether a step inside a leg that fail-fast cancelled finished first is timing (cases.md, case 6): not compared.
-  if (job.conclusion === 'cancelled') return;
   for (const observed of job.steps) {
     if (GITHUB_STEP.test(observed.name)) continue;
     const at = `${where} step ${observed.number} ${observed.name}`;
