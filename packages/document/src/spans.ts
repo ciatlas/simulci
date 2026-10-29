@@ -156,8 +156,8 @@ export function itemColumn(tree: Tree, parent: Collection): number {
 /**
  * What removing item `index` of a block collection deletes: its span, and one blank separator so that a collection
  * written with blank lines between its items keeps them. An item after the first takes the blank lines above it; the
- * first takes those between it and the second. At the end of a file with no final line break the line break before
- * the span goes too, so the file still ends without one.
+ * first takes those between it and the second; the only one takes those between it and its key. At the end of a file
+ * with no final line break the line break before the span goes too, so the file still ends without one.
  */
 export function removalSpan(tree: Tree, parent: Collection, index: number): { from: number; to: number } {
   const { lines, text } = tree;
@@ -170,6 +170,7 @@ export function removalSpan(tree: Tree, parent: Collection, index: number): { fr
     to = lines.start(
       blankBelow(lines, lines.lineAt(Math.max(to - 1, from)) + 1, itemSpan(tree, parent, 1).from),
     );
+  else from = lines.start(blankAbove(lines, lines.lineAt(from)));
   // After a kept block scalar the blank lines below go too, or they would join its value.
   if (index > 0 && endsInKeep(parent.items[index - 1]!) && index + 1 < parent.items.length)
     to = lines.start(
