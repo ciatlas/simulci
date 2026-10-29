@@ -20,6 +20,8 @@ import type { JobStatus } from './status';
 export interface NeedState {
   result: Value<Result>;
   outputs: Record<string, Value<string>>;
+  /** The legs that call a workflow the plan does not load: they may set outputs beyond the ones listed. */
+  open?: readonly string[];
 }
 
 export interface StepState {
@@ -183,8 +185,17 @@ function needsContext(needs: Record<string, NeedState>, path: string[]): Value<J
   if (!need) return known(field === undefined ? null : '');
   if (field?.toLowerCase() === 'result') return need.result;
   if (field?.toLowerCase() === 'outputs')
-    return name === undefined ? unknown([`needs.${id}.outputs`]) : (lookup(need.outputs, name) ?? known(''));
+    return name === undefined ? unknown([`needs.${id}.outputs`]) : needOutput(need, name);
   return known(null);
+}
+
+/** An output a call that is not loaded may have set is unknown, named by each such leg. */
+function needOutput(need: NeedState, name: string): Value<string> {
+  const open = need.open ?? [];
+  return (
+    lookup(need.outputs, name) ??
+    (open.length ? unknown(open.map((leg) => `${leg}.outputs.${name}`)) : known(''))
+  );
 }
 
 function stepsContext(steps: Record<string, StepState>, path: string[]): Value<Json> {

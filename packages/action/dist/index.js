@@ -35362,8 +35362,13 @@ function needsContext(needs, path) {
 	const need = lookup(needs, id);
 	if (!need) return known$1(field === void 0 ? null : "");
 	if (field?.toLowerCase() === "result") return need.result;
-	if (field?.toLowerCase() === "outputs") return name === void 0 ? unknown$1([`needs.${id}.outputs`]) : lookup(need.outputs, name) ?? known$1("");
+	if (field?.toLowerCase() === "outputs") return name === void 0 ? unknown$1([`needs.${id}.outputs`]) : needOutput(need, name);
 	return known$1(null);
+}
+/** An output a call that is not loaded may have set is unknown, named by each such leg. */
+function needOutput(need, name) {
+	const open = need.open ?? [];
+	return lookup(need.outputs, name) ?? (open.length ? unknown$1(open.map((leg) => `${leg}.outputs.${name}`)) : known$1(""));
 }
 function stepsContext(steps, path) {
 	const [id, field, name] = path;
@@ -44233,7 +44238,7 @@ function unitRef(id, units) {
 	}
 }
 function aboutOf(rest) {
-	if (rest === "outcome") return { field: "outcome" };
+	if (rest === "outcome" || rest === "call") return { field: "outcome" };
 	for (const field of ["outputs", "env"]) if (rest.startsWith(`${field}.`) && rest.length > field.length + 1) return {
 		field,
 		name: rest.slice(field.length + 1)
@@ -45354,6 +45359,8 @@ var Planner = class {
 	models = /* @__PURE__ */ new Map();
 	/** Every planned step and leg by id, with the location an assume entry is matched against. */
 	units = /* @__PURE__ */ new Map();
+	/** The legs that call a workflow the plan does not load (by object: a dynamic matrix renames its leg). */
+	openCalls = /* @__PURE__ */ new WeakSet();
 	index;
 	constructor(loaded, scenario, detail, maxDepth, mocks, shipped, untriggered) {
 		this.loaded = loaded;
@@ -45517,10 +45524,7 @@ var Planner = class {
 	/** The outputs a reusable workflow declares, read from its jobs. */
 	callOutputs(wf, plan, base) {
 		if (!wf.call) return {};
-		const jobs = Object.fromEntries(plan.jobs.map((j) => [j.jobId, {
-			result: j.result,
-			outputs: j.outputs
-		}]));
+		const jobs = Object.fromEntries(plan.jobs.map((j) => [j.jobId, this.needOf(j)]));
 		return this.outputsOf(wf.call.outputs, {
 			...base,
 			jobs
@@ -45536,7 +45540,7 @@ var Planner = class {
 			job: job.id,
 			env: ctx.wfEnv,
 			inputs: ctx.inputs,
-			needs: needState(closure(ctx.wf, job.id), ctx.planned)
+			needs: this.needsOf(closure(ctx.wf, job.id), ctx.planned)
 		};
 		const { runs, cond } = this.jobDecision(job, ctx, jobNode, directResults, ifState);
 		const continueOnError = this.setting(ctx.settings.continueOnError, false, `${jobNode}.continue-on-error`);
@@ -45554,7 +45558,7 @@ var Planner = class {
 			job,
 			jobNode,
 			jobRuns: runs,
-			needs: needState(direct, ctx.planned),
+			needs: this.needsOf(direct, ctx.planned),
 			failFast: plan.matrix?.failFast ?? known$1(true),
 			total: exp.combos.length || 1
 		};
@@ -45591,10 +45595,10 @@ var Planner = class {
 				node: jobNode,
 				mock: facts.outcome.by
 			});
-		}
+		} else if (this.openCalls.has(leg)) this.noteValue(leg.result);
 		const declared = job.uses ? Object.keys(leg.outputs) : Object.keys(job.outputs);
 		this.overlayOutputs(leg.outputs, facts, leg.id, {
-			closed: true,
+			closed: !this.openCalls.has(leg),
 			names: declared,
 			what: `job ${job.id}`
 		});
@@ -45739,7 +45743,7 @@ var Planner = class {
 		const out = {};
 		const names = [...new Set(plan.legs.flatMap((l) => Object.keys(l.outputs)))];
 		for (const name of names) {
-			const values = plan.legs.map((l) => l.outputs[name] ?? known$1(""));
+			const values = plan.legs.map((l) => l.outputs[name] ?? this.unsetOutput(l, name));
 			const ids = values.flatMap((v) => v.known ? [] : v.unknowns);
 			const nonEmpty = [...new Set(values.flatMap((v) => v.known && v.value !== "" ? [v.value] : []))];
 			const chosen = nonEmpty[0] ?? "";
@@ -45890,7 +45894,32 @@ var Planner = class {
 			"failure",
 			"skipped"
 		]);
-		this.noteValue(leg.result);
+		if (leg.runs.verdict !== "no") this.openCalls.add(leg);
+	}
+	/** An output a leg does not list: empty, unless the leg calls a workflow the plan does not load. */
+	unsetOutput(leg, name) {
+		return this.openCalls.has(leg) ? unknown$1([`${leg.id}.outputs.${name}`]) : known$1("");
+	}
+	/** What `needs.<id>` reads of each planned job named. */
+	needsOf(ids, planned) {
+		const out = {};
+		for (const id of ids) {
+			const p = planned.get(id);
+			if (p) out[id] = this.needOf(p);
+		}
+		return out;
+	}
+	/** What `needs.<id>` (or `jobs.<id>`) reads of a planned job. */
+	needOf(p) {
+		const open = p.legs.filter((l) => this.openCalls.has(l)).map((l) => l.id);
+		return open.length ? {
+			result: p.result,
+			outputs: p.outputs,
+			open
+		} : {
+			result: p.result,
+			outputs: p.outputs
+		};
 	}
 	planSteps(steps, settings, parentId, parentRuns, state, inputs, parent) {
 		const taken = /* @__PURE__ */ new Set();
@@ -46407,17 +46436,6 @@ function checkInputs(inputs) {
 		known: true,
 		value: v.value
 	} : { known: false }]));
-}
-function needState(ids, planned) {
-	const out = {};
-	for (const id of ids) {
-		const p = planned.get(id);
-		if (p) out[id] = {
-			result: p.result,
-			outputs: p.outputs
-		};
-	}
-	return out;
 }
 /** Every ancestor through `needs`, nearest first. */
 function closure(wf, jobId) {
