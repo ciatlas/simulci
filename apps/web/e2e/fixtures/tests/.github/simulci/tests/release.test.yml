@@ -1,0 +1,5 @@
+workflow: release.yml
+cases:
+  - name: a tag releases
+    when: { event: push, tag: v1.0.0 }
+    then: { run: [publish] }

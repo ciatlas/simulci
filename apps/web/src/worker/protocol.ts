@@ -1,5 +1,6 @@
 import type {
   AssumeEntry,
+  Failure,
   GeneratedCase,
   Json,
   Loc,
@@ -30,6 +31,11 @@ export interface LoadRequest {
    * the test file schema, their failures reported as the Outline's `kind: 'test'` files.
    */
   tests?: Record<string, string>;
+  /**
+   * Read-only files by path, never loaded into the project either: the route tests' snapshots (`*.snap.json`), which a
+   * `test` request checks the plans against.
+   */
+  readonly?: Record<string, string>;
   repository?: string;
 }
 
@@ -78,7 +84,21 @@ export interface RefsRequest {
   target: ReferenceTarget;
 }
 
-export type EngineRequest = LoadRequest | SimulateRequest | CaseRequest | RefsRequest;
+/**
+ * The route tests of the project `loaded` named, run as `simulci test` runs them (synthesis § 5.1), against the
+ * snapshots of the same load; `ci` runs them as `simulci test --ci` does: a missing snapshot fails and `only` is invalid.
+ * Off, a missing snapshot passes and is not written.
+ */
+export interface TestRequest {
+  id: number;
+  type: 'test';
+  project: number;
+  ci: boolean;
+  /** Only the cases whose name contains the text. */
+  filter?: string;
+}
+
+export type EngineRequest = LoadRequest | SimulateRequest | CaseRequest | RefsRequest | TestRequest;
 
 export interface ModelInfo {
   id: string;
@@ -141,6 +161,46 @@ export interface RefsResponse {
   notes: string[];
 }
 
+/** A case as `simulci test` reports it, with what the Tests tab offers for it. */
+export interface TestedCase {
+  name: string;
+  status: 'passed' | 'failed' | 'invalid' | 'skipped';
+  failures: Failure[];
+  /** Accepted maybes, `snapshot not written here`: what passed with a remark. */
+  notes: string[];
+  /** Why the case was skipped. */
+  reason?: string;
+  /** The line of the case's `name:` in its test file. */
+  line: number;
+  /** The workflow line that decided the first failure, else the one that decided whether the workflow runs. */
+  deciding?: Loc;
+  /** The case's scenario and mocks, its file's `given` under them: what Load into scenario puts in the form. */
+  scenario?: ScenarioInput;
+  assume?: AssumeEntry[];
+}
+
+export interface TestedFile {
+  path: string;
+  /** The workflow the file tests, as `workflow:` names it, by repository path. */
+  workflow?: string;
+  status: TestedCase['status'];
+  /** Problems with the file itself (T0xx, T1xx, T201, T104). */
+  failures: Failure[];
+  notes: string[];
+  cases: TestedCase[];
+}
+
+/** The route tests' results, as `simulci test` reports them, without the plans. */
+export interface TestedResponse {
+  id: number;
+  type: 'tested';
+  project: number;
+  files: TestedFile[];
+  summary: { passed: number; failed: number; invalid: number; skipped: number };
+  exitCode: 0 | 1 | 2;
+  ms: number;
+}
+
 export interface InvalidResponse {
   id: number;
   type: 'invalid';
@@ -163,6 +223,7 @@ export type EngineResponse =
   | PlanResponse
   | CaseResponse
   | RefsResponse
+  | TestedResponse
   | InvalidResponse
   | ErrorResponse;
 
@@ -288,7 +349,7 @@ export interface Derived {
   unknownPaths: Record<UnknownId, string>;
 }
 
-const TYPES = new Set(['load', 'simulate', 'case', 'refs']);
+const TYPES = new Set(['load', 'simulate', 'case', 'refs', 'test']);
 
 const isObject = (v: unknown): boolean => typeof v === 'object' && v !== null;
 
@@ -297,8 +358,15 @@ export function isEngineRequest(data: unknown): data is EngineRequest {
   if (typeof data !== 'object' || data === null) return false;
   const d = data as Record<string, unknown>;
   if (typeof d.id !== 'number' || typeof d.type !== 'string' || !TYPES.has(d.type)) return false;
-  if (d.type === 'load') return isObject(d.files) && (d.tests === undefined || isObject(d.tests));
+  if (d.type === 'load')
+    return isObject(d.files) && [d.tests, d.readonly].every((m) => m === undefined || isObject(m));
   if (d.type === 'refs') return typeof d.project === 'number' && isTarget(d.target);
+  if (d.type === 'test')
+    return (
+      typeof d.project === 'number' &&
+      typeof d.ci === 'boolean' &&
+      (d.filter === undefined || typeof d.filter === 'string')
+    );
   return (
     typeof d.project === 'number' &&
     typeof d.scenario === 'object' &&

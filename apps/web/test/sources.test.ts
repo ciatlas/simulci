@@ -104,6 +104,43 @@ describe('route tests among the files', () => {
     expect(Object.keys(store.getState().files.byPath).sort()).toEqual([TEST, CI]);
   });
 
+  it('reads the tests’ snapshots apart and read-only, again on Reload, and keeps them with a stored copy', async () => {
+    const { store, kv, sources, notices } = setup();
+    const SNAP = '.github/simulci/tests/__snapshots__/ci.test.snap.json';
+    const snapshots: Tree = { 'ci.test.snap.json': '{"schemaVersion":1,"cases":{}}\n' };
+    const tests = { 'ci.test.yml': 'workflow: ci.yml\n', __snapshots__: snapshots };
+    await sources.drop(dropOf(folderItem(folder('repo', tree(tests)))));
+    const files = store.getState().files;
+    expect(Object.keys(files.byPath).sort()).toEqual([TEST, CI]);
+    expect(files.readonly).toEqual({ [SNAP]: '{"schemaVersion":1,"cases":{}}\n' });
+    expect(Object.keys(files.meta).sort()).toEqual([TEST, CI]);
+
+    snapshots['ci.test.snap.json'] = '{"schemaVersion":1,"cases":{"a":1}}\n';
+    await sources.reload();
+    expect(store.getState().files.readonly).toEqual({ [SNAP]: '{"schemaVersion":1,"cases":{"a":1}}\n' });
+    expect(store.getState().files.version).toBe(files.version);
+    expect(notices()).toEqual(['repo: only snapshots changed']);
+    delete snapshots['ci.test.snap.json'];
+    await sources.reload();
+    expect(store.getState().files.readonly).toBeUndefined();
+
+    // A chosen folder is a copy with no handle: the stored copy keeps its snapshots for the next visit.
+    const entry = (path: string, text: string) => ({
+      name: path,
+      webkitRelativePath: `repo/${path}`,
+      ...fileOf(text),
+    });
+    await sources.chooseFiles([
+      entry(CI, 'on: push\n'),
+      entry(TEST, 'workflow: ci.yml\n'),
+      entry(SNAP, '{}\n'),
+    ] as unknown as File[]);
+    expect(await kv.get('current')).toMatchObject({ kind: 'copy', readonly: { [SNAP]: '{}\n' } });
+    const next = setup(() => sourceStore(kv));
+    await next.sources.restore();
+    expect(next.store.getState().files.readonly).toEqual({ [SNAP]: '{}\n' });
+  });
+
   it('keeps a route test added among pasted buffers through the next paste and the next visit, unsaved (P1)', async () => {
     const { store, kv, sources } = setup();
     const first = sources.paste(CI, 'on: push\n');

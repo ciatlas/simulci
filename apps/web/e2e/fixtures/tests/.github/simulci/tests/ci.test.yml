@@ -1,0 +1,15 @@
+workflow: ci.yml
+given: { event: push, branch: main }
+cases:
+  - name: a push to main builds and deploys
+    when: { assume: [{ job: build, outcome: success }] }
+    then: { run: [build, deploy] }
+  - name: a pull request deploys too
+    when: { event: pull_request }
+    then: { run: [build, deploy] }
+  - name: the plan of a push to main
+    when: {}
+    snapshot: true
+  - name: the plan of a pull request
+    when: { event: pull_request }
+    snapshot: true

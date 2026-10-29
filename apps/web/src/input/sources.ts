@@ -5,7 +5,7 @@ import type { SourceStore, StoredSource } from '../state/persist';
 import type { ReloadPlan } from '../state/reload';
 import { type BaseDiff, dirtyPaths, type SessionStore, type Settling, type Source } from '../state/store';
 import { type Dropped, filesFromDrop } from './drop';
-import { filterFiles, isProjectFile } from './filter';
+import { filterFiles, isProjectFile, snapshotFiles } from './filter';
 import { canPickFolder, canReadFolder, pickFolder, readFolder, requestFolder } from './folder';
 import { leftOut, overLimit, type Skipped, type Walked } from './limits';
 import { checkPaste, type PasteCheck } from './paste';
@@ -20,7 +20,8 @@ import type { Choices, DiskConflict } from './save';
  * out for their size are a notice. Files with unsaved edits are never replaced unasked (synthesis § 5.7): opening a
  * folder or a sample, choosing or dropping files, a paste over an edited buffer and Forget first ask the author, who
  * can save them to the folder, download them (each, or as one patch), let them go, or keep them. Reload replaces
- * nothing: it merges the folder into the files one by one (`state/reload.ts`).
+ * nothing: it merges the folder into the files one by one (`state/reload.ts`). The tests' snapshots a walk read go
+ * apart, read-only (`files.readonly`); Reload reads them again.
  */
 export interface Sources {
   canPickFolder: boolean;
@@ -82,7 +83,8 @@ const LOOKED_FOR = 'looked for .github/workflows/*.yml, .github/actions/**/actio
  * What a way in brought: the files, what reading them found (none for strings), the files it left out, and for
  * buffers that keep their edits the texts those were made to.
  */
-type Brought = Pick<Walked, 'files'> & Partial<Pick<Walked, 'meta' | 'skipped'>> & { base?: BaseDiff };
+type Brought = Pick<Walked, 'files'> &
+  Partial<Pick<Walked, 'meta' | 'skipped'>> & { base?: BaseDiff; readonly?: Record<string, string> };
 
 export function createSources({
   store,
@@ -172,22 +174,26 @@ export function createSources({
     if (skipped.length) actions.notify(`${where}: ${leftOut(skipped)}`);
   };
 
-  const accept = ({ files, meta, skipped = [], base }: Brought, source: Source, where: string): boolean => {
+  const accept = (
+    { files, meta, skipped = [], base, readonly = snapshotFiles(files) }: Brought,
+    source: Source,
+    where: string,
+  ): boolean => {
     // Route tests are kept beside the project, but a source of tests alone has nothing to simulate.
     const kept = filterFiles(files);
     if (!Object.keys(kept).some(isProjectFile)) {
       fail(nothingIn(where, skipped, `no workflow files in ${where}: ${LOOKED_FOR}`));
       return false;
     }
-    const limit = overLimit(kept);
+    const limit = overLimit({ ...kept, ...readonly });
     if (limit) {
       fail(`${where} is too big: ${limit}`);
       return false;
     }
-    actions.setFiles(kept, source, meta, base);
+    actions.setFiles(kept, source, meta, base, readonly);
     tellLeftOut(where, skipped);
     const now = store.getState().files;
-    void persist.save(source, kept, now.meta, now.base);
+    void persist.save(source, kept, now.meta, now.base, now.readonly);
     return true;
   };
 
@@ -321,7 +327,11 @@ export function createSources({
     if (!code) return fail(`reloading ${name} stopped: the page could not fetch the merge; reload again`);
     if (store.getState().files.epoch !== epoch) return;
     const plan = code.reloadPlan(store.getState().files, read);
-    if (Object.keys(plan.disk).length === 0) actions.notify(`${name}: no changes`);
+    const before = store.getState().files.readonly;
+    actions.setReadonly(epoch, plan.readonly);
+    const snapshots = store.getState().files.readonly !== before;
+    if (Object.keys(plan.disk).length === 0)
+      actions.notify(`${name}: ${snapshots ? 'only snapshots changed' : 'no changes'}`);
     else if (!(await takeIn(name, epoch, plan, code))) return;
     tellLeftOut(where, read.skipped);
   };
@@ -372,6 +382,8 @@ export function createSources({
           filesOf(stored.buffers),
           { kind: 'folder', name: stored.name, readAt: 0 },
           stored.meta,
+          undefined,
+          stored.readonly,
         );
         break;
       case 'folder':

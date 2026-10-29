@@ -1,6 +1,6 @@
 import { loadProject, memoryFileSystem } from '@ciatlas/core';
 import * as fc from 'fast-check';
-import { isScalar, isSeq } from 'yaml';
+import { isCollection, isScalar, isSeq } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import {
   convertEol,
@@ -230,10 +230,26 @@ function plan(doc: WorkflowDocument, op: PrimitiveOp): EditPlan<TextEdit[]> {
 /** The lines an op may change: its top-level pair, or under `jobs` and `on` the second-level one. */
 function region(doc: WorkflowDocument, op: PrimitiveOp): { from: number; to: number } | undefined {
   if (!('path' in op) || op.path.length === 0 || op.kind === 'dealias') return undefined;
-  const second =
-    (op.path[0] === 'jobs' || op.path[0] === 'on') && op.path.length >= 3 && nodeAt(doc, op.path.slice(0, 2));
-  const span = doc.spanOf(op.path.slice(0, second ? 2 : 1));
+  const path = op.kind === 'remove' ? rewritten(doc, op.path, op.emptied) : op.path;
+  const span = doc.spanOf(path.slice(0, depth(doc, path)));
   return span && widened(doc, span);
+}
+
+/** How deep a path's pair is: under `jobs` and `on` the second level, once a path reaches below it; else the first. */
+function depth(doc: WorkflowDocument, path: YamlPath): number {
+  const nested = (path[0] === 'jobs' || path[0] === 'on') && path.length >= 3;
+  return nested && nodeAt(doc, path.slice(0, 2)) ? 2 : 1;
+}
+
+/**
+ * What a remove rewrites: the item, or once it empties its collection, the collection's value (`emptied: 'null'`) or
+ * the collection itself, emptying the one above it in turn (`'remove'`). Removing the last job's last key empties
+ * `jobs`, and with it the comments inside `jobs` that no job owns.
+ */
+function rewritten(doc: WorkflowDocument, path: YamlPath, emptied: 'null' | 'remove'): YamlPath {
+  const parent = nodeAt(doc, path.slice(0, -1));
+  if (path.length < 2 || !isCollection(parent) || parent.items.length > 1) return path;
+  return emptied === 'remove' ? rewritten(doc, path.slice(0, -1), 'null') : path.slice(0, -1);
 }
 
 /** A span with the blank lines around it, and the line break before it. */
@@ -346,5 +362,20 @@ describe('primitive sequences (fast-check)', () => {
 
   it('applied ops and met refusals of every kind it can', () => {
     expect(stats.applied).toBeGreaterThan(100);
+  });
+});
+
+describe('primitive sequences: regressions', () => {
+  // Seed -1817638724 on comments.yml: the remove emptied `test`, then `jobs`, and took the comment above `test`.
+  it('lets a remove that empties jobs rewrite jobs, with the comment in it that no job owns', () => {
+    const doc = open(
+      "name: comments\n\njobs:\n    # After a blank line: nobody's.\n  test:\n    runs-on: ubuntu-latest\n  # Dangling.\n",
+    );
+    const op: PrimitiveOp = { kind: 'remove', path: ['jobs', 'test', 'runs-on'], emptied: 'remove' };
+    const result = plan(doc, op);
+    if (!result.ok) expect.unreachable(result.message);
+    const next = result.documents[PATH]!;
+    expect(next.text).toBe('name: comments\n\njobs:\n  # Dangling.\n');
+    expect(check(doc, op, result.value, next)).toBeUndefined();
   });
 });
