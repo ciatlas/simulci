@@ -830,6 +830,29 @@ describe('the YAML pane in edit mode', () => {
     expect(store.getState().files.byPath[CRLF]).toBe(crlfText);
   });
 
+  it('types a key over a selection itself, and leaves a key at a cursor to the browser', () => {
+    const { store, view } = editing();
+    const v = view();
+    const typed = (data: string) => {
+      const event = new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data,
+        cancelable: true,
+        bubbles: true,
+      });
+      act(() => {
+        v.contentDOM.dispatchEvent(event);
+      });
+      return event.defaultPrevented;
+    };
+    expect(typed('x')).toBe(false);
+    expect(store.getState().files.byPath[CRLF]).toBe(crlfText);
+    act(() => v.dispatch({ selection: { anchor: 0, head: v.state.doc.line(2).to } }));
+    expect(typed('#')).toBe(true);
+    expect(store.getState().files.byPath[CRLF]).toBe(`#\r\n${crlfText.split('\r\n').slice(2).join('\r\n')}`);
+    expect(v.state.selection.main.head).toBe(1);
+  });
+
   it('hands the focus to the editor once Edit (E) has made the file writable', async () => {
     const { store, view } = editing();
     act(() => store.getState().setEdit(false));
