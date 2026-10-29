@@ -8,6 +8,32 @@ cases:
       units:
         # The release bot's key is a secret of the release environment, which only main may use.
         release-please: { environment: release }
+  - name: a release pull request gets the rebuilt bundle, then a refreshed catalog
+    when:
+      event: push
+      branch: main
+      assume:
+        - { step: release-please.app, outputs: { token: release-bot-token } }
+        - step: release-please.rp
+          outputs: { prs_created: 'true', pr: '{"headBranchName":"release-please--branches--main--components--simulci"}' }
+    then:
+      run: [release-please]
+      units:
+        release-please.bundle: { runs: yes }
+        # The catalog's builder reads public data only: it gets the job's token, which only the run knows, and never the
+        # release bot's, which is pinned here.
+        release-please.catalog: { runs: yes, env: { GITHUB_TOKEN: { unknown: true } } }
+  - name: a push that leaves the release pull request alone refreshes nothing
+    when:
+      event: push
+      branch: main
+      assume:
+        - { step: release-please.rp, outputs: { prs_created: 'false' } }
+    then:
+      run: [release-please]
+      units:
+        release-please.bundle: { runs: no, because: if }
+        release-please.catalog: { runs: no, because: if }
   - name: a push to another branch does not
     when: { event: push, branch: feat/x }
     then: { because: branches }
