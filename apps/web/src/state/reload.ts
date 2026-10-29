@@ -1,4 +1,4 @@
-import { isKeptFile } from '../input/filter';
+import { isKeptFile, snapshotFiles } from '../input/filter';
 import type { Walked } from '../input/limits';
 import { asWritten, type FileMeta, textMeta } from '../input/read';
 import type { Choices, DiskConflict, DiskFile } from '../input/save';
@@ -9,7 +9,8 @@ import type { SessionState } from './store';
  * the author's text, edits and all; a file the folder changed takes the folder's text when the author has not edited
  * it; a file both changed is a conflict, settled with the choices of § 5.4. What is taken is one undoable `disk`
  * transaction, and the base of every file the folder changed moves to the folder's text, so the next save compares
- * with what the folder holds. Nothing reloads by itself.
+ * with what the folder holds. The tests' snapshots are read-only: the folder's replace the page's, whatever they were.
+ * Nothing reloads by itself.
  */
 
 /** What a reload takes in, before the author settles its conflicts. */
@@ -22,6 +23,8 @@ export interface ReloadPlan {
   conflicts: DiskConflict[];
   /** Per path of `disk`, the author's text the plan was made over (`null`: none), so a take refuses a text moved since. */
   from: Record<string, string | null>;
+  /** The snapshots the folder holds now, which replace the page's (`files.readonly`). */
+  readonly: Record<string, string>;
 }
 
 type Files = Pick<SessionState['files'], 'byPath' | 'base' | 'meta'>;
@@ -31,12 +34,19 @@ type Files = Pick<SessionState['files'], 'byPath' | 'base' | 'meta'>;
  * and route tests); a file the walk left out for its size is not taken for gone.
  */
 export function reloadPlan(files: Files, read: Pick<Walked, 'files' | 'meta' | 'skipped'>): ReloadPlan {
-  const plan: ReloadPlan = { disk: {}, take: [], conflicts: [], from: {} };
+  const plan: ReloadPlan = {
+    disk: {},
+    take: [],
+    conflicts: [],
+    from: {},
+    readonly: snapshotFiles(read.files),
+  };
   const left = new Set(read.skipped.map((s) => s.path));
   const here = [...Object.keys(files.base), ...Object.keys(files.byPath)].filter(
     (p) => isKeptFile(p) && !left.has(p),
   );
-  for (const path of new Set([...Object.keys(read.files), ...here].sort())) {
+  const there = Object.keys(read.files).filter(isKeptFile);
+  for (const path of new Set([...there, ...here].sort())) {
     const text = read.files[path];
     const disk = text === undefined ? undefined : { text, meta: read.meta[path] ?? textMeta(text) };
     const base = files.base[path];

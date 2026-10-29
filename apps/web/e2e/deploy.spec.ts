@@ -1,30 +1,31 @@
 import { expect, type Page, type Response, test } from '@playwright/test';
-import { headersFor, readVercelConfig } from '../vercel-headers.ts';
+import { headerRules, headersFor, VERCEL } from '../headers.ts';
 
 /**
  * The deployment smoke: the app as a host serves it, the deployment BASE_URL names (the deployment smoke workflow
- * runs it for each Vercel deployment) or else the local preview, which serves vercel.json's headers and rewrites too
- * (vercel-headers.ts). Every response the page loads carries the headers vercel.json gives its path: the CSP on all
- * of them, the worker scripts included, so it binds the workers too; hashed assets cached for good, everything else
- * revalidated. A deep link is the page and a missing chunk a 404, never the page under an asset's name. The starter
- * sample's plan renders with both workers running, the YAML pane's chunk and the fonts load, and neither the page
- * nor a worker reports a CSP violation or an error.
+ * runs it for each Vercel deployment) or else the local preview, which serves Vercel's headers and rewrites too
+ * (vercel-headers.ts). Every response the page loads carries the headers the header table (headers.ts) gives its path
+ * in Vercel's mode: the CSP on all of them, the worker scripts included, so it binds the workers too; hashed assets
+ * cached for good, everything else revalidated. A deep link is the page and a missing chunk a 404, never the page
+ * under an asset's name. The starter sample's plan renders with both workers running, the YAML pane's chunk and the
+ * fonts load, and neither the page nor a worker reports a CSP violation or an error.
  */
 
-const config = readVercelConfig();
-/** The response headers vercel.json sets, in the lower case Playwright reports them in. */
-const SET_BY_CONFIG = new Set(config.headers.flatMap((rule) => rule.headers.map((h) => h.key.toLowerCase())));
+/** The response headers the table sets, in the lower case Playwright reports them in. */
+const SET_BY_TABLE = new Set(
+  headerRules(VERCEL).flatMap((rule) => rule.headers.map((h) => h.key.toLowerCase())),
+);
 /** Vercel Authentication answers a redirect to vercel.com's login (or a 401), never the app. */
 const PROTECTED =
   'Vercel Authentication protects the deployment: set Deployment Protection to none for the project, or give the smoke VERCEL_AUTOMATION_BYPASS_SECRET';
 
-/** What vercel.json says the response's path gets and the host did not send, one line per header. */
+/** What the table says the response's path gets and the host did not send, one line per header. */
 function headerProblems(response: Response): string[] {
   const { pathname } = new URL(response.url());
   const served = response.headers();
-  const expected = headersFor(config, pathname);
+  const expected = headersFor(pathname, VERCEL);
   const problems: string[] = [];
-  for (const key of SET_BY_CONFIG) {
+  for (const key of SET_BY_TABLE) {
     const want = expected.get(key);
     if (served[key] !== want)
       problems.push(`${pathname}: ${key} is ${served[key] ?? 'absent'}, not ${want ?? 'absent'}`);

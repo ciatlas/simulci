@@ -25,15 +25,17 @@ const assets = join(dist, 'assets');
  * over the run graph), rounded up; raise them on purpose.
  */
 const BUDGETS = [
-  // The engine, @ciatlas/core, yaml, zod and @actions/*: 149.4 kB measured.
+  // The engine, @ciatlas/core, yaml, zod and @actions/*: 149.4 kB measured; 164.9 with the route tests' runner and
+  // its assertions (156.5 before, synthesis § 5.11), and the budget stays 172.
   { name: 'the engine worker', test: (f) => f.startsWith('engine.worker-'), kB: 172 },
   // elkjs: 428.5 kB measured.
   { name: 'the layout worker', test: (f) => f.startsWith('layout.worker-'), kB: 493 },
   // React, the router, React Flow and its d3 modules, Base UI, the scenario form, the panels and the edit history,
   // with the crash snapshot, the replace prompt, edit mode, what an edit changed (the plan diff and Details, a
   // platform popover), the edit runtime's and the dialogs' loaders, Save's buttons and keys with its permission
-  // request, the canvas's side of its gestures, and a rename's remaps: 241.1 kB measured (246.5 before the dialogs
-  // moved to their own chunk). The synthesis keeps 251 (§ 8.5).
+  // request, the canvas's side of its gestures, a rename's remaps, and the Tests tab's state, schedule and loader:
+  // 242.2 kB measured (241.2 before the Tests tab, 246.5 before the dialogs moved to their own chunk). The synthesis
+  // keeps 251 (§ 8.5, M4 § 5.11).
   { name: 'the page', test: (f) => f.startsWith('index-') && f.endsWith('.js'), kB: 251 },
   // CodeMirror's view, state, language and commands with the YAML grammar, and the pane's edit mode, fetched when the
   // pane first opens: 107.1 kB measured (95.4 before edit mode).
@@ -47,6 +49,9 @@ const BUDGETS = [
   // The Changes, save and test case dialogs with the restore conflicts' rows, the line diff and the patch, and what
   // Save and Reload run against the folder, fetched on idle once a file is unsaved (synthesis § 8.5): 9.9 kB measured.
   { name: 'the dialogs', test: (f) => f.startsWith('dialogs-'), kB: 12 },
+  // The Tests tab: the route tests' results grouped by file, with their actions, fetched when the tab is first shown
+  // (M4 synthesis § 5.1): 1.9 kB measured; the synthesis budgets 8 (§ 5.11).
+  { name: 'the Tests tab', test: (f) => f.startsWith('tests-'), kB: 8 },
   // The bundled action catalog, 50 actions with their refs, commits and inputs, fetched by the edit runtime when the
   // palette or Properties needs it (synthesis § 4.8): 33.0 kB measured.
   { name: 'the action catalog', test: (f) => f.startsWith('catalog-'), kB: 38 },

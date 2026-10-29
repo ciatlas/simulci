@@ -117,6 +117,20 @@ jobs:
       'failure',
       ['success', 'cancelled'],
     ]);
+    // A cancelled leg's step may have finished first: its conclusion is the leg's race.
+    expect(a.legs.map((l) => l.steps![0]!.conclusion)).toEqual([
+      {
+        known: false,
+        unknowns: ['race:fail-fast:.github/workflows/ci.yml#a[n=1]'],
+        oneOf: ['success', 'cancelled'],
+      },
+      { known: true, value: 'failure' },
+      {
+        known: false,
+        unknowns: ['race:fail-fast:.github/workflows/ci.yml#a[n=3]'],
+        oneOf: ['success', 'cancelled'],
+      },
+    ]);
     expect(jobs(plan)).toMatchObject({ a: { result: 'failure' }, b: { runs: 'no' }, c: { runs: 'no' } });
     const race = plan.unknowns.find((u) => u.id.startsWith('race:fail-fast:'))!;
     expect(race.pin).toEqual({

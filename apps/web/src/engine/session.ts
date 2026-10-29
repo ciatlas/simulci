@@ -1,10 +1,11 @@
 import { isProjectFile, isTestFile } from '../input/filter';
 import { debounce, scheduler, type Timers } from '../lib/debounce';
+import { hashFiles } from '../lib/hash';
 import { markEdit } from '../lib/marks';
 import { defaultScenario } from '../scenario/defaults';
-import type { SessionState, SessionStore } from '../state/store';
+import type { SessionState, SessionStore, TestRun } from '../state/store';
 import { type CaseFormat, type CaseOutcome, requestCase } from '../testcase/case';
-import type { EngineClient, SimulateResult } from '../worker/client';
+import type { EngineClient, SimulateResult, TestResult } from '../worker/client';
 import type { LoadedResponse, Outline, RefsResponse } from '../worker/protocol';
 import { heldSentence, newlyBroken } from './hold';
 
@@ -21,6 +22,8 @@ import { heldSentence, newlyBroken } from './hold';
  * on the canvas; edit mode or the focus moving re-simulates when that changes the plan. Each plan is labelled with
  * the files version it was simulated from, so a plan of older texts never passes for one of the texts on screen.
  * The engine reads busy while any request of the session is unanswered, and failed once the client gives up on it.
+ * After each plan settles, the route tests run once per project and "As CI" setting (synthesis § 5.1), in the
+ * background: busy does not count them, and a plan never waits for them.
  */
 
 export interface SessionOptions {
@@ -40,23 +43,54 @@ export interface SessionOptions {
 type Cause = 'source' | 'edit' | 'reload';
 
 /**
- * What a load sends: the project's files, which the engine loads, and the route tests apart, which the worker only
- * checks (synthesis § 4.9). `tests` is left out when there are none.
+ * What a load sends: the project's files, which the engine loads, and the route tests apart, which the worker checks
+ * (synthesis § 4.9) and runs with the snapshots, read-only, beside them (§ 5.1). `tests` and `readonly` are left out
+ * when there are none.
  */
-function loadBody(byPath: Record<string, string>): {
-  files: Record<string, string>;
-  tests?: Record<string, string>;
-} {
+function loadBody(
+  byPath: Record<string, string>,
+  readonly: Record<string, string> | undefined,
+): { files: Record<string, string>; tests?: Record<string, string>; readonly?: Record<string, string> } {
   const paths = Object.keys(byPath);
-  if (paths.every(isProjectFile)) return { files: byPath };
+  const extra = readonly ? { readonly } : {};
+  if (paths.every(isProjectFile)) return { files: byPath, ...extra };
   const pick = (keep: (path: string) => boolean): Record<string, string> =>
     Object.fromEntries(paths.filter(keep).map((p) => [p, byPath[p]!]));
   const tests = pick(isTestFile);
   const files = pick(isProjectFile);
-  return Object.keys(tests).length ? { files, tests } : { files };
+  return Object.keys(tests).length ? { files, tests, ...extra } : { files, ...extra };
 }
 
+/**
+ * The project shown and the files version it was loaded from, when it may be simulated or tested: loaded, and not
+ * held (while held, a changed scenario waits for valid YAML: the worker holds the broken texts, not the plan's).
+ */
+function shownProject(s: SessionState): { project: number; files: number } | undefined {
+  const { status, held, version, files } = s.project;
+  if (status !== 'ready' || held || version === undefined || files === undefined) return undefined;
+  return { project: version, files };
+}
+
+/** Whether the project loaded holds route tests: the Outline lists them. */
+const hasTests = (s: SessionState): boolean =>
+  s.project.outline?.files.some((f) => f.kind === 'test') ?? false;
+
+/** A short digest of what a test run reads: the texts and the snapshots, as the Tests tab's header names them. */
+const digestOf = (files: SessionState['files']): string =>
+  hashFiles({ ...files.byPath, ...files.readonly }).slice(0, 7);
+
 const hasProjectFiles = (s: SessionState): boolean => Object.keys(s.files.byPath).some(isProjectFile);
+
+/**
+ * The texts changed within the epoch, or the snapshots beside them were read again (Reload): either loads, so the
+ * worker holds what the plan and the tests are of.
+ */
+const textsMoved = (s: SessionState, prev: SessionState): boolean =>
+  s.files.version !== prev.files.version || s.files.readonly !== prev.files.readonly;
+
+/** The texts changed by keys typed in the pane, which load after a pause; anything else loads at once. */
+const typedInPane = (s: SessionState, prev: SessionState): boolean =>
+  s.files.version !== prev.files.version && s.edit.lastOrigin === 'pane';
 
 const inputsChanged = (s: SessionState, prev: SessionState): boolean =>
   s.scenario !== prev.scenario || s.assume !== prev.assume || s.detail !== prev.detail;
@@ -182,11 +216,11 @@ export function createSession({
    * until the new one replaces it: busy says it.
    */
   const load = async (cause: Cause): Promise<void> => {
-    const { version, epoch, byPath } = store.getState().files;
+    const { version, epoch, byPath, readonly } = store.getState().files;
     if (cause !== 'edit') actions.projectLoading();
     busy(1);
     try {
-      const r = await client.load(loadBody(byPath));
+      const r = await client.load(loadBody(byPath, readonly));
       if (store.getState().files.version !== version) return;
       if (r.type === 'loaded') {
         if (cause === 'edit') markEdit('edit:loaded', version);
@@ -234,10 +268,9 @@ export function createSession({
 
   const run = async (): Promise<void> => {
     const s = store.getState();
-    const { version: project, files } = s.project;
-    // While held, a changed scenario waits for valid YAML: the worker holds the broken texts, not the plan's.
-    if (s.project.status !== 'ready' || s.project.held || project === undefined || files === undefined)
-      return;
+    const ready = shownProject(s);
+    if (!ready) return;
+    const { project, files } = ready;
     const id = ++request;
     const { epoch } = s.files;
     const { assume, scenario } = s;
@@ -266,6 +299,7 @@ export function createSession({
       if (r.project !== now.project.version || now.project.held) return;
       actions.planReceived({ plan: r.plan, derived: r.derived, text: r.text, ms: r.ms, for: asked });
       markEdit('edit:plan', files);
+      void test();
       return;
     }
     if (r.type === 'invalid') {
@@ -274,6 +308,8 @@ export function createSession({
         message: r.issues.map((i) => i.message).join('; '),
         issues: r.issues,
       });
+      // The tests bring their own scenarios: an invalid one in the form does not keep them from running.
+      void test();
       return;
     }
     if (r.kind === 'stale') {
@@ -282,6 +318,37 @@ export function createSession({
       return;
     }
     actions.rejected({ kind: 'engine', message: r.message, ...(r.stack ? { stack: r.stack } : {}) });
+  };
+
+  /** The project and the setting the route tests last ran for: they run again only when one of them changes. */
+  let tested: { project: number; ci: boolean } | undefined;
+
+  /** The route tests of the project shown, unless they already ran for it as the switch says; in the background. */
+  const test = async (): Promise<void> => {
+    const s = store.getState();
+    const ready = shownProject(s);
+    if (!ready) return;
+    if (!hasTests(s)) {
+      tested = undefined;
+      actions.testsCleared();
+      return;
+    }
+    const { ci } = s.tests;
+    if (tested?.project === ready.project && tested.ci === ci) return;
+    tested = { project: ready.project, ci };
+    const asked = { ...ready, ci, digest: digestOf(s.files) };
+    actions.testsRunning();
+    testsAnswered(await client.test({ project: ready.project, ci }), asked);
+  };
+
+  /** A test run's answer, unless a newer run took its place or another project is loaded: its own run follows its plan. */
+  const testsAnswered = (r: TestResult, asked: TestRun['for']): void => {
+    if (r.type === 'superseded' || tested?.project !== asked.project || tested.ci !== asked.ci) return;
+    if (r.type === 'tested') {
+      const { files, summary, exitCode, ms } = r;
+      actions.testsReceived({ files, summary, exitCode, ms, for: asked });
+    } else if (r.kind === 'stale') tested = undefined;
+    else actions.testsFailed(r.message);
   };
 
   const simulate = debounce(() => void run(), debounceMs, timers);
@@ -302,12 +369,16 @@ export function createSession({
       if (hasProjectFiles(s)) void load('source');
       return;
     }
-    if (s.files.version !== prev.files.version) {
-      edits.schedule(s.edit.lastOrigin === 'pane' ? Math.max(typingMs, lastCycle) : 0);
+    if (textsMoved(s, prev)) {
+      edits.schedule(typedInPane(s, prev) ? Math.max(typingMs, lastCycle) : 0);
       return;
     }
-    if (s.project.status !== 'ready' || s.project.held) return;
+    if (!shownProject(s)) return;
     if (inputsChanged(s, prev) || untriggeredMoved(s, prev)) simulate.call();
+  });
+  // "As CI" runs the tests of the project shown again, as the switch now says.
+  const unwatchCi = store.subscribe((s, prev) => {
+    if (s.tests.ci !== prev.tests.ci) void test();
   });
 
   if (hasProjectFiles(store.getState())) void load('source');
@@ -348,6 +419,7 @@ export function createSession({
     testCase: (format, given) => requestCase(client, store.getState(), format, given),
     dispose: () => {
       unsubscribe();
+      unwatchCi();
       simulate.cancel();
       edits.cancel();
     },

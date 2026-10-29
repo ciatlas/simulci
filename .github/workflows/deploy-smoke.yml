@@ -1,11 +1,12 @@
 name: Deployment smoke
 # Each Vercel deployment of the web app (the Vercel project `simulci`, root apps/web), in Chromium as Vercel serves it
-# (apps/web/e2e/deploy.spec.ts): the headers vercel.json sets (the CSP, the worker scripts included, and the cache
-# rules), a deep link and a missing chunk, and the starter sample's plan with both workers running under the CSP.
-# Vercel sends a repository_dispatch event once a deployment is ready. GitHub runs this file as it is on main, and the
-# job checks out main: no code from the deployed commit runs here, a fork's included. The result goes on the deployed
-# commit as the `Deployment smoke` status, so a pull request shows it. Deployments are public, or the
-# VERCEL_AUTOMATION_BYPASS_SECRET secret (Vercel's Protection Bypass for Automation) gets the smoke past protection.
+# (apps/web/e2e/deploy.spec.ts): the headers the header table sets (apps/web/headers.ts: the CSP, the worker scripts
+# included, and the cache rules), a deep link and a missing chunk, and the starter sample's plan with both workers
+# running under the CSP. Vercel sends a repository_dispatch event once a deployment is ready. GitHub runs this file as
+# it is on main, and the job checks out main: no code from the deployed commit runs here, a fork's included. The
+# result goes on the deployed commit as the `Deployment smoke` status, so a pull request shows it. Deployments are
+# public, or the VERCEL_AUTOMATION_BYPASS_SECRET secret (Vercel's Protection Bypass for Automation) gets the smoke
+# past protection.
 on:
   repository_dispatch:
     types: [vercel.deployment.success]
@@ -75,7 +76,7 @@ jobs:
           RESULT: ${{ job.status }}
         run: |
           case "$RESULT" in
-            success) STATE=success DESCRIPTION='The deployment serves the app as vercel.json says' ;;
+            success) STATE=success DESCRIPTION='The deployment serves the app as the header table says' ;;
             failure) STATE=failure DESCRIPTION='The deployment failed the smoke: see the run' ;;
             *) STATE=error DESCRIPTION="The smoke did not finish ($RESULT)" ;;
           esac

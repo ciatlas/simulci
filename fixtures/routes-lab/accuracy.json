@@ -1,0 +1,14 @@
+{
+  "capture": "e623802ba524a344c2033c94c438a38fe0e8c07f",
+  "runs": 115,
+  "compared": {
+    "triggers": 115,
+    "checks": 323,
+    "jobs": 323,
+    "steps": 405,
+    "probes": 416
+  },
+  "exact": 1494,
+  "maybe": 88,
+  "wrong": 0
+}

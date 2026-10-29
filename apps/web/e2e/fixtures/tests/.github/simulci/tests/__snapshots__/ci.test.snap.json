@@ -1,0 +1,356 @@
+{
+  "schemaVersion": 1,
+  "cases": {
+    "the plan of a push to main": {
+      "detail": "steps",
+      "diagnostics": [],
+      "mocks": [],
+      "models": [],
+      "scenario": {
+        "actor": {
+          "bot": false,
+          "fork": false
+        },
+        "defaultBranch": "main",
+        "event": "push",
+        "id": "push:main",
+        "inputs": {},
+        "platform": "dotcom",
+        "ref": "refs/heads/main",
+        "refName": "main",
+        "refType": "branch",
+        "secrets": [],
+        "vars": {}
+      },
+      "schemaVersion": 1,
+      "unknowns": [],
+      "workflows": [
+        {
+          "conclusion": {
+            "known": true,
+            "value": "success"
+          },
+          "depth": 0,
+          "id": ".github/workflows/ci.yml",
+          "inputs": {},
+          "jobs": [
+            {
+              "check": {
+                "certain": true,
+                "skippedName": "build",
+                "stem": "build"
+              },
+              "continueOnError": {
+                "known": true,
+                "value": false
+              },
+              "id": ".github/workflows/ci.yml#build",
+              "jobId": "build",
+              "legs": [
+                {
+                  "check": {
+                    "certain": true,
+                    "name": "build"
+                  },
+                  "env": {},
+                  "id": ".github/workflows/ci.yml#build",
+                  "legKey": "",
+                  "outputs": {},
+                  "result": {
+                    "known": true,
+                    "value": "success"
+                  },
+                  "runs": {
+                    "chain": [
+                      {
+                        "kind": "parent",
+                        "node": ".github/workflows/ci.yml#build",
+                        "verdict": "yes"
+                      }
+                    ],
+                    "verdict": "yes"
+                  },
+                  "runsOn": {
+                    "known": true,
+                    "value": ["ubuntu-latest"]
+                  },
+                  "steps": [
+                    {
+                      "conclusion": {
+                        "known": true,
+                        "value": "success"
+                      },
+                      "continueOnError": {
+                        "known": true,
+                        "value": false
+                      },
+                      "env": {},
+                      "id": ".github/workflows/ci.yml#build/~actions-checkout",
+                      "index": 0,
+                      "key": "~actions-checkout",
+                      "outcome": {
+                        "known": true,
+                        "value": "success"
+                      },
+                      "outputs": {},
+                      "runs": {
+                        "chain": [
+                          {
+                            "kind": "parent",
+                            "node": ".github/workflows/ci.yml#build",
+                            "verdict": "yes"
+                          },
+                          {
+                            "evaluated": "success()",
+                            "expr": "",
+                            "implicitSuccess": true,
+                            "kind": "if",
+                            "status": {
+                              "known": true,
+                              "value": "success"
+                            },
+                            "value": {
+                              "known": true,
+                              "value": true
+                            }
+                          }
+                        ],
+                        "verdict": "yes"
+                      },
+                      "uses": "actions/checkout@v4",
+                      "with": {}
+                    },
+                    {
+                      "conclusion": {
+                        "known": true,
+                        "value": "success"
+                      },
+                      "continueOnError": {
+                        "known": true,
+                        "value": false
+                      },
+                      "env": {},
+                      "id": ".github/workflows/ci.yml#build/~make",
+                      "index": 1,
+                      "key": "~make",
+                      "outcome": {
+                        "known": true,
+                        "value": "success"
+                      },
+                      "outputs": {},
+                      "run": true,
+                      "runs": {
+                        "chain": [
+                          {
+                            "kind": "parent",
+                            "node": ".github/workflows/ci.yml#build",
+                            "verdict": "yes"
+                          },
+                          {
+                            "evaluated": "success()",
+                            "expr": "",
+                            "implicitSuccess": true,
+                            "kind": "if",
+                            "status": {
+                              "known": true,
+                              "value": "success"
+                            },
+                            "value": {
+                              "known": true,
+                              "value": true
+                            }
+                          }
+                        ],
+                        "verdict": "yes"
+                      },
+                      "with": {}
+                    }
+                  ],
+                  "values": {}
+                }
+              ],
+              "needs": [],
+              "outputs": {},
+              "result": {
+                "known": true,
+                "value": "success"
+              },
+              "runs": {
+                "chain": [
+                  {
+                    "kind": "parent",
+                    "node": ".github/workflows/ci.yml",
+                    "verdict": "yes"
+                  },
+                  {
+                    "evaluated": "success()",
+                    "expr": "",
+                    "implicitSuccess": true,
+                    "kind": "if",
+                    "status": {
+                      "known": true,
+                      "value": "success"
+                    },
+                    "value": {
+                      "known": true,
+                      "value": true
+                    }
+                  }
+                ],
+                "verdict": "yes"
+              }
+            },
+            {
+              "check": {
+                "certain": true,
+                "skippedName": "deploy",
+                "stem": "deploy"
+              },
+              "continueOnError": {
+                "known": true,
+                "value": false
+              },
+              "id": ".github/workflows/ci.yml#deploy",
+              "jobId": "deploy",
+              "legs": [
+                {
+                  "check": {
+                    "certain": true,
+                    "name": "deploy"
+                  },
+                  "env": {},
+                  "id": ".github/workflows/ci.yml#deploy",
+                  "legKey": "",
+                  "outputs": {},
+                  "result": {
+                    "known": true,
+                    "value": "success"
+                  },
+                  "runs": {
+                    "chain": [
+                      {
+                        "kind": "parent",
+                        "node": ".github/workflows/ci.yml#deploy",
+                        "verdict": "yes"
+                      }
+                    ],
+                    "verdict": "yes"
+                  },
+                  "runsOn": {
+                    "known": true,
+                    "value": ["ubuntu-latest"]
+                  },
+                  "steps": [
+                    {
+                      "conclusion": {
+                        "known": true,
+                        "value": "success"
+                      },
+                      "continueOnError": {
+                        "known": true,
+                        "value": false
+                      },
+                      "env": {},
+                      "id": ".github/workflows/ci.yml#deploy/~deploy",
+                      "index": 0,
+                      "key": "~deploy",
+                      "outcome": {
+                        "known": true,
+                        "value": "success"
+                      },
+                      "outputs": {},
+                      "run": true,
+                      "runs": {
+                        "chain": [
+                          {
+                            "kind": "parent",
+                            "node": ".github/workflows/ci.yml#deploy",
+                            "verdict": "yes"
+                          },
+                          {
+                            "evaluated": "success()",
+                            "expr": "",
+                            "implicitSuccess": true,
+                            "kind": "if",
+                            "status": {
+                              "known": true,
+                              "value": "success"
+                            },
+                            "value": {
+                              "known": true,
+                              "value": true
+                            }
+                          }
+                        ],
+                        "verdict": "yes"
+                      },
+                      "with": {}
+                    }
+                  ],
+                  "values": {}
+                }
+              ],
+              "needs": [".github/workflows/ci.yml#build"],
+              "outputs": {},
+              "result": {
+                "known": true,
+                "value": "success"
+              },
+              "runs": {
+                "chain": [
+                  {
+                    "kind": "parent",
+                    "node": ".github/workflows/ci.yml",
+                    "verdict": "yes"
+                  },
+                  {
+                    "evaluated": "success() && (github.event_name == 'push')",
+                    "expr": "github.event_name == 'push'",
+                    "implicitSuccess": true,
+                    "kind": "if",
+                    "status": {
+                      "known": true,
+                      "value": "success"
+                    },
+                    "value": {
+                      "known": true,
+                      "value": true
+                    }
+                  }
+                ],
+                "verdict": "yes"
+              }
+            }
+          ],
+          "name": "CI",
+          "on": ["push", "pull_request"],
+          "outputs": {},
+          "path": ".github/workflows/ci.yml",
+          "triggered": {
+            "chain": [
+              {
+                "event": "push",
+                "kind": "event",
+                "listens": true
+              },
+              {
+                "filter": "branches",
+                "kind": "filter",
+                "matched": {
+                  "known": true,
+                  "value": true
+                },
+                "patterns": ["main"],
+                "subject": {
+                  "known": true,
+                  "value": "main"
+                }
+              }
+            ],
+            "verdict": "yes"
+          }
+        }
+      ]
+    }
+  }
+}
