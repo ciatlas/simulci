@@ -17,7 +17,7 @@
     "apps/docs/content/**/*.mdx",
   ],
   // Vite serves apps/web/public at the site root, where index.html asks for it.
-  "ignoreUnresolvedImports": ["/theme.js"],
+  "ignoreUnresolvedImports": ["/config.js", "/theme.js"],
   // The engine and the document model are libraries inside the workspace: what their entries export, and the members
   // of what they export, are their API for the CLI, the Action, the web app and the server.
   "publicPackages": ["@simulci/engine", "@simulci/document", "@simulci/node"],

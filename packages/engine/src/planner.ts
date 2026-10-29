@@ -250,6 +250,8 @@ class Planner {
   private readonly models = new Map<string, string>();
   /** Every planned step and leg by id, with the location an assume entry is matched against. */
   private readonly units = new Map<NodeId, UnitSite>();
+  /** The legs that call a workflow the plan does not load (by object: a dynamic matrix renames its leg). */
+  private readonly openCalls = new WeakSet<LegPlan>();
   private readonly index: ProjectIndex;
 
   constructor(
@@ -400,9 +402,7 @@ class Planner {
     base: ContextState,
   ): Record<string, Value<string>> {
     if (!wf.call) return {};
-    const jobs = Object.fromEntries(
-      plan.jobs.map((j) => [j.jobId, { result: j.result, outputs: j.outputs }]),
-    );
+    const jobs = Object.fromEntries(plan.jobs.map((j) => [j.jobId, this.needOf(j)]));
     return this.outputsOf(wf.call.outputs, { ...base, jobs });
   }
 
@@ -418,7 +418,7 @@ class Planner {
       job: job.id,
       env: ctx.wfEnv,
       inputs: ctx.inputs,
-      needs: needState(closure(ctx.wf, job.id), ctx.planned),
+      needs: this.needsOf(closure(ctx.wf, job.id), ctx.planned),
     };
     const { runs, cond } = this.jobDecision(job, ctx, jobNode, directResults, ifState);
     const continueOnError = this.setting(ctx.settings.continueOnError, false, `${jobNode}.continue-on-error`);
@@ -436,7 +436,7 @@ class Planner {
       job,
       jobNode,
       jobRuns: runs,
-      needs: needState(direct, ctx.planned),
+      needs: this.needsOf(direct, ctx.planned),
       failFast: plan.matrix?.failFast ?? known(true),
       total: exp.combos.length || 1,
     };
@@ -469,10 +469,10 @@ class Planner {
           node: jobNode,
           mock: facts.outcome.by,
         });
-    }
+    } else if (this.openCalls.has(leg)) this.noteValue(leg.result);
     const declared = job.uses ? Object.keys(leg.outputs) : Object.keys(job.outputs);
     this.overlayOutputs(leg.outputs, facts, leg.id, {
-      closed: true,
+      closed: !this.openCalls.has(leg),
       names: declared,
       what: `job ${job.id}`,
     });
@@ -613,7 +613,7 @@ class Planner {
     // A call job's outputs are the called workflow's, a plain job's its own; a mock on a leg may add one (SC101).
     const names = [...new Set(plan.legs.flatMap((l) => Object.keys(l.outputs)))];
     for (const name of names) {
-      const values = plan.legs.map((l) => l.outputs[name] ?? known(''));
+      const values = plan.legs.map((l) => l.outputs[name] ?? this.unsetOutput(l, name));
       const ids = values.flatMap((v) => (v.known ? [] : v.unknowns));
       const nonEmpty = [...new Set(values.flatMap((v) => (v.known && v.value !== '' ? [v.value] : [])))];
       const chosen = nonEmpty[0] ?? '';
@@ -756,7 +756,31 @@ class Planner {
       leg.runs.verdict === 'no'
         ? known('skipped')
         : unknown([`${leg.id}.call`], ['success', 'failure', 'skipped']);
-    this.noteValue(leg.result);
+    // Noted in `applyLegFacts`, unless a mock sets the outcome.
+    if (leg.runs.verdict !== 'no') this.openCalls.add(leg);
+  }
+
+  /** An output a leg does not list: empty, unless the leg calls a workflow the plan does not load. */
+  private unsetOutput(leg: LegPlan, name: string): Value<string> {
+    return this.openCalls.has(leg) ? unknown([`${leg.id}.outputs.${name}`]) : known('');
+  }
+
+  /** What `needs.<id>` reads of each planned job named. */
+  private needsOf(ids: string[], planned: Map<string, JobPlan>): Record<string, NeedState> {
+    const out: Record<string, NeedState> = {};
+    for (const id of ids) {
+      const p = planned.get(id);
+      if (p) out[id] = this.needOf(p);
+    }
+    return out;
+  }
+
+  /** What `needs.<id>` (or `jobs.<id>`) reads of a planned job. */
+  private needOf(p: JobPlan): NeedState {
+    const open = p.legs.filter((l) => this.openCalls.has(l)).map((l) => l.id);
+    return open.length
+      ? { result: p.result, outputs: p.outputs, open }
+      : { result: p.result, outputs: p.outputs };
   }
 
   // --- steps -------------------------------------------------------------------------------------------------------
@@ -1364,15 +1388,6 @@ function checkInputs(
       v.known ? { known: true as const, value: v.value } : { known: false as const },
     ]),
   );
-}
-
-function needState(ids: string[], planned: Map<string, JobPlan>): Record<string, NeedState> {
-  const out: Record<string, NeedState> = {};
-  for (const id of ids) {
-    const p = planned.get(id);
-    if (p) out[id] = { result: p.result, outputs: p.outputs };
-  }
-  return out;
 }
 
 /** Every ancestor through `needs`, nearest first. */

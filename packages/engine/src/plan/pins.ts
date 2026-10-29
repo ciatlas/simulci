@@ -55,7 +55,8 @@ function unitRef(
 }
 
 function aboutOf(rest: string): About | undefined {
-  if (rest === 'outcome') return { field: 'outcome' };
+  // `<leg>.call`: the result of a called workflow the plan does not load.
+  if (rest === 'outcome' || rest === 'call') return { field: 'outcome' };
   for (const field of ['outputs', 'env'] as const) {
     if (rest.startsWith(`${field}.`) && rest.length > field.length + 1)
       return { field, name: rest.slice(field.length + 1) };
