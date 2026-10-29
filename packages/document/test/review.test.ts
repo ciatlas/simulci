@@ -131,6 +131,19 @@ describe('review regressions: lines and separators', () => {
     );
   });
 
+  it("keeps the comments in an emptied collection that are not its last item's", () => {
+    // Found by the property test (seed -1817638724): emptying `jobs` rewrote all its lines, the comment too.
+    const doc = open("on: push\njobs:\n    # nobody's\n  a:\n    runs-on: x\n  # nor this\n");
+    expect(result(remove(doc, ['jobs', 'a', 'runs-on'], 'remove'))).toBe(
+      "on: push\njobs:\n    # nobody's\n  # nor this\n",
+    );
+    expect(result(remove(doc, ['jobs', 'a'], 'null'))).toBe(
+      "on: push\njobs:\n    # nobody's\n  # nor this\n",
+    );
+    const blank = open('on: push\njobs:\n\n  a:\n    runs-on: x\n\nenv:\n  A: 1\n');
+    expect(result(remove(blank, ['jobs', 'a'], 'null'))).toBe('on: push\njobs:\n\nenv:\n  A: 1\n');
+  });
+
   it('keeps no final line break where the file had none', () => {
     const doc = open('on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - run: x');
     expect(result(remove(doc, ['jobs', 'b', 'steps', 0]))).toBe(

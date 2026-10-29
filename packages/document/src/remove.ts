@@ -34,7 +34,7 @@ export function removeDraft(
   const expect = (js: unknown) => entryEquivalents(doc, path).reduce((j, p) => deleteIn(j, p, emptied), js);
   const label = `Removed ${refusals.describe(path)}`;
   if (hop.parent.items.length === 1) {
-    const emptiedDraft = emptyCollection(doc, path, emptied, options);
+    const emptiedDraft = emptyCollection(doc, hop.parent, path, emptied, options);
     return isRefusal(emptiedDraft) ? emptiedDraft : { ...emptiedDraft, expect, label };
   }
   const edit = isFlow(hop.parent)
@@ -43,9 +43,14 @@ export function removeDraft(
   return isRefusal(edit) ? edit : { edits: [edit], expect, label };
 }
 
-/** A collection's last item removed: its key stays with no value, or goes too. */
+/**
+ * A collection's last item removed: its key stays with no value, or goes too. A block collection loses only the
+ * item's lines, so the comments in it that are not the item's stay where they are; a flow one (`[a]`) is written
+ * anew as no value.
+ */
 function emptyCollection(
   doc: WorkflowDocument,
+  parent: Collection,
   path: YamlPath,
   emptied: 'null' | 'remove',
   options: { shared?: 'all' },
@@ -55,7 +60,8 @@ function emptyCollection(
   if (container.length === 0) return refusals.unsupported(doc.path, path, 'the file would be left empty');
   if (typeof container.at(-1) === 'number')
     return refusals.unsupported(doc.path, path, `${refusals.describe(container)} would be left empty`);
-  return setDraft(doc, container, null, options);
+  if (isFlow(parent)) return setDraft(doc, container, null, options);
+  return { edits: [{ ...removalSpan(doc.tree, parent, 0), insert: '' }], label: '', select: container };
 }
 
 function flowItem(
