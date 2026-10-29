@@ -1,0 +1,48 @@
+---
+title: Keys
+description: Every key of edit mode, with the page's own.
+---
+
+Mod is ⌘ on a Mac and Ctrl elsewhere. Single letters act on the page while the top bar's **Shortcuts** switch is on,
+and never while you type in a field or the YAML pane. Keys with Mod, and F2, work whatever the switch says.
+
+## On the page
+
+| Key                      | Does                                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `e`                      | edit mode on and off                                                                   |
+| `i`                      | the selected job's or step's **Run if**, in Properties                                 |
+| `a`                      | add a job after the selected one, or to the workflow                                   |
+| `n`                      | what the selected job needs                                                            |
+| `s`, Mod+K               | the palette: a step after the selected step, else at the end of the selected job       |
+| F2                       | rename the selected job or step                                                        |
+| Mod+Z                    | undo                                                                                   |
+| Mod+Shift+Z, Mod+Y       | redo                                                                                   |
+| Mod+S                    | save to the folder; with no folder to save to, open Changes                            |
+| Mod+Shift+D              | the Changes dialog                                                                     |
+| `c`                      | Copy as test case                                                                      |
+| `\`                      | open and close the YAML pane                                                           |
+
+Every key but `e`, `c`, `\` and Mod+S needs edit mode. Mod+S also works inside fields and the pane, and writes the
+field first. In the pane, Mod+Z undoes the page's history, typing included; in a field it is the field's own undo
+until the field writes. The [web app](/docs/web-app) lists the keys that move around the plan.
+
+## On the canvas
+
+With the focus on the canvas, in edit mode:
+
+| Key                | Does                                                                |
+| ------------------ | ------------------------------------------------------------------- |
+| Delete, Backspace  | remove the selected job or step, or the need of the focused edge    |
+| Alt+↑, Alt+↓       | move the selected step up or down                                   |
+
+In the plan as text, the context menu key or Shift+F10 opens a row's menu: add a job or a step, what a job needs,
+rename, move, remove.
+
+## In the forms
+
+- **A field** writes on Enter (Mod+Enter in **Run**, where Enter breaks the line) and when you leave it. **Run if** also
+  writes after a short pause. Escape drops what you typed since the last write.
+- **Chips** (triggers, matrix values): Delete or Backspace removes one; Enter on **+** opens an input, Enter adds and
+  Escape cancels. Arrow keys move between the triggers' event radios.
+- **Popovers** (Add job, needs, rename): Enter confirms and Escape closes.

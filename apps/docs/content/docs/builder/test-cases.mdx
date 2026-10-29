@@ -1,0 +1,34 @@
+---
+title: Adding a test case
+description: Write the plan on screen into the workflow's route-test file as a new case.
+---
+
+**Copy as test case** (`c`) turns the plan of the focused workflow into a [test case](/docs/reference/test-files).
+Under **Add it to the repository**, give the case a name and press **Add to ci.test.yml**, or **Create ci.test.yml**
+when the workflow has no test file yet. Test files live in `.github/simulci/tests/`.
+
+## Which file
+
+1. The workflow's own `<name>.test.yml`, when it is loaded.
+2. Else another loaded test file whose `workflow:` names the workflow.
+3. Else a new `<name>.test.yml`.
+
+If `<name>.test.yml` tests another workflow, adding is refused, and the fix offers `<name>-2.test.yml` instead.
+
+## What is written
+
+- **The case** is planned under the file's `given`, since `given` applies to every case in the file. The dialog says
+  so when the file has one.
+- **A taken name** gets ` (2)`, and the dialog shows the name the case will be written under.
+- **Each `maybe`** becomes a comment naming the unknown and how to pin it, and the case gets `allowMaybe: true`.
+- **The file's style** is kept: indent, quotes, flow or block lists and line endings.
+
+## After adding
+
+- Adding is one undoable step, "Added test case 'push to main'", and its notice has **Undo**.
+- The page switches to edit mode, and the YAML pane opens on the new case.
+- The file stays unsaved until you [save](/docs/builder/saving): Save (Mod+S) for a folder opened with Open folder,
+  else Download or **Download patch**.
+
+Test files show in the pane under **Tests**. Their problems (YAML, the schema, duplicate case names) are worded as
+`simulci test` words them, and never stop the simulation.

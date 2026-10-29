@@ -13,7 +13,14 @@ the files you open; they stay in the page.
 - **The plan** in the middle, as a graph or as text (`t`; below 1024 px wide, text only).
 - **The panels** on the right: Reasons, Unknowns (with the assumptions you pinned above them), Node and Problems
   (`r`, `1`–`4`). Pin an unknown from its row and the plan follows.
-- **The YAML pane** (`\`): the files, read-only, with each line's verdict and the line that decided the selection.
-- **Copy as test case** (`c`): the plan of the focused workflow as a [test case](/docs/reference/test-files).
+- **The YAML pane** (`\`, or **Open the workflow source** under the plan): the files, with each line's verdict and the
+  line that decided the selection. It is read-only until edit mode.
+- **Copy as test case** (`c`): the plan of the focused workflow as a [test case](/docs/reference/test-files), to copy,
+  download or [add to the workflow's test file](/docs/builder/test-cases).
+- **Edit mode** (`e`, or the top bar's **Edit**): the [builder](/docs/builder). It opens the YAML pane and makes it
+  editable, turns the Node tab into Properties and the scenario's event into the triggers editor, and lets you add,
+  connect and remove jobs and steps on the canvas. Every edit is planned again as you make it, and Save writes it back
+  to the folder.
 
-`[` and `]` close and open the scenario column and the panels. The keys can be turned off from the top bar.
+`[` and `]` close and open the scenario column and the panels. The single-letter keys can be turned off from the top
+bar's Shortcuts switch; [Keys](/docs/builder/keys) lists them all.

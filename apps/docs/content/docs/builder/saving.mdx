@@ -1,0 +1,59 @@
+---
+title: Saving
+description: Save edits back to the folder, settle conflicts, download them where the browser has no folder access, and keep them across reloads.
+---
+
+## Saving to the folder
+
+A folder opened with **Open folder** (Chromium-based browsers) saves in place. **Save** sits beside the source's
+`● 2 unsaved` in the top bar, and Mod+S does the same, even from a field or the pane. The button reads **Save…** when the
+browser will ask for write access first.
+
+1. **Write access.** If you refuse it, nothing is written and your edits stay; **Download patch** hands them over instead.
+2. **The check.** Each unsaved file is read from the folder and compared, byte for byte, with the text you opened or
+   last saved. Any difference is a [conflict](#conflicts), and nothing is written until each one has an answer.
+3. **The writes,** one file at a time: edited files first, then new ones, and workflows before tests. A new file's
+   directories, such as `.github/simulci/tests/`, are made just before it. Each file is read back after it is written.
+4. **The report** is in the status line: `Saved ci.yml; deploy.yml failed (NoModificationAllowedError, is it open
+   elsewhere?); not attempted: ci.test.yml`. A save stops at the first file that fails, and the files after it are not
+   attempted. When anything is not saved, a dialog lists every file with **Download patch** and **Retry**. Retry runs
+   the check again.
+
+Each file keeps its line endings and its byte order mark. A file that is not UTF-8 is never written, and save never
+deletes a file from the folder. The undo history survives a save.
+
+## Conflicts
+
+A file in conflict changed on disk since it was opened or last saved, is gone from the folder, or, for a new file, is
+in the folder already. **Compare** shows what the folder changed and what you changed. For each file, pick:
+
+- **Overwrite with mine:** write your text anyway.
+- **Keep the disk version:** take the folder's text. Your edits are one undo away.
+- **Skip:** write nothing for that file. **Download mine** saves your text as a file.
+
+There is no line-by-line merge. Cancel, or Escape, leaves everything as it was.
+
+## Without folder access
+
+Firefox and Safari have no Open folder, and neither does a folder opened with **Choose folder**, which is a copy, or
+pasted YAML, a sample, or a drop that gives no folder handle. Edits there are downloads:
+
+- **Download** in the pane's footer or in the Changes dialog saves one file as it would be written.
+- **Download patch** in the Changes dialog saves every change as `simulci-changes.patch`, for `git apply`.
+- Mod+S opens the Changes dialog while anything is unsaved.
+
+The first edit of a copied folder says so: `This folder was opened as a copy; Open folder (Chromium) saves in place.`
+A sample is never changed: its first edit makes an edited copy of it.
+
+## Reloads and crashes
+
+- **Unsaved edits are kept in the browser,** half a second after each edit and when the tab is hidden. When the same
+  folder opens again, after a reload or a crash, they come back as one undoable step: `Restored unsaved edits to 2 files
+  from 14:02 · undo starts here`. A file whose disk text changed meanwhile asks first: **Restore mine** or **Keep disk**.
+  Pasted files and edited samples are kept too. The undo history is not.
+- **Leaving the page** with unsaved edits asks first.
+- **Reload** in the top bar reads the folder again. Files you did not edit take the disk's text; edited files the folder
+  did not change keep yours; a file both changed asks: **Keep mine**, **Take the disk version** or **Skip**. Reload is
+  one undoable step, and nothing reloads by itself.
+- **Opening something else** (another folder, Paste YAML, a sample, Forget) while edits are unsaved asks first:
+  **Save**, **Download patch** or **Download it first**, **Discard edits** or **Cancel**.
