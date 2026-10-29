@@ -106,8 +106,9 @@ jobs:
 
   schemas:
     # The JSON schemas under schemas/ are generated from the engine (pnpm schemas) and committed, so the $id URLs
-    # GitHub Pages serves are always what the release defines.
-    name: Schemas up to date
+    # GitHub Pages serves are always what the release defines. The routes lab's accuracy figure (pnpm lab:accuracy) is
+    # committed the same way, so it is always what the engine predicts.
+    name: Schemas and lab figure up to date
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -121,6 +122,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm schemas
       - run: git diff --exit-code -- schemas
+      - run: pnpm lab:accuracy
+      - run: git diff --exit-code -- fixtures/routes-lab/accuracy.json
 
   action-dist:
     # action.yml runs packages/action/dist/index.js straight from the repository, so the bundle is committed and must

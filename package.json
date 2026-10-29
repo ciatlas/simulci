@@ -11,6 +11,7 @@
     "coverage": "vitest run --coverage",
     "lint": "oxlint && oxfmt --check .",
     "format": "oxfmt .",
+    "lab:accuracy": "tsx --conditions=source scripts/lab-accuracy.ts",
     "schemas": "tsx --conditions=source scripts/gen-schemas.ts"
   },
   "dependencies": {
