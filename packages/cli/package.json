@@ -1,6 +1,6 @@
 {
   "name": "simulci",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Static simulator and test framework for GitHub Actions: which jobs and steps run for a scenario, and why.",
   "keywords": [
     "ci",

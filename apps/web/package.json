@@ -1,6 +1,6 @@
 {
   "name": "@simulci/web",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "The simulci web app: simulate workflows in the browser, the engine in a Web Worker.",
   "license": "FSL-1.1-MIT",
