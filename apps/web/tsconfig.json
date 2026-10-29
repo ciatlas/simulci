@@ -4,9 +4,9 @@
     "lib": ["es2023", "dom", "dom.iterable"],
     "types": ["vite/client"],
     "jsx": "react-jsx",
-    // vercel-headers.ts is imported with its extension: Vite warns that its native config loader, planned as the
-    // default, cannot resolve an extensionless import in vite.config.ts.
+    // headers.ts and vercel-headers.ts are imported with their extension: Vite warns that its native config loader,
+    // planned as the default, cannot resolve an extensionless import in vite.config.ts.
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "test", "e2e", "vite.config.ts", "vercel-headers.ts", "playwright.config.ts"]
+  "include": ["src", "test", "e2e", "*.ts"]
 }
