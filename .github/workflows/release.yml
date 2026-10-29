@@ -1,9 +1,9 @@
 name: Release
-# Every push to main updates the release pull request (version bump and changelog from Conventional Commits) and
-# rebuilds the action bundle on it, since the version is compiled in. Merging that pull request tags the release and
-# creates the GitHub release; this workflow then publishes the simulci package to npm (trusted publishing, with
-# provenance), smoke-tests the published package, publishes the draft release and moves the floating tag of the action
-# (v0.N before 1.0, vN after).
+# Every push to main updates the release pull request (version bump and changelog from Conventional Commits),
+# rebuilds the action bundle on it, since the version is compiled in, and refreshes the web app's action catalog.
+# Merging that pull request tags the release and creates the GitHub release; this workflow then publishes the simulci
+# package to npm (trusted publishing, with provenance), smoke-tests the published package, publishes the draft release
+# and moves the floating tag of the action (v0.N before 1.0, vN after).
 on:
   push:
     branches: [main]
@@ -71,19 +71,40 @@ jobs:
         with:
           package-manager-cache: false
           node-version: '24'
-      - name: Rebuild the action bundle on the release branch
+      - name: Commit as the release bot
         if: steps.rp.outputs.prs_created == 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           BOT: ${{ steps.app.outputs.app-slug }}[bot]
         run: |
+          git config user.name "$BOT"
+          git config user.email "$(gh api "/users/$BOT" --jq .id)+$BOT@users.noreply.github.com"
+      - name: Rebuild the action bundle on the release branch
+        id: bundle
+        if: steps.rp.outputs.prs_created == 'true'
+        run: |
           pnpm install --frozen-lockfile
           pnpm --filter @simulci/action build
           if [ -n "$(git status --porcelain packages/action/dist)" ]; then
-            git config user.name "$BOT"
-            git config user.email "$(gh api "/users/$BOT" --jq .id)+$BOT@users.noreply.github.com"
             git add -A packages/action/dist
             git commit -m "build(action): rebuild the bundle for the release"
+            git push
+          fi
+      # The web app's bundled catalog of common actions (scripts/build-catalog.mjs) moves to their newest releases, so it
+      # changes only at releases. An action that cannot be resolved or fetched keeps its committed entry and is reported
+      # as a warning: a network failure never fails the release job (hence no --strict). The script imports yaml, which
+      # the step above installed.
+      - name: Refresh the action catalog on the release branch
+        id: catalog
+        if: steps.rp.outputs.prs_created == 'true'
+        env:
+          # Only for reading public repositories' licences from api.github.com; the app's token is not in its environment.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/build-catalog.mjs
+          if ! git diff --quiet -- apps/web/src/catalog/catalog.json; then
+            git add apps/web/src/catalog/catalog.json
+            git commit -m "build(web): refresh the action catalog for the release"
             git push
           fi
 
