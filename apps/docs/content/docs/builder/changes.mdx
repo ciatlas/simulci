@@ -1,0 +1,47 @@
+---
+title: Changes and undo
+description: What each edit changed in the plan, one undo history for every view, and the Changes dialog with its patch.
+---
+
+## This edit changed
+
+After each edit the status line says what it did to the plan, once the new plan is in:
+
+- `Add job lint: new job lint runs`
+- `Set deploy's if: deploy is now skipped`
+- `Set push's branches: CI is no longer triggered`
+
+Jobs, workflows and check names added, removed or turned are named, up to three; the rest are counted. Steps and legs
+are only counted. **Details** lists every node and check that changed, and a click selects it. On the canvas, changed
+cards flash once and added cards get a ring for two seconds, except when the system asks for reduced motion. A gesture
+always says something, `no verdict changed` included; typing in the pane speaks only when the plan changed.
+
+## Undo
+
+One history holds every edit: typing in the pane, fields, canvas gestures, triggers, the matrix, renames, reverts,
+taking the disk version and added test cases. Undo and redo work on files, so an edit that touched two files comes back
+whole.
+
+- **The top bar's Undo and Redo** are named by the entry they would take back: "Undo Add job lint". Mod+Z, Mod+Shift+Z
+  and Mod+Y do the same.
+- **Typing** is grouped: a pause, a jump of the cursor, a paste or a new line starts a new entry.
+- **A field's writes** during one visit are one entry.
+- **Undo selects** what was selected before the edit, and the pane moves to the first line it changed.
+- **Saving keeps the history.** Undo after a save makes the file unsaved again.
+- **The history is the page's.** It keeps 500 entries and does not survive a reload; your unsaved texts do (see
+  [saving](/docs/builder/saving#reloads-and-crashes)).
+
+If a file changed outside the history, undo stops instead of writing the wrong bytes, and the history starts over:
+`undo stopped: ci.yml changed outside the history`.
+
+## Changes and the patch
+
+**Changes** in the top bar (Mod+Shift+D) opens a dialog with every unsaved file, its counts of lines added and
+removed, and a diff. Its count shows on the button: **Changes (2)**.
+
+- **Since last save** or **Since opened** picks what the diff compares with.
+- **Revert** puts one file back, as one undoable entry; the dialog offers Undo right there.
+- **Download** saves one file as it would be written, byte order mark and line endings included.
+- **Download patch** saves every change as one git-style patch, `simulci-changes.patch`, for `git apply`.
+
+The tab's title starts with `•` while anything is unsaved, and the pane marks each unsaved file's tab.

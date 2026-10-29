@@ -1,0 +1,64 @@
+---
+title: Edit mode
+description: Turn the web app into a builder for one workflow, and edit it in the YAML pane or with forms and the canvas.
+---
+
+The [web app](/docs/web-app) edits the workflows it plans. Each edit is planned again as you make it, so you see what it
+does to the run before you save anything.
+
+## Turning it on
+
+Use the top bar's **Edit** switch, press `e`, or open a URL with `edit=1`. The URL keeps edit mode, and edit mode turns
+the screen into the builder for the focused workflow:
+
+- **The canvas** shows only that workflow. A workflow it calls stays nested and read-only.
+- **The YAML pane** opens, and its files become editable.
+- **The Node tab** becomes **Properties**.
+- **The scenario column** gains the triggers editor, headed **On**, above the scenario fields. Its radios pick the
+  event to simulate.
+
+Leaving edit mode discards nothing: your edits are in the files, not in the mode. While you edit, a workflow the
+scenario does not trigger keeps its jobs on the canvas, dimmed, under a banner that names the filter that stopped it.
+Its button simulates another of the workflow's events.
+
+## The YAML pane
+
+The pane opens from the bar under the plan, **Open the workflow source**, or with `\`. **Close** in its footer closes
+it. In edit mode a file is writable unless its footer says why not:
+
+| Footer                                | Means                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `● unsaved · CRLF · 2 spaces`         | writable; the line endings and the indent the editor keeps            |
+| `read-only · Edit (E)`                | edit mode is off                                                      |
+| `Generated (line 1: …) · Edit anyway` | the file says it is generated; **Edit anyway** unlocks it while these files stay open |
+| `Mixed line endings · Convert to LF`  | convert it first (**Convert to LF** or **Convert to CRLF**)           |
+| `Not UTF-8: read-only`                | shown and simulated, never edited or written                          |
+
+A new line takes the file's line ending, and Tab indents by the file's own indent. **Download** in the footer saves the
+shown file as it would be written, with its byte order mark if it had one. Invalid YAML is still editable, since the
+pane is where you fix it.
+
+**While the YAML is broken**, the plan you had stays on screen and the status line says why it waits: `the plan waits
+for valid YAML: ci.yml line 17`. Copy as test case, adding a case and renames wait with it. The plan comes back with
+the first text that parses.
+
+## Forms and the canvas
+
+Properties, the canvas, the step lists, the palette, the triggers editor and the matrix editor all write the same
+files as the pane, in the file's own style. See [forms and the canvas](/docs/builder/editing). What has no form, such as
+`permissions`, `concurrency`, `services`, `container`, `defaults`, comments and anchors, shows read-only with **Edit in
+YAML**, which opens the pane on its line.
+
+## When an edit is refused
+
+A gesture that cannot be written safely writes nothing. It says why where you made it, and in the status line, with a
+button to fix it when there is one:
+
+- **Generated file.** **Edit it anyway**.
+- **An alias** (`*name`) or a shared anchor. **Give deploy's runs-on its own value**, which copies the value in.
+- **A merge key, a multi-document file, a directive, duplicate keys, a file too large for forms.** **Edit in YAML**
+  or **Show line 14**.
+- **Broken YAML.** **Show line 17** or **Undo the last change**.
+- **Two needs in a loop, a taken id, a step that moved since you looked.** The sentence says which; nothing is written.
+
+The fix and the edit you asked for are one step in the history, so one undo takes both back.

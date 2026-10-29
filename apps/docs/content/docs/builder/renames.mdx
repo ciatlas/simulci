@@ -1,0 +1,38 @@
+---
+title: Renames
+description: Rename a job or a step id, and every reference to it, in one undoable step.
+---
+
+In edit mode, select a job or a step and press F2. You can also double-click a job card's title, or pick **Rename…** from
+a row's menu in the plan as text (Shift+F10). Type the new id and press Enter: the popover lists every line that will
+change. Press Enter again on **Rename** to write them all.
+
+## What changes
+
+The rename stays inside one workflow file:
+
+- the job's key, quotes kept, or the step's `id:`. A step without an id gets one;
+- every `needs:` entry naming the job;
+- every expression that reads it: `needs.<id>…`, `jobs.<id>…` in `workflow_call` outputs, and `steps.<id>…` in the
+  job.
+
+Output names, inputs and matrix keys are not renamed.
+
+## What does not
+
+The list says so before you confirm:
+
+- **Route tests** in `.github/simulci/tests/` that name the old id are counted, not rewritten. Edit them in the pane.
+- **Reads the rename cannot follow**, such as `needs[matrix.dep]`, `toJSON(needs)` or an id spelled with an escape, are
+  listed with their lines.
+- **Check names.** A job without `name:` reports its check under its id, so its check is renamed with it. "This edit
+  changed" names the check removed and the one added, because a required check that changes its name blocks pull
+  requests.
+
+## Safety
+
+- One undo takes the whole rename back, byte for byte.
+- If the file changes while the list is open, the list is made again before anything is written.
+- If the next plan still shows a `needs` naming the old id, the rename is undone and the status line says why.
+- An id is letters, digits, `-` and `_`, starting with a letter or `_`. Ids are compared ignoring case, so a rename
+  that changes only the case is allowed.

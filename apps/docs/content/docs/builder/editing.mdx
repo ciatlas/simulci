@@ -1,0 +1,96 @@
+---
+title: Forms and the canvas
+description: Properties, canvas gestures, steps, the action palette and its catalog, triggers and the matrix.
+---
+
+Each gesture here writes the YAML as the file already writes it: its indent, quotes, flow or block lists, comments and
+line endings. Nothing else in the file moves.
+
+## Properties
+
+In edit mode the right panel's Node tab is **Properties**: the selection's fields, above what the plan says of it.
+Each field shows exactly what the file says.
+
+- **Workflow:** Name, Run name. Its `on:` is the triggers editor.
+- **Job:** Name, Runs on (comma-separated labels), Needs, Run if, Environment, Continue on error, Timeout (minutes),
+  the matrix, Outputs, Env and Steps. A job that calls a reusable workflow has Uses, With and Secrets instead of steps.
+- **Step:** Uses, or Run, Shell and Working directory; then Name, Run if, With, Env, Continue on error, Timeout.
+
+Under **Run if** the panel shows what the condition evaluates to under the current scenario, marked "(as of the last
+plan)" while the plan catches up. **In the YAML** lists what has no form (permissions, concurrency, services,
+container, defaults, `secrets: inherit`), each with **Edit in YAML**.
+
+A field writes on Enter or when you leave it, and all its writes during one visit are one undo step. A value written
+as an alias or inside a merge key shows its source read-only, with the refusal and its fix.
+
+## The canvas
+
+In edit mode the focused workflow's cards take these gestures:
+
+- **Add a job.** **+** on a card's right edge adds a job after it; **+ Add job** in the workflow's title bar adds one
+  that needs nothing. The popover offers an Id, Runs on, Needs and "Start with Checkout", and Enter adds it.
+- **Connect.** Drag from one job's handle onto another to make the second need the first. A loop is refused, and the
+  red line says why.
+- **Disconnect.** Hover or focus an edge and press its ✕, or Delete.
+- **Remove.** Delete on a selected job or step. Removing a job also removes the needs on it. When a removal takes more
+  than you pointed at, or leaves a read of it behind, you confirm first; the notice afterwards has **Undo**.
+
+## Steps
+
+An expanded job card lists its steps, and so does Properties' **Steps**. Both take:
+
+- **+** between two steps, or **+ Add step**, for the palette at that place;
+- drag handles to reorder, or Alt+↑ and Alt+↓;
+- Delete to remove.
+
+## The palette and the catalog
+
+`s`, Mod+K, any step **+** and Uses → **Change…** open the palette. Type to narrow it. Its sections:
+
+1. **In this repository:** local actions and callable workflows. Picking a workflow adds a job that calls it.
+2. **Used here:** every `uses:` the repository has, at the ref the repository uses.
+3. **Common actions:** the bundled catalog, about fifty actions, minus those already under Used here.
+4. **Other:** what you typed, `owner/repo[/path]@ref`, inserted as written. No interface is known for it, so its
+   inputs are free-form.
+5. **Write your own:** **Run a script** adds a `run:` step and puts you in its Run field.
+
+The palette writes `uses: <ref>` and nothing else, and selects the new step with Properties open on it. Its **With**
+rows come from the action's `action.yml` (local) or the catalog (common): a description per input, an amber "required
+by …, and not set" for a required input without a default, and "deprecated by …" for a deprecated one.
+
+**Pin to SHA**, beside Uses, rewrites a catalog action's ref as its commit and keeps the tag as a comment:
+`actions/checkout@<sha> # <tag>`. It is offered only when the step uses the ref the catalog recorded; a step already
+pinned shows "Pinned to" and the tag.
+
+The catalog is part of the app and loads with the palette; the page never fetches anything to fill it. Each release
+refreshes it: the release pull request runs the catalog's builder, which resolves each action's newest version to a
+commit and commits the catalog when it changed. An action that cannot be fetched keeps its entry.
+
+## Triggers
+
+In edit mode the scenario column starts with **On**, one row per event of the workflow's `on:`:
+
+- **The radio** is the event the scenario simulates.
+- **Filters** (`branches`, `paths`, `tags` and their `-ignore` forms) are chips: × removes one, **+** adds one.
+  **+ filter** adds a filter the event reads, and a filter's ⋯ offers **Switch to branches-ignore** and **Remove
+  filter**.
+- **Types** list the activity types written, or GitHub's defaults in grey when there are none.
+- **Schedule** shows each cron with its meaning in words, and an optional timezone.
+- **workflow_dispatch** lists its inputs: type, required, default and options. An input's name cannot be changed here.
+- **✓ or ✗** at a row's end is the plan's answer: whether that filter lets the scenario through.
+
+**+ Add event** lists every event `on:` takes. `on: push` and `on: [push, pull_request]` keep their short form until
+a filter needs the long one.
+
+## The matrix
+
+A job with a `strategy:` has a **Matrix** section in Properties, and **+ matrix** starts one:
+
+- **Dimensions** are a name and value chips. **+ value** adds a value; a chip edits in place; × removes it, and
+  removing the last value removes the dimension. **+ dimension** takes a name and comma-separated values.
+- **include** and **exclude** are entries of `key = value` chips, added as `key=value, …`.
+- **fail-fast** and **max-parallel.**
+- **The live line** counts the legs, "6 legs: 4 run · 2 skipped", with the card's leg grid beside it.
+
+Values keep their type: `3.10` stays a string, and a number added to a dimension of numbers stays a number. A matrix or
+a dimension written as an expression is set at run time, so it shows read-only.
