@@ -144,6 +144,19 @@ describe('review regressions: lines and separators', () => {
     expect(result(remove(blank, ['jobs', 'a'], 'null'))).toBe('on: push\njobs:\n\nenv:\n  A: 1\n');
   });
 
+  it("keeps an emptied collection's anchor, refuses its tag, and writes a flow one anew", () => {
+    const anchored = job('    env: &e\n      A: 1\n');
+    expect(result(remove(open(anchored), ['jobs', 'a', 'env', 'A']))).toBe(job('    env: &e\n'));
+    const own = job('    env:\n      &e\n      A: 1\n');
+    expect(result(remove(open(own), ['jobs', 'a', 'env', 'A']))).toBe(job('    env:\n      &e\n'));
+    const shared = 'on: push\nenv: &e\n  A: 1\njobs:\n  a:\n    env: *e\n    runs-on: x\n';
+    expect(result(remove(open(shared), ['env', 'A']))).toBe('refused: shared-anchor');
+    const tagged = job('    env: !x\n      A: 1\n');
+    expect(result(remove(open(tagged), ['jobs', 'a', 'env', 'A']))).toBe('refused: unsupported-shape');
+    const flow = job('    needs: [b] # one\n');
+    expect(result(remove(open(flow), ['jobs', 'a', 'needs', 0]))).toBe(job('    needs: # one\n'));
+  });
+
   it('keeps no final line break where the file had none', () => {
     const doc = open('on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - run: x');
     expect(result(remove(doc, ['jobs', 'b', 'steps', 0]))).toBe(
