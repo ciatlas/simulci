@@ -631,14 +631,14 @@ describe('warnings', () => {
   it('labels each op in the author’s words, and selects what it touched', () => {
     const doc = open(fixture('starter.yml'));
     expect(plan(doc, { op: 'removeJob', file: FILE, job: 'build' })).toMatchObject({
-      label: 'Remove job build',
+      label: 'Removed job build',
       select: { file: FILE, path: ['jobs', 'test'] },
     });
     expect(
       plan(doc, { op: 'moveStep', file: FILE, job: 'test', from: 0, to: 3, fp: fp(doc, 'test', 0) }),
-    ).toMatchObject({ label: "Move test's step 1", select: { path: ['jobs', 'test', 'steps', 3] } });
+    ).toMatchObject({ label: "Moved test's step 1", select: { path: ['jobs', 'test', 'steps', 3] } });
     expect(plan(doc, { op: 'addJob', file: FILE, id: 'x', job: {} })).toMatchObject({
-      label: 'Add job x',
+      label: 'Added job x',
       select: { path: ['jobs', 'x'] },
     });
     expect(plan(doc, { op: 'setNeeds', file: FILE, job: 'deploy', needs: ['build'] })).toMatchObject({

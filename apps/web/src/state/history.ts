@@ -36,7 +36,7 @@ export interface FileChange {
 
 export interface Transaction {
   id: number;
-  /** For the undo and redo buttons: "Typing in ci.yml", "Added job lint". */
+  /** For the undo and redo buttons: "Typed in ci.yml", "Added job lint". */
   label: string;
   origin: Origin;
   at: number;
@@ -268,7 +268,7 @@ export function grouped(h: History, texts: Texts, key: string, input: TxInput, c
 /** A typed edit that is not a key: a paste, a cut or a drop is an entry of its own. */
 export type Alone = 'paste' | 'cut' | 'drop';
 
-const ALONE_LABEL: Record<Alone, string> = { paste: 'Paste into', cut: 'Cut from', drop: 'Drop into' };
+const ALONE_LABEL: Record<Alone, string> = { paste: 'Pasted into', cut: 'Cut from', drop: 'Dropped into' };
 
 /**
  * A key typed in the pane, applied at once. It joins the open group when it continues it: the same file, within
@@ -297,7 +297,7 @@ export function typed(
       ? { ...h.group, now: { [path]: applied.text }, last: ctx.at, end }
       : {
           key,
-          label: `${alone ? ALONE_LABEL[alone] : 'Typing in'} ${fileLabel(path)}`,
+          label: `${alone ? ALONE_LABEL[alone] : 'Typed in'} ${fileLabel(path)}`,
           origin: 'pane',
           before: { [path]: current },
           now: { [path]: applied.text },

@@ -135,7 +135,7 @@ export function directive(file: string, source: string, line: number): Refusal {
 }
 
 export function generated(file: string, marker: string, line: number | undefined): Refusal {
-  const unlock: Fix = { kind: 'unlock', label: 'Edit it anyway' };
+  const unlock: Fix = { kind: 'unlock', label: 'Edit anyway' };
   const why =
     line === undefined
       ? marker === '.lock.yml'

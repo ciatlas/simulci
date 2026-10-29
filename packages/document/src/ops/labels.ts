@@ -8,41 +8,41 @@ export function labelOf(op: WorkflowOp): string {
 
 type Of<K extends WorkflowOp['op']> = Extract<WorkflowOp, { op: K }>;
 
-const setOr = (value: unknown): string => (value === null ? 'Remove' : 'Set');
+const setOr = (value: unknown): string => (value === null ? 'Removed' : 'Set');
 
 const LABELS: { [K in WorkflowOp['op']]: (op: Of<K>) => string } = {
   setWorkflowField: (op) => `${setOr(op.value)} the workflow's ${op.field}`,
-  addJob: (op) => `Add job ${op.id}`,
-  removeJob: (op) => `Remove job ${op.job}`,
+  addJob: (op) => `Added job ${op.id}`,
+  removeJob: (op) => `Removed job ${op.job}`,
   setJobField: (op) => `${setOr(op.value)} ${op.job}'s ${op.field}`,
   setNeeds: (op) => `Set what ${op.job} needs`,
   setOutput: (op) => `${setOr(op.value)} ${op.job}'s output ${op.name}`,
   setBinding: (op) => `${setOr(op.value)} ${op.kind}.${op.name} of ${owner(op.job, op.step?.index)}`,
-  addStep: (op) => `Add a step to ${op.job}`,
-  removeStep: (op) => `Remove ${owner(op.job, op.index)}`,
-  moveStep: (op) => `Move ${owner(op.job, op.from)}`,
+  addStep: (op) => `Added a step to ${op.job}`,
+  removeStep: (op) => `Removed ${owner(op.job, op.index)}`,
+  moveStep: (op) => `Moved ${owner(op.job, op.from)}`,
   setStepField: (op) => `${setOr(op.value)} ${op.field} of ${owner(op.job, op.index)}`,
-  pinStepUses: (op) => `Pin the action of ${owner(op.job, op.index)} to ${op.tag}'s commit`,
+  pinStepUses: (op) => `Pinned the action of ${owner(op.job, op.index)} to ${op.tag}'s commit`,
   setMatrixDim: (op) => `${setOr(op.values)} ${op.job}'s matrix ${op.dim}`,
   setMatrixEntry: (op) =>
     op.index === 'append'
-      ? `Add an ${op.list} entry to ${op.job}'s matrix`
+      ? `Added an ${op.list} entry to ${op.job}'s matrix`
       : `${setOr(op.entry)} ${op.list} entry ${op.index + 1} of ${op.job}'s matrix`,
   setStrategyField: (op) => `${setOr(op.value)} ${op.job}'s ${op.field}`,
-  addEvent: (op) => `Add the ${op.event} trigger`,
-  removeEvent: (op) => `Remove the ${op.event} trigger`,
+  addEvent: (op) => `Added the ${op.event} trigger`,
+  removeEvent: (op) => `Removed the ${op.event} trigger`,
   setFilter: (op) => `${setOr(op.patterns)} ${op.event}'s ${op.filter}`,
   setTypes: (op) => `${setOr(op.types)} ${op.event}'s types`,
-  setSchedule: (op) => (op.crons.length === 0 ? 'Remove the schedule' : 'Set the schedule'),
+  setSchedule: (op) => (op.crons.length === 0 ? 'Removed the schedule' : 'Set the schedule'),
   setDispatchInput: (op) => `${setOr(op.input)} the input ${op.name}`,
-  switchFilter: (op) => `Switch ${op.event} to ${op.to}`,
-  addCase: (op) => `Add a case to ${fileName(op.file)}`,
-  createFile: (op) => `Create ${fileName(op.file)}`,
-  renameJob: (op) => `Rename job ${op.job} to ${op.to}`,
-  renameStepId: (op) => `Rename the id of ${owner(op.job, op.index)} to ${op.to}`,
-  dealias: (op) => `Copy into ${describe(op.path)}`,
-  dealiasAnchor: (op) => `Copy \`&${op.anchor}\` into its uses`,
-  convertEol: (op) => `Convert line endings to ${op.eol === '\r\n' ? 'CRLF' : 'LF'}`,
+  switchFilter: (op) => `Switched ${op.event} to ${op.to}`,
+  addCase: (op) => `Added a case to ${fileName(op.file)}`,
+  createFile: (op) => `Created ${fileName(op.file)}`,
+  renameJob: (op) => `Renamed job ${op.job} to ${op.to}`,
+  renameStepId: (op) => `Renamed the id of ${owner(op.job, op.index)} to ${op.to}`,
+  dealias: (op) => `Copied into ${describe(op.path)}`,
+  dealiasAnchor: (op) => `Copied \`&${op.anchor}\` into its uses`,
+  convertEol: (op) => `Converted line endings to ${op.eol === '\r\n' ? 'CRLF' : 'LF'}`,
 };
 
 const owner = (job: string, index: number | undefined): string =>

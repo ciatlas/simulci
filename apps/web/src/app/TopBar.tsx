@@ -14,7 +14,8 @@ const THEME_LABEL = { system: 'Theme: system', light: 'Theme: light', dark: 'The
  * What the Shortcuts switch turns on and off (app/shortcuts.ts); the canvas's own keys need the focus in it. The
  * switch says on or off in words, so its state does not lean on a colour.
  */
-const KEYS_HINT = 'The single keys t, f, ., 0, r, c, e, 1 to 4, [, ] and \\ act on the page while this is on';
+const KEYS_HINT =
+  'The single keys t, f, ., 0, r, c, e, 1 to 4, [, ] and \\, and i, a, n and s in edit mode, act on the page while this is on';
 
 const button =
   'rounded border border-border bg-surface px-2 py-1 text-text hover:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50';
@@ -87,7 +88,7 @@ export function TopBar() {
 
 /**
  * Edit mode's switch (`e`, `edit=1`), and in edit mode Undo and Redo, each naming the entry it would take back or do
- * again ("Undo Typing in ci.yml"; Mod+Z, Mod+Shift+Z and Mod+Y do the same). The page's title starts with "• " while
+ * again ("Undo Typed in ci.yml"; Mod+Z, Mod+Shift+Z and Mod+Y do the same). The page's title starts with "• " while
  * a file has unsaved edits.
  */
 function EditControls() {

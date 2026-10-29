@@ -46,7 +46,7 @@ export function addEvent(doc: WorkflowDocument, op: Op<'addEvent'>, shared?: 'al
   const events = eventsOf(doc);
   if (!events) return notEvents(doc);
   const options = shared ? { shared } : {};
-  const label = `Add the ${op.event} trigger`;
+  const label = `Added the ${op.event} trigger`;
   if (events.includes(op.event)) return { edits: [], label };
   const on = doc.get(ON);
   const draft =
@@ -67,7 +67,7 @@ export function addEvent(doc: WorkflowDocument, op: Op<'addEvent'>, shared?: 'al
 export function removeEvent(doc: WorkflowDocument, op: Op<'removeEvent'>, shared?: 'all'): Draft | Refusal {
   const events = eventsOf(doc);
   if (!events) return notEvents(doc);
-  const label = `Remove the ${op.event} trigger`;
+  const label = `Removed the ${op.event} trigger`;
   const on = doc.get(ON);
   if (!events.includes(op.event)) return { edits: [], label };
   if (on?.kind === 'scalar') return labelled(setDraft(doc, ON, null, shared ? { shared } : {}), label);
@@ -107,7 +107,7 @@ const EXCLUSIVE: Record<FilterKey, FilterKey> = {
  * `null` removes the filter and leaves the event (`push:`).
  */
 export function setFilter(doc: WorkflowDocument, op: Op<'setFilter'>, shared?: 'all'): Draft | Refusal {
-  const label = `${op.patterns === null ? 'Remove' : 'Set'} ${op.event}'s ${op.filter}`;
+  const label = `${op.patterns === null ? 'Removed' : 'Set'} ${op.event}'s ${op.filter}`;
   if (op.patterns !== null) {
     const twin = EXCLUSIVE[op.filter];
     if (doc.get([...ON, op.event, twin]) !== undefined)
@@ -124,7 +124,7 @@ export function setFilter(doc: WorkflowDocument, op: Op<'setFilter'>, shared?: '
 
 /** An event's activity types set, or removed with `null`; as `setFilter`. */
 export function setTypes(doc: WorkflowDocument, op: Op<'setTypes'>, shared?: 'all'): Draft | Refusal {
-  const label = `${op.types === null ? 'Remove' : 'Set'} ${op.event}'s types`;
+  const label = `${op.types === null ? 'Removed' : 'Set'} ${op.event}'s types`;
   return eventKey(doc, op.event, 'types', op.types, label, shared);
 }
 
@@ -195,7 +195,7 @@ export function switchFilter(doc: WorkflowDocument, op: Op<'switchFilter'>, shar
   const draft = renameKeyDraft(doc, [...ON, op.event, op.from], op.to, shared ? { shared } : {});
   return isRefusal(draft)
     ? draft
-    : { ...draft, label: `Switch ${op.event} to ${op.to}`, select: [...ON, op.event] };
+    : { ...draft, label: `Switched ${op.event} to ${op.to}`, select: [...ON, op.event] };
 }
 
 const SCHEDULE: YamlPath = [...ON, 'schedule'];
@@ -210,7 +210,7 @@ const cronItem = (cron: Cron): { [key: string]: Json } =>
  * new ones appended; a new cron is always quoted, as it holds `*`. No crons removes the schedule.
  */
 export function setSchedule(doc: WorkflowDocument, op: Op<'setSchedule'>, shared?: 'all'): Draft | Refusal {
-  const label = op.crons.length === 0 ? 'Remove the schedule' : 'Set the schedule';
+  const label = op.crons.length === 0 ? 'Removed the schedule' : 'Set the schedule';
   const options = shared ? { shared } : {};
   if (op.crons.length === 0)
     return doc.get(SCHEDULE) === undefined
@@ -265,7 +265,7 @@ export function setDispatchInput(
 ): Draft | Refusal {
   const name = keyIn(doc, INPUTS, op.name);
   const path = [...INPUTS, name];
-  const label = `${op.input === null ? 'Remove' : 'Set'} the input ${name}`;
+  const label = `${op.input === null ? 'Removed' : 'Set'} the input ${name}`;
   const options = { order: orderFor, ...(shared ? { shared } : {}) };
   const exists = doc.get(path) !== undefined;
   if (op.input === null)

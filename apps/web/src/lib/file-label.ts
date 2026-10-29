@@ -1,5 +1,5 @@
 /**
- * How the page names a file in a sentence ("Typing in ci.yml", "the plan waits for valid YAML: setup/action.yml line
+ * How the page names a file in a sentence ("Typed in ci.yml", "the plan waits for valid YAML: setup/action.yml line
  * 3"): its name, and for an action its directory too, since every action file is called `action.yml`.
  */
 export function fileLabel(path: string): string {

@@ -98,7 +98,7 @@ describe("renaming flowpact's resolve job (E2's numbers)", () => {
 
   it('renames each of them and nothing else: 52 lines change, and undo gives the bytes back', () => {
     if (!result.ok) throw new Error(`${result.reason}: ${result.message}`);
-    expect(result.label).toBe('Rename job resolve to tag-resolve');
+    expect(result.label).toBe('Renamed job resolve to tag-resolve');
     expect(result.renames).toEqual([
       { kind: 'job', file: path, job: 'resolve', from: 'resolve', to: 'tag-resolve' },
     ]);

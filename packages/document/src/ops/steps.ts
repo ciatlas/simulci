@@ -73,7 +73,7 @@ export function addStep(doc: WorkflowDocument, op: Op<'addStep'>, shared?: 'all'
     order: ORDER.job,
     ...(shared ? { shared } : {}),
   });
-  return isRefusal(draft) ? draft : { ...draft, label: `Add a step to ${op.job}` };
+  return isRefusal(draft) ? draft : { ...draft, label: `Added a step to ${op.job}` };
 }
 
 /** A step out with its lines; a step whose id is read elsewhere in its job gets a warning. */
@@ -92,7 +92,7 @@ export function removeStep(doc: WorkflowDocument, op: Op<'removeStep'>, shared?:
   const select = op.index > 0 ? ['jobs', op.job, 'steps', op.index - 1] : ['jobs', op.job];
   return {
     ...draft,
-    label: `Remove ${refusals.describe(['jobs', op.job, 'steps', op.index])}`,
+    label: `Removed ${refusals.describe(['jobs', op.job, 'steps', op.index])}`,
     warnings: danglingReads(doc, `steps.${id}`, spans),
     select,
   };

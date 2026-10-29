@@ -50,7 +50,7 @@ function appendCase(doc: WorkflowDocument, testCase: CaseJson): Draft | Refusal 
   const index = Array.isArray(cases) ? cases.length : 0;
   const name = freeCaseName(testCase.name, names);
   const flow = whenInFlow(doc, testCase);
-  const draft = chain(doc, `Add a case to ${fileName(doc.path)}`, [
+  const draft = chain(doc, `Added a case to ${fileName(doc.path)}`, [
     (d) => insertDraft(d, ['cases'], index, caseValue({ ...testCase, name })),
     (d) => (flow === undefined ? undefined : inFlow(d, ['cases', index, 'when'], flow)),
     (d) => commentsBefore(d, ['cases', index], testCase.comments),
@@ -159,7 +159,7 @@ export function createFile(op: Op<'createFile'>, ctx: OpContext): EditPlan<Recor
   const plan = verify(empty, {
     edits: op.text === '' ? [] : [{ from: 0, to: 0, insert: op.text }],
     expect: () => value,
-    label: `Create ${fileName(op.file)}`,
+    label: `Created ${fileName(op.file)}`,
     eol: eolOf(op.text),
   });
   return plan.ok ? { ...plan, value: { [op.file]: plan.value }, created: [op.file] } : plan;

@@ -160,7 +160,7 @@ describe('the other-workflow refusal and its fix', () => {
     const result = planOp(create, context(doc));
     if (!result.ok) throw new Error(result.message);
     const path = `${DIR}ci-2.test.yml`;
-    expect(result).toMatchObject({ label: 'Create ci-2.test.yml', created: [path] });
+    expect(result).toMatchObject({ label: 'Created ci-2.test.yml', created: [path] });
     expect(result.value).toEqual({
       [path]: [{ from: 0, to: 0, insert: create.op === 'createFile' ? create.text : '' }],
     });

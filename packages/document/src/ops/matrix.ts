@@ -77,7 +77,7 @@ export function setMatrixDim(doc: WorkflowDocument, op: Op<'setMatrixDim'>, shar
   if (bad) return bad;
   const dim = keyIn(doc, matrixOf(op.job), op.dim);
   const path = [...matrixOf(op.job), dim];
-  const label = `${op.values === null ? 'Remove' : 'Set'} ${op.job}'s matrix ${dim}`;
+  const label = `${op.values === null ? 'Removed' : 'Set'} ${op.job}'s matrix ${dim}`;
   const before = doc.get(path)?.value;
   const named = dimensionName(doc, op, before === undefined);
   if (named) return named;
@@ -194,8 +194,8 @@ function flowEntries(doc: WorkflowDocument, list: YamlPath): boolean | undefined
 
 function entryLabel(op: Op<'setMatrixEntry'>): string {
   const matrix = `${op.job}'s matrix`;
-  if (op.index === 'append') return `Add an ${op.list} entry to ${matrix}`;
-  return `${op.entry === null ? 'Remove' : 'Set'} ${op.list} entry ${op.index + 1} of ${matrix}`;
+  if (op.index === 'append') return `Added an ${op.list} entry to ${matrix}`;
+  return `${op.entry === null ? 'Removed' : 'Set'} ${op.list} entry ${op.index + 1} of ${matrix}`;
 }
 
 /** How a strategy field's text is read: `max-parallel: 2` a number, `fail-fast: false` a boolean. */
@@ -213,7 +213,7 @@ export function setStrategyField(
   const missing = jobMissing(doc, op.job);
   if (missing) return missing;
   const path = [...strategyOf(op.job), op.field];
-  const label = `${op.value === null ? 'Remove' : 'Set'} ${op.job}'s ${op.field}`;
+  const label = `${op.value === null ? 'Removed' : 'Set'} ${op.job}'s ${op.field}`;
   if (op.value === null)
     return doc.get(path) === undefined
       ? { edits: [], label }

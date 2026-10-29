@@ -589,9 +589,9 @@ describe('warnings and labels of the trigger and matrix ops', () => {
       const result = plan(doc, op);
       return result.ok ? result.label : result.reason;
     };
-    expect(label({ op: 'addEvent', file: FILE, event: 'release' })).toBe('Add the release trigger');
+    expect(label({ op: 'addEvent', file: FILE, event: 'release' })).toBe('Added the release trigger');
     expect(label({ op: 'setFilter', file: FILE, event: 'push', filter: 'branches', patterns: null })).toBe(
-      "Remove push's branches",
+      "Removed push's branches",
     );
     expect(label({ op: 'setSchedule', file: FILE, crons: [{ cron: '0 4 * * 1' }] })).toBe('Set the schedule');
     expect(
@@ -603,9 +603,9 @@ describe('warnings and labels of the trigger and matrix ops', () => {
         index: 'append',
         entry: { node: 26 },
       }),
-    ).toBe("Add an include entry to test's matrix");
+    ).toBe("Added an include entry to test's matrix");
     expect(label({ op: 'setStrategyField', file: FILE, job: 'test', field: 'fail-fast', value: null })).toBe(
-      "Remove test's fail-fast",
+      "Removed test's fail-fast",
     );
   });
 });

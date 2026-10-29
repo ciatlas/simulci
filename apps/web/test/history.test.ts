@@ -175,10 +175,10 @@ describe('the edit history', () => {
     expect(e.h.past).toEqual([]);
     expect(e.h.group).toMatchObject({
       key: `pane:${CI}`,
-      label: 'Typing in ci.yml',
+      label: 'Typed in ci.yml',
       before: { [CI]: 'on: push\n' },
     });
-    expect(undoLabel(e.h)).toBe('Typing in ci.yml');
+    expect(undoLabel(e.h)).toBe('Typed in ci.yml');
     e.close();
     expect(e.h.group).toBeUndefined();
     expect(e.h.past).toHaveLength(1);
@@ -208,13 +208,13 @@ describe('the edit history', () => {
     ok(e.type(CI, 0, 0, '!', PAUSE_MS + 7)); // another file
     ok(e.tx([{ path: RELEASE, edits: [{ from: 0, to: 0, insert: '%' }] }], PAUSE_MS + 8));
     expect(e.h.past.map((t) => t.label)).toEqual([
-      'Typing in ci.yml',
-      'Typing in ci.yml',
-      'Typing in ci.yml',
-      'Typing in ci.yml',
-      'Paste into ci.yml',
-      'Typing in release.yml',
-      'Typing in ci.yml',
+      'Typed in ci.yml',
+      'Typed in ci.yml',
+      'Typed in ci.yml',
+      'Typed in ci.yml',
+      'Pasted into ci.yml',
+      'Typed in release.yml',
+      'Typed in ci.yml',
       'Op',
     ]);
     expect(e.texts).toEqual({ [CI]: '!>\nfPASTEDabcde\n', [RELEASE]: '%#xyz\n' });
@@ -243,7 +243,7 @@ describe('the edit history', () => {
     const e = editor({ [SETUP]: 'name: x\n' });
     ok(e.type(SETUP, 0, 0, 'a', 0));
     ok(e.type(SETUP, 1, 1, 'b', PAUSE_MS));
-    expect(e.h.past.map((t) => t.label)).toEqual(['Typing in setup/action.yml']);
+    expect(e.h.past.map((t) => t.label)).toEqual(['Typed in setup/action.yml']);
   });
 
   it('drops a group typed back to its text, and undo then undoes the entry before it', () => {

@@ -905,6 +905,6 @@ describe('the YAML pane in edit mode', () => {
       view().contentDOM.dispatchEvent(new FocusEvent('blur'));
     });
     expect(store.getState().edit.group).toBeUndefined();
-    expect(store.getState().edit.past.map((t) => t.label)).toEqual(['Typing in crlf.yml']);
+    expect(store.getState().edit.past.map((t) => t.label)).toEqual(['Typed in crlf.yml']);
   });
 });

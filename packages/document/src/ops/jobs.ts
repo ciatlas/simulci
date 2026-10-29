@@ -65,7 +65,7 @@ export function addJob(doc: WorkflowDocument, op: Op<'addJob'>): Draft | Refusal
   const jobs = [...ids.slice(0, at + 1), op.id];
   const order = (path: YamlPath) => (path.length === 1 && path[0] === 'jobs' ? jobs : orderFor(path));
   const draft = setDraft(doc, ['jobs', op.id], jobBody(doc, op), { order });
-  return isRefusal(draft) ? draft : { ...draft, label: `Add job ${op.id}`, select: ['jobs', op.id] };
+  return isRefusal(draft) ? draft : { ...draft, label: `Added job ${op.id}`, select: ['jobs', op.id] };
 }
 
 /**
@@ -163,7 +163,7 @@ export function removeJob(doc: WorkflowDocument, op: Op<'removeJob'>, shared?: '
       () => (d: WorkflowDocument) => removeNeed(d, other, op.job, shared),
     ),
   );
-  const draft = chain(doc, `Remove job ${op.job}`, [
+  const draft = chain(doc, `Removed job ${op.job}`, [
     ...needSteps,
     (d) => removeDraft(d, ['jobs', op.job], 'null', shared ? { shared } : {}),
   ]);
