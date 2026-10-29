@@ -6,9 +6,10 @@ import { folderWith, useOpfsFolder } from './opfs';
 
 /**
  * The accessibility pass in a real browser (synthesis §§ 7, 10 and 11), over the bundled starter sample: axe finds
- * nothing on any view the page has, in the light theme and the dark, wide, narrow, with an input the worker refused
- * and at 200 % zoom; the plan the refusal keeps is marked stale without fading any text; the text view's ring is
- * drawn where its section cannot clip it; at 200 %, in the stacked layout and in the one where each pane scrolls
+ * nothing on any view the page has, in the light theme and the dark, wide, narrow, with the scenario column and the
+ * right panel closed to their rails, with an input the worker refused and at 200 % zoom; the plan the refusal keeps
+ * is marked stale without fading any text; the text view's ring is drawn where its section cannot clip it; at
+ * 200 %, in the stacked layout and in the one where each pane scrolls
  * itself, nothing scrolls sideways and the last of each column can be scrolled to; an author who asked for less
  * motion gets no transition, no flash and an instant fit, and still hears the pin's sentence; with motion the cards a
  * pin changed flash once; the pointer on an unknown's "affects n" dims every card it does not affect; a pin from the
@@ -206,6 +207,22 @@ test.describe('axe finds nothing', () => {
     await darkTheme(page);
     await expectTabsClean(page, 'dark');
     await expectCaseFormatsClean(page, 'dark');
+  });
+
+  test('with the scenario column and the right panel closed to their rails, in both themes and narrow', async ({
+    page,
+  }) => {
+    await openStarter(page);
+    await page.keyboard.press('[');
+    await page.keyboard.press(']');
+    await expect(page.getByRole('button', { name: 'Open the plan details' })).toBeVisible();
+    await expectAxeClean(page, 'light: the graph between the two rails');
+    await darkTheme(page);
+    await expectAxeClean(page, 'dark: the graph between the two rails');
+    // Below 1024 px the panel's rail is a bar under the plan.
+    await page.setViewportSize({ width: 900, height: 720 });
+    await expect(thePlan(page)).toBeVisible();
+    await expectAxeClean(page, 'dark, narrow: the text view, the scenario’s rail and the panel’s bar');
   });
 
   test('in the narrow layout, where the text view is the only one', async ({ page }) => {
