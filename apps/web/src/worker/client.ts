@@ -14,6 +14,8 @@ import {
   type RefsResponse,
   type SimulateRequest,
   SUPPORTED_RUN_PLAN,
+  type TestedResponse,
+  type TestRequest,
 } from './protocol';
 
 /**
@@ -21,7 +23,8 @@ import {
  * waiting request replaces the older one, which is answered `superseded`); a reply that is not for the request in
  * flight is dropped; a request that takes longer than the watchdog allows restarts the worker, which loads the newest
  * files again before the requests that were in flight are sent once more, and after two restarts for the same files
- * the client gives up with an error.
+ * the client gives up with an error. A test run plans every case, so the watchdog gives it, and whatever waits behind
+ * it in the worker, a longer allowance.
  */
 
 export type Superseded = { type: 'superseded' };
@@ -29,6 +32,7 @@ export type LoadResult = LoadedResponse | ErrorResponse | Superseded;
 export type SimulateResult = PlanResponse | InvalidResponse | ErrorResponse | Superseded;
 export type CaseResult = CaseResponse | InvalidResponse | ErrorResponse | Superseded;
 export type RefsResult = RefsResponse | ErrorResponse | Superseded;
+export type TestResult = TestedResponse | ErrorResponse | Superseded;
 
 export interface EngineClient {
   ready: Promise<ReadyResponse>;
@@ -36,6 +40,7 @@ export interface EngineClient {
   simulate(body: Omit<SimulateRequest, 'id' | 'type'>): Promise<SimulateResult>;
   case(body: Omit<CaseRequest, 'id' | 'type'>): Promise<CaseResult>;
   refs(body: Omit<RefsRequest, 'id' | 'type'>): Promise<RefsResult>;
+  test(body: Omit<TestRequest, 'id' | 'type'>): Promise<TestResult>;
   /** Called after the worker was restarted by the watchdog and the files were loaded again under `project`. */
   onRestart(listener: (restarts: number, project: number | undefined) => void): void;
   /**
@@ -82,6 +87,9 @@ interface Previous {
 
 const MIN_WATCHDOG_MS = 3000;
 const MAX_RESTARTS = 2;
+/** A test run plans each of its cases: it may take this long, or as long as this many plans. */
+const TEST_WATCHDOG_MS = 30_000;
+const TEST_RUN_PLANS = 200;
 
 export function createEngineClient(options: ClientOptions): EngineClient {
   const setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
@@ -111,10 +119,17 @@ export function createEngineClient(options: ClientOptions): EngineClient {
   const listeners: ((restarts: number, project: number | undefined) => void)[] = [];
   const failureListeners: ((message: string) => void)[] = [];
 
+  /** How long a request may take: a test run longer, and a request the worker answers only after a test run as long. */
+  const allowance = (kind: Kind): number => {
+    const plan = Math.max(MIN_WATCHDOG_MS, 20 * lastMs);
+    const test = Math.max(TEST_WATCHDOG_MS, TEST_RUN_PLANS * lastMs);
+    return kind === 'test' ? test : inFlight.has('test') ? plan + test : plan;
+  };
+
   const post = (pending: Pending): void => {
     const id = nextId++;
     pending.id = id;
-    pending.timer = setTimer(() => stalled(pending.body.type), Math.max(MIN_WATCHDOG_MS, 20 * lastMs));
+    pending.timer = setTimer(() => stalled(pending.body.type), allowance(pending.body.type));
     inFlight.set(pending.body.type, pending);
     // oxlint-disable-next-line unicorn/require-post-message-target-origin -- a Worker's postMessage takes a transfer list, not an origin
     worker.postMessage({ ...pending.body, id });
@@ -322,6 +337,7 @@ export function createEngineClient(options: ClientOptions): EngineClient {
     simulate: (body) => request<SimulateResult>({ ...body, type: 'simulate' }),
     case: (body) => request<CaseResult>({ ...body, type: 'case' }),
     refs: (body) => request<RefsResult>({ ...body, type: 'refs' }),
+    test: (body) => request<TestResult>({ ...body, type: 'test' }),
     onRestart: (listener) => {
       listeners.push(listener);
     },

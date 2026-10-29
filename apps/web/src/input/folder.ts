@@ -1,4 +1,4 @@
-import { filterFiles, isKeptFile, mayHoldProjectFiles } from './filter';
+import { filterFiles, isReadFile, mayHoldProjectFiles, snapshotFiles } from './filter';
 import { LIMITS, readWithin, type Walked } from './limits';
 
 /**
@@ -55,11 +55,18 @@ export async function requestFolder(handle: FileSystemDirectoryHandle): Promise<
   }
 }
 
-/** The project files and route tests under a handle, by repository-relative path, and the ones too big to read. */
+/**
+ * The project files, route tests and their snapshots under a handle, by repository-relative path, and the ones too big
+ * to read.
+ */
 export async function readFolder(root: FileSystemDirectoryHandle): Promise<Walked> {
   const walked: Walked = { files: {}, meta: {}, skipped: [] };
   await walk(root, '', 0, walked);
-  return { files: filterFiles(walked.files), meta: walked.meta, skipped: walked.skipped };
+  return {
+    files: { ...filterFiles(walked.files), ...snapshotFiles(walked.files) },
+    meta: walked.meta,
+    skipped: walked.skipped,
+  };
 }
 
 async function walk(
@@ -73,7 +80,7 @@ async function walk(
     const path = prefix ? `${prefix}/${name}` : name;
     if (handle.kind === 'directory') {
       if (mayHoldProjectFiles(path)) await walk(handle, path, depth + 1, walked);
-    } else if (isKeptFile(path)) await readWithin(await handle.getFile(), path, walked);
+    } else if (isReadFile(path)) await readWithin(await handle.getFile(), path, walked);
   }
 }
 

@@ -1,6 +1,6 @@
 import { Tabs } from '@base-ui/react/tabs';
 import { lazy, Suspense, useMemo } from 'react';
-import { useSession } from '../app/providers';
+import { useApp, useSession } from '../app/providers';
 import type { PanelTab } from '../state/prefs';
 import { newestOutline } from '../state/store';
 import { NodeDetails } from './NodeDetails';
@@ -10,14 +10,18 @@ import { Reasons } from './Reasons';
 import { Unknowns } from './Unknowns';
 
 /**
- * The right panel: Reasons, Unknowns (with the Assumptions above them), Node and Problems, one open at a time. The
- * open tab is a preference; `r` and `1`–`4` switch it from anywhere outside a field (app/shortcuts.ts). A tab's
- * count is what it asks the author to look at: the unknowns that decide a verdict, the problems. In edit mode the Node
- * tab is Properties: the selection's fields, from the edit runtime, above what the plan says of it.
+ * The right panel: Reasons, Unknowns (with the Assumptions above them), Node, Problems and Tests, one open at a time.
+ * The open tab is a preference; `r` and `1`–`5` switch it from anywhere outside a field (app/shortcuts.ts). A tab's
+ * count is what it asks the author to look at: the unknowns that decide a verdict, the problems, the cases that did
+ * not pass. In edit mode the Node tab is Properties: the selection's fields, from the edit runtime, above what the plan
+ * says of it.
  */
 
 /** Properties, from the edit runtime's chunk (`edit-*`), fetched when edit mode first shows it. */
 const Properties = lazy(() => import('../edit/edit').then((m) => ({ default: m.Properties })));
+
+/** The Tests tab, a chunk of its own (`tests-*`), fetched when the tab is first shown (synthesis § 5.1). */
+const Tests = lazy(() => import('./tests/tests').then((m) => ({ default: m.Tests })));
 
 const TAB = 'rounded-t px-2.5 py-1.5 text-muted text-xs hover:text-text data-[selected]:text-text';
 
@@ -30,6 +34,11 @@ export function Panels() {
   const editing = useSession((s) => s.edit.on);
   const gating = plan ? plan.unknowns.filter((u) => u.affects.length > 0).length : 0;
   const problems = useMemo(() => problemRows(outline, plan, files).length, [outline, plan, files]);
+  const tests = useSession((s) => s.tests);
+  const hasTests = useSession((s) => s.project.outline?.files.some((f) => f.kind === 'test') ?? false);
+  const { store } = useApp();
+  const summary = tests.run?.summary;
+  const notPassed = summary ? summary.failed + summary.invalid : 0;
 
   return (
     <Tabs.Root
@@ -51,6 +60,10 @@ export function Panels() {
         <Tabs.Tab value="problems" className={TAB}>
           Problems
           <Count n={problems} />
+        </Tabs.Tab>
+        <Tabs.Tab value="tests" className={TAB}>
+          Tests
+          <Count n={notPassed} />
         </Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="reasons" data-panel="reasons" className={PANEL}>
@@ -79,6 +92,11 @@ export function Panels() {
       </Tabs.Panel>
       <Tabs.Panel value="problems" data-panel="problems" className={PANEL}>
         <Problems />
+      </Tabs.Panel>
+      <Tabs.Panel value="tests" data-panel="tests" className={PANEL}>
+        <Suspense fallback={<p className="text-muted text-sm">loading the tests…</p>}>
+          <Tests tests={tests} hasTests={hasTests} actions={store.getState()} />
+        </Suspense>
       </Tabs.Panel>
     </Tabs.Root>
   );

@@ -1,5 +1,8 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { folderWith, useOpfsFolder } from './opfs';
 
 /**
  * The accessibility pass in a real browser (synthesis §§ 7, 10 and 11), over the bundled starter sample: axe finds
@@ -17,7 +20,7 @@ const CI = '.github/workflows/ci.yml';
 /** The starter's two unknowns: the build step's output its last step's if: reads, and the changed files. */
 const DETECT = `${CI}#build/steps.detect.outputs.changed`;
 const CHANGED = 'scenario.changed';
-const TABS = ['Reasons', 'Unknowns', 'Node', 'Problems'] as const;
+const TABS = ['Reasons', 'Unknowns', 'Node', 'Problems', 'Tests'] as const;
 const FORMATS = ['Test case (jobs)', 'Test case (steps)', 'Plan as text', 'Plan as Mermaid'] as const;
 /** What the status line says once the changed-files pin's plan comes: only docs changed, which CI ignores. */
 const PINNED = 'pinned; CI is no longer triggered';
@@ -138,6 +141,32 @@ test.describe('axe finds nothing', () => {
     await viewButton(page, 'Text').click();
     await expect(thePlan(page)).toBeVisible();
     await expectAxeClean(page, 'light: the text view');
+  });
+
+  test('on the Tests tab with passed, failed and invalid cases, in both themes', async ({ page }) => {
+    // e2e/fixtures/tests, opened as a folder: tests.spec.ts checks what the tab says of it.
+    const root = join(import.meta.dirname, 'fixtures/tests');
+    const files: Record<string, number[]> = {};
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else files[relative(root, path)] = Array.from(readFileSync(path));
+      }
+    };
+    walk(root);
+    await useOpfsFolder(page);
+    await page.goto('/');
+    await folderWith(page, files);
+    await page
+      .getByRole('navigation', { name: 'Source' })
+      .getByRole('button', { name: 'Open folder' })
+      .click();
+    await tab(page, 'Tests').click();
+    await expect(page.locator('[data-panel="tests"]').getByRole('status')).toHaveText(/ran as CI on/);
+    await expectAxeClean(page, 'light: the Tests tab');
+    await darkTheme(page);
+    await expectAxeClean(page, 'dark: the Tests tab');
   });
 
   test('in the Copy as test case dialog at each format', async ({ page }) => {

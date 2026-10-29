@@ -53,12 +53,13 @@ const page = (key: string, more: Partial<PageKey> = {}) => keyFor({ ...base, key
 describe('the page keys', () => {
   it('takes t, f, . and 0 as the page’s commands, and nothing else', () => {
     expect(['t', 'f', '.', '0'].map((k) => page(k))).toEqual(['view', 'fit', 'centre', 'actualSize']);
-    expect(['r', '1', '2', '3', '4', '[', ']', '\\'].map((k) => page(k))).toEqual([
+    expect(['r', '1', '2', '3', '4', '5', '[', ']', '\\'].map((k) => page(k))).toEqual([
       'reasons',
       'panel:reasons',
       'panel:unknowns',
       'panel:node',
       'panel:problems',
+      'panel:tests',
       'pane:left',
       'pane:right',
       'pane:yaml',

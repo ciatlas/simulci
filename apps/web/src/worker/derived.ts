@@ -97,7 +97,7 @@ function decisionLoc(decision: Decision, parentLoc: Loc | undefined, own: Loc | 
 }
 
 /** The `on:` line that decided a workflow: the filter's key, the event's key, or `on` itself. */
-function triggerLoc(wf: WorkflowPlan, outline: Outline): Loc | undefined {
+export function triggerLoc(wf: WorkflowPlan, outline: Outline): Loc | undefined {
   const o = outline.workflows.find((w) => w.path === wf.path);
   if (!o) return undefined;
   const reason = decidingReason(wf.triggered.chain, wf.triggered.verdict);

@@ -9,7 +9,7 @@ import { classifyEol, type FileMeta, textMeta } from '../input/read';
 import type { DiskConflict, DiskFile, FileOutcome } from '../input/save';
 import { type ChangeRow, changeRows, changeSentence } from '../plan/change-rows';
 import { diffOf, pinSentence, verdictChanges } from '../plan/changes';
-import type { Derived, ModelInfo, Outline, ReadyResponse } from '../worker/protocol';
+import type { Derived, ModelInfo, Outline, ReadyResponse, TestedResponse } from '../worker/protocol';
 import * as history from './history';
 import { carried, changeRenames, inverse, type Renames, renamedBeside } from './renames';
 import { DEFAULT_PREFS, type PanelTab, type Prefs } from './prefs';
@@ -169,6 +169,12 @@ export interface SessionState {
      * The edits of the last commit of the history, per file, with each file's rev before it: a view that shows the
      * text of that rev maps the edits instead of comparing texts (`yaml/bridge.ts`).
      */
+    /**
+     * The route tests' snapshots by path (`*.snap.json`, `lib/snapshot-path.ts`), as the source held them: read-only,
+     * so never in `byPath`, with no pane tab, never dirty and never saved. Every load sends them, for the Tests tab;
+     * Reload reads them again (`setReadonly`). Absent when the source has none.
+     */
+    readonly?: Record<string, string>;
     edited?: {
       version: number;
       revs: Record<string, number>;
@@ -262,6 +268,24 @@ export interface SessionState {
    * that failed; absent until the epoch's first Outline, when no file is known not to be generated.
    */
   generated?: Record<string, string>;
+  /** The Tests tab: the route tests run in the worker after each plan of new files (synthesis § 5.1). */
+  tests: TestsState;
+}
+
+/** What the Tests tab shows: the last run of the route tests, the one under way, and how they run. */
+export interface TestsState {
+  /** Run as `simulci test --ci` runs them (the "As CI" switch, on by default): no snapshot written, `only` refused. */
+  ci: boolean;
+  /** `idle`: nothing ran for these files (none hold tests, or none loaded yet). */
+  status: 'idle' | 'running' | 'done' | 'failed';
+  run?: TestRun;
+  /** Why the last run failed: the engine's message. */
+  error?: string;
+}
+
+/** A run of the route tests, with what it ran on: the project, its files version, CI or not, and a digest of them. */
+export interface TestRun extends Pick<TestedResponse, 'files' | 'summary' | 'exitCode' | 'ms'> {
+  for: { project: number; files: number; ci: boolean; digest: string };
 }
 
 /** A file of the crash snapshot that did not come back by itself (synthesis § 5.6): the author settles it. */
@@ -343,7 +367,22 @@ export interface SessionActions {
     source: Source,
     meta?: Record<string, FileMeta>,
     base?: BaseDiff,
+    readonly?: Record<string, string>,
   ) => void;
+  /** The snapshots of `epoch` read again (Reload): they replace the ones held, unless they are the same. */
+  setReadonly: (epoch: number, readonly: Record<string, string>) => void;
+  /** The "As CI" switch. */
+  setTestsCi: (ci: boolean) => void;
+  testsRunning: () => void;
+  testsReceived: (run: TestRun) => void;
+  testsFailed: (message: string) => void;
+  /** No route test is in the project loaded: nothing to show. */
+  testsCleared: () => void;
+  /**
+   * A route test's case loaded into the scenario (the Tests tab's Load into scenario): its scenario and mocks, as `given`
+   * and `when` merge them, replace the ones held, as a pin; the case's workflow is focused.
+   */
+  loadCase: (scenario: ScenarioInput, assume: AssumeEntry[], workflow: string) => void;
   forgetSource: () => void;
   /** A source that has no files until the author acts: a stored folder waiting for Reopen. */
   awaitReopen: (source: Source) => void;
@@ -498,7 +537,20 @@ export function initialSessionState(prefs: Prefs = DEFAULT_PREFS): SessionState 
     ui: { view: 'graph', hideUntriggered: false, prefs, expanded: [], representative: {}, opened: [] },
     notices: [],
     edit: { ...history.emptyHistory(), on: false, unlocked: [] },
+    tests: { ci: true, status: 'idle' },
   };
+}
+
+/** The Tests tab of new files: nothing ran yet, the switch as the author left it. */
+const untested = (tests: TestsState): TestsState => ({ ci: tests.ci, status: 'idle' });
+
+/** Two sets of snapshots alike, path by path. */
+function sameTexts(
+  a: Readonly<Record<string, string>> = {},
+  b: Readonly<Record<string, string>> = {},
+): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => Object.hasOwn(b, k) && a[k] === b[k]);
 }
 
 /**
@@ -727,11 +779,12 @@ export function createSessionStore(initial: SessionState = initialSessionState()
     };
     return {
       ...initial,
-      setFiles: (byPath, source, meta, base) =>
+      setFiles: (byPath, source, meta, base, readonly) =>
         set((s) => ({
           source,
-          files: sourceFiles(s.files, byPath, metaOf(byPath, meta), base),
+          files: withReadonly(sourceFiles(s.files, byPath, metaOf(byPath, meta), base), readonly),
           ...UNLOADED,
+          tests: untested(s.tests),
           edit: freshEdit(s.edit),
           error: s.error?.kind === 'source' ? undefined : s.error,
         })),
@@ -740,6 +793,7 @@ export function createSessionStore(initial: SessionState = initialSessionState()
           source: { kind: 'none' },
           files: sourceFiles(s.files, {}, {}),
           ...UNLOADED,
+          tests: untested(s.tests),
           edit: freshEdit(s.edit),
           focus: undefined,
           sel: undefined,
@@ -747,6 +801,30 @@ export function createSessionStore(initial: SessionState = initialSessionState()
         })),
       // A new epoch, so the session takes it for a source with no files, not for an edit that emptied them.
       awaitReopen: (source) => get().setFiles({}, source),
+      setReadonly: (epoch, readonly) =>
+        set((s) =>
+          s.files.epoch !== epoch || sameTexts(s.files.readonly, readonly)
+            ? s
+            : { files: withReadonly(s.files, readonly) },
+        ),
+      setTestsCi: (ci) => set((s) => (s.tests.ci === ci ? s : { tests: { ...s.tests, ci } })),
+      testsRunning: () => set((s) => ({ tests: { ...s.tests, status: 'running', error: undefined } })),
+      testsReceived: (run) => set((s) => ({ tests: { ci: s.tests.ci, status: 'done', run } })),
+      testsFailed: (error) => set((s) => ({ tests: { ...s.tests, status: 'failed', error } })),
+      testsCleared: () =>
+        set((s) => (s.tests.status === 'idle' && !s.tests.run ? s : { tests: untested(s.tests) })),
+      loadCase: (scenario, assume, workflow) =>
+        set((s) => ({
+          scenario,
+          scenarioFrom: 'author',
+          assumed: [],
+          assume,
+          focus: workflow,
+          sel: undefined,
+          stale: inputsStale(s),
+          error: authorsErrorCleared(authorsErrorCleared(s.error, 'scenario'), 'assume'),
+          change: pinOver(s, scenario, assume),
+        })),
       setScenario: (scenario, options) =>
         set((s) => ({
           scenario,
@@ -1154,6 +1232,17 @@ const contextOf = (s: SessionState): history.Context => {
  * The files of a new source: a new epoch, every file at the new version, its text as read and as opened, except
  * where `diff` gives the text its edits were made to (pasted buffers carry their edits across epochs).
  */
+/** The files with these snapshots, or none. */
+function withReadonly(
+  files: SessionState['files'],
+  readonly: Record<string, string> | undefined,
+): SessionState['files'] {
+  if (readonly && Object.keys(readonly).length > 0) return { ...files, readonly };
+  const rest = { ...files };
+  delete rest.readonly;
+  return rest;
+}
+
 function sourceFiles(
   files: SessionState['files'],
   byPath: Record<string, string>,

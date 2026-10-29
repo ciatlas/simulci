@@ -139,6 +139,7 @@ describe('the three-way reload', () => {
       take: ['t'],
       conflicts: [conflict('a'), conflict('b'), conflict('c')],
       from: { a: 'm\n', b: 'm\n', c: 'm\n', t: 'a\n' },
+      readonly: {},
     };
     const stamp = '';
     const choices: Choices = {

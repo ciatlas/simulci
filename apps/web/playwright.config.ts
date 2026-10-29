@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * The browser pass: the specs under e2e/ drive the built app (`pnpm --filter @simulci/web build` first) as `vite
- * preview` serves it, with vercel.json's headers and rewrites (vercel-headers.ts), workers and all, in headless
+ * preview` serves it, with Vercel's headers and rewrites (headers.ts, vercel-headers.ts), workers and all, in headless
  * Chromium. The port is the preview's default and must be free, so a preview of another checkout is never the one
  * tested. With BASE_URL set (a deployment, as the deployment smoke workflow runs it) only the deployment smoke runs,
  * against that URL, and nothing is served locally.
