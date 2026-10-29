@@ -13,7 +13,7 @@ cases:
         - Code health
         - Workflows (flowpact)
         - Workflow security (zizmor)
-        - Schemas up to date
+        - Schemas and lab figure up to date
         - Action bundle is up to date
         - Action on this repository
         - Browser bundle
