@@ -127,7 +127,7 @@ function pageProblems(file, sources) {
 
 /**
  * What breaks the contract in one stylesheet: a font inlined as a data: URI, which the deployment's CSP
- * (`font-src 'self'`, apps/web/vercel.json) refuses, so its glyphs fall back to another face.
+ * (`font-src 'self'`, apps/web/headers.ts) refuses, so its glyphs fall back to another face.
  * @param {string} file the stylesheet's name under assets/
  * @param {string} code its text
  * @returns {string[]}

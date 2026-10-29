@@ -133,6 +133,25 @@ test('typing if: false turns the deploy card skipped, and undoing everything giv
   );
 });
 
+test('a key typed over a selection replaces it with no style attribute for the CSP to refuse', async ({
+  page,
+}) => {
+  await openStarter(page);
+  await editMode(page);
+  // Line 1 starts with a bold key, `name`, whose weight Chrome would keep for the typed text as a `style` attribute.
+  await endOfLine(page, 1);
+  await page.keyboard.press('Shift+Home');
+  await page.keyboard.type('#');
+  await expect(editor(page).locator('.cm-line').first()).toHaveText('#');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('x');
+  await expect(editor(page)).toHaveText('x');
+  expect((await downloaded(page)).toString('utf8')).toBe('x');
+  // The two keys are one typing group of the page's history.
+  await page.getByRole('button', { name: /^Undo/ }).click();
+  expect((await downloaded(page)).toString('utf8')).toBe(STARTER_CI);
+});
+
 test('typing a branch filter that untriggers CI says so, and Details lists it', async ({ page }) => {
   await openStarter(page);
   await editMode(page);
