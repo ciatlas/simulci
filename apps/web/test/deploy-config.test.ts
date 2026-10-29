@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { EditorView } from '@codemirror/view';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,26 +10,40 @@ import { describeViolation } from '../src/worker/csp';
 import { themeFor } from '../src/yaml/extensions';
 // oxlint-disable-next-line import/no-unassigned-import -- what the engine worker imports, for its side effect
 import '../src/worker/jitless';
-import { headersFor, isNotFound, pathOf, readVercelConfig, servesFile } from '../vercel-headers.ts';
+import { cspFor, type HostMode, headerRules, headersFor, isNotFound, REWRITES, VERCEL } from '../headers.ts';
+import { pathOf, servesFile } from '../vercel-headers.ts';
+import { config as vercel } from '../vercel.ts';
 
 /**
- * What the deployment serves (vercel.json, read the way vercel-headers.ts reads it for `vite preview`), how the
+ * What every host serves (the header table, headers.ts, by mode), that vercel.ts gives Vercel the same, how the
  * preview finds the file a path names, and what the workers load first so that the CSP's refusals inside a worker are
  * seen (csp.ts, in both) and zod causes none (jitless.ts, in the engine worker). CodeMirror's styles go into a
  * constructed sheet, which the CSP's style-src allows, rather than a `<style>` element, which it refuses
  * (patches/style-mod@4.1.4.patch).
  */
 
-const vercel = readVercelConfig();
-const csp = (pathname: string): Record<string, string> =>
+const here = dirname(fileURLToPath(import.meta.url));
+
+const MODES: Record<string, HostMode> = {
+  'static, github.com': VERCEL,
+  'static, GHES': { serve: 'static', github: 'ghes' },
+  'server, github.com': { serve: 'server', github: 'github.com' },
+  'server, GHES': { serve: 'server', github: 'ghes' },
+};
+const SERVER: HostMode = { serve: 'server', github: 'github.com' };
+
+const directives = (policy: string): Record<string, string> =>
   Object.fromEntries(
-    (headersFor(vercel, pathname).get('content-security-policy') ?? '')
+    policy
       .split(';')
       .map((d) => d.trim().split(/\s+/))
       .filter((words) => words[0])
       .map(([name, ...values]) => [name, values.join(' ')]),
   );
+const csp = (pathname: string, mode: HostMode): Record<string, string> =>
+  directives(headersFor(pathname, mode).get('content-security-policy') ?? '');
 
+/** The policy Vercel serves today; only connect-src differs by mode. */
 const POLICY = {
   'default-src': "'self'",
   'script-src': "'self'",
@@ -41,6 +55,14 @@ const POLICY = {
   'base-uri': "'none'",
   'frame-ancestors': "'none'",
   'form-action': "'none'",
+};
+
+/** Where the page may fetch from in each mode. */
+const CONNECT: Record<string, string> = {
+  'static, github.com': "'none'",
+  'static, GHES': "'none'",
+  'server, github.com': "'self' https://api.github.com",
+  'server, GHES': "'self'",
 };
 
 /** A source's text outside its parenthesised groups, where path-to-regexp and a regular expression read alike. */
@@ -55,9 +77,10 @@ function outsideGroups(source: string): string {
   return out;
 }
 
-describe('vercel.json', () => {
+describe('the header table', () => {
   it('writes every source so that Vercel and a regular expression read it alike: no :name, nothing special outside a group', () => {
-    for (const { source } of [...vercel.headers, ...vercel.rewrites]) {
+    const rules = Object.values(MODES).flatMap(headerRules);
+    for (const { source } of [...rules, ...REWRITES]) {
       expect(() => new RegExp(source)).not.toThrow();
       expect(outsideGroups(source)).toMatch(/^[\w/-]*$/);
     }
@@ -65,23 +88,68 @@ describe('vercel.json', () => {
     expect(outsideGroups('/theme.js')).not.toMatch(/^[\w/-]*$/);
   });
 
-  it('sends the CSP with every response, the page, its scripts and the worker scripts', () => {
-    for (const path of ['/', '/some/link', '/theme.js', '/assets/index-a1.js', '/assets/engine.worker-a1.js'])
-      expect(csp(path)).toEqual(POLICY);
+  it('sends the CSP with every response in every mode, the page, its scripts and the worker scripts', () => {
+    for (const [name, mode] of Object.entries(MODES))
+      for (const path of [
+        '/',
+        '/some/link',
+        '/theme.js',
+        '/assets/index-a1.js',
+        '/assets/engine.worker-a1.js',
+      ])
+        expect(csp(path, mode), `${name} ${path}`).toEqual({ ...POLICY, 'connect-src': CONNECT[name] });
+  });
+
+  it('lets the page fetch from nothing on a static host, and from its server and the API of the GitHub it reads on a server', () => {
+    const connect = Object.entries(MODES).map(([name, mode]) => [
+      name,
+      directives(cspFor(mode))['connect-src'],
+    ]);
+    expect(Object.fromEntries(connect)).toEqual(CONNECT);
   });
 
   it('caches hashed assets for good and has everything else revalidated', () => {
-    const cache = (path: string) => headersFor(vercel, path).get('cache-control');
-    expect(cache('/assets/index-a1.js')).toBe('public, max-age=31536000, immutable');
-    expect(cache('/assets/mona-sans-latin-wdth-normal-a1.woff2')).toBe('public, max-age=31536000, immutable');
-    for (const path of ['/', '/index.html', '/theme.js', '/some/link'])
-      expect(cache(path)).toBe('public, max-age=0, must-revalidate');
+    for (const mode of Object.values(MODES)) {
+      const cache = (path: string) => headersFor(path, mode).get('cache-control');
+      expect(cache('/assets/index-a1.js')).toBe('public, max-age=31536000, immutable');
+      expect(cache('/assets/mona-sans-latin-wdth-normal-a1.woff2')).toBe(
+        'public, max-age=31536000, immutable',
+      );
+      for (const path of ['/', '/index.html', '/theme.js', '/some/link'])
+        expect(cache(path)).toBe('public, max-age=0, must-revalidate');
+    }
+  });
+
+  it("keeps a server's API and sign-in answers out of every cache and every other origin; a static host has neither", () => {
+    for (const path of [
+      '/api/session',
+      '/api/github/repos/o/r/contents/a.yml',
+      '/auth/sign-in',
+      '/auth/callback',
+    ]) {
+      expect(headersFor(path, SERVER).get('cache-control'), path).toBe('no-store');
+      expect(headersFor(path, SERVER).get('cross-origin-resource-policy'), path).toBe('same-origin');
+      expect(headersFor(path, VERCEL).get('cache-control'), path).toBe('public, max-age=0, must-revalidate');
+      expect(headersFor(path, VERCEL).has('cross-origin-resource-policy'), path).toBe(false);
+    }
+    for (const path of ['/', '/apis', '/assets/api/x.js'])
+      expect(headersFor(path, SERVER).has('cross-origin-resource-policy'), path).toBe(false);
   });
 
   it('answers a deep link with the page and a missing chunk with a 404', () => {
-    expect(isNotFound(vercel, '/some/link', false)).toBe(false);
-    expect(isNotFound(vercel, '/assets/index-gone.js', false)).toBe(true);
-    expect(isNotFound(vercel, '/assets/index-a1.js', true)).toBe(false);
+    expect(isNotFound('/some/link', false)).toBe(false);
+    expect(isNotFound('/assets/index-gone.js', false)).toBe(true);
+    expect(isNotFound('/assets/index-a1.js', true)).toBe(false);
+  });
+});
+
+describe('vercel.ts', () => {
+  it("gives Vercel the table's headers and rewrites in Vercel's mode, and is the project's only config file", () => {
+    expect(vercel.headers).toEqual(headerRules(VERCEL));
+    expect(vercel.rewrites).toEqual(REWRITES);
+    expect(vercel.outputDirectory).toBe('dist');
+    for (const other of ['vercel.json', 'vercel.toml'])
+      expect(existsSync(join(here, '..', other)), other).toBe(false);
   });
 });
 
@@ -115,12 +183,9 @@ describe('the workers under the CSP', () => {
 
   it('load csp.ts before anything else, and the engine worker jitless.ts before the engine', () => {
     const imports = (file: string): string[] =>
-      [
-        ...readFileSync(
-          join(dirname(fileURLToPath(import.meta.url)), '../src/worker', file),
-          'utf8',
-        ).matchAll(/^import .*?'([^']+)';$/gm),
-      ].map((m) => m[1]!);
+      [...readFileSync(join(here, '../src/worker', file), 'utf8').matchAll(/^import .*?'([^']+)';$/gm)].map(
+        (m) => m[1]!,
+      );
     const engine = imports('engine.worker.ts');
     expect(engine.slice(0, 2)).toEqual(['./csp', './jitless']);
     expect(engine).toContain('@simulci/engine');
