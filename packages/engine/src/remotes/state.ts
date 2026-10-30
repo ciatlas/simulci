@@ -70,6 +70,13 @@ export interface LoadedProject {
 /** By code unit, not locale, so every host loads in the same order. */
 const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
+/** Failures in one order, so the one kept for a key does not depend on the order a host gave them in. */
+const sortFailures = (failed: readonly RemoteFailureInput[]): RemoteFailureInput[] =>
+  failed
+    .map((f) => ({ f, key: `${remoteKey(f.ref)}\n${f.ref}\n${f.failure}\n${f.message}` }))
+    .sort((a, b) => byCodeUnit(a.key, b.key))
+    .map(({ f }) => f);
+
 /** Sources in one order whatever order a host read them in: site ids are numbered in load order. */
 const sortSources = (sources: readonly RemoteSourceInput[]): RemoteSourceInput[] =>
   sources
@@ -109,7 +116,7 @@ function remotesState(
   return {
     mode: o.mode ?? (o.remotes ? 'lock' : 'off'),
     sources: new Map(sources.map((s) => [remoteKey(s.ref), s])),
-    failed: new Map((o.remotes?.failed ?? []).map((f) => [remoteKey(f.ref), f])),
+    failed: new Map(sortFailures(o.remotes?.failed ?? []).map((f) => [remoteKey(f.ref), f])),
     limited: new Set((o.remotes?.limited ?? []).map(remoteKey)),
     ...locksOf(files),
   };
@@ -139,9 +146,14 @@ export function remoteRefOf(unit: UnitDecl, uses: UsesRef): RemoteRef | undefine
   return remoteRefOfUses(unit, uses);
 }
 
-/** Whether `uses:` names its remote through the unit's own repository (`./`, `$/`) rather than as written. */
+/**
+ * Whether `uses:` names its remote through the unit's own repository (`./`, `$/`) rather than as written. A full ref to
+ * the remote's own repository is parsed as local there too (`sameRepoRef`), but runs at its own ref (lab R10).
+ */
 export const namedByOrigin = (unit: UnitDecl, uses: UsesRef): boolean =>
-  unit.external === true && (uses.kind === 'local-workflow' || uses.kind === 'local-action');
+  unit.external === true &&
+  uses.sameRepoRef === undefined &&
+  (uses.kind === 'local-workflow' || uses.kind === 'local-action');
 
 /** Where a remote stands for a plan: read (and parsed or not), not read, past a cap, or never fetched. */
 export type RemoteStateKind = 'simulated' | 'invalid' | 'failed' | 'limit' | 'not-fetched';
@@ -254,18 +266,25 @@ function neededAt(
   const next: UnitDecl[] = [];
   for (const { unit, uses, ref } of refsOf(at.level)) {
     const found = lookupRemote(loaded, ref);
-    if (found.state !== 'not-fetched') {
-      if (found.state === 'simulated' && !at.seen.has(found.key)) next.push(found.unit!);
-      at.seen.add(found.key);
-      continue;
-    }
-    const was = at.out.get(found.key);
-    if (was?.pin) continue;
-    const context = pinContextOf(loaded, unit, uses, ref, runningWorkflows(loaded, unit));
-    const need = needed(ref, was?.depth ?? at.depth, pinFor(ref, { ...context, mode }));
-    if (need && (!was || need.pin)) at.out.set(found.key, need);
+    if (found.state === 'simulated' && !at.seen.has(found.key)) next.push(found.unit!);
+    at.seen.add(found.key);
+    if (found.state === 'not-fetched') needOnce(loaded, mode, at, { unit, uses, ref, key: found.key });
   }
   return next;
+}
+
+/** A ref not read, needed once at its shallowest depth, with the pin of any use that has one. */
+function needOnce(
+  loaded: LoadedProject,
+  mode: RemotesMode,
+  at: { depth: number; out: Map<string, NeededRemote> },
+  use: { unit: UnitDecl; uses: UsesRef; ref: RemoteRef; key: string },
+): void {
+  const was = at.out.get(use.key);
+  if (was?.pin) return;
+  const context = pinContextOf(loaded, use.unit, use.uses, use.ref, runningWorkflows(loaded, use.unit));
+  const need = needed(use.ref, was?.depth ?? at.depth, pinFor(use.ref, { ...context, mode }));
+  if (need && (!was || need.pin)) at.out.set(use.key, need);
 }
 
 function* refsOf(units: UnitDecl[]): Generator<{ unit: UnitDecl; uses: UsesRef; ref: RemoteRef }> {

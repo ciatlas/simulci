@@ -266,6 +266,8 @@ interface StepTarget {
   model?: ModelUse;
   /** Where the action's own `uses:` resolve. */
   scope?: Scope;
+  /** A remote's ref as the plan shows it, which `uses:` mocks match. */
+  shown?: string;
 }
 
 /** The outputs an opaque step may set before mocks: the names of its interface, those already valued, and whether it is open. */
@@ -387,7 +389,7 @@ class Planner {
     const planned = new Map<string, JobPlan>();
     const jobCtx: Omit<JobContext, 'settings'> = {
       wf,
-      wfPath: ctx.remote?.display ?? wf.path,
+      wfPath: shownPath(wf, ctx),
       wfNode: id,
       wfName,
       triggered,
@@ -412,12 +414,13 @@ class Planner {
   /** The workflow's settings, node id, scenario (a callee sees the secrets it is given), trigger decision and inputs. */
   private setupWorkflow(wf: WorkflowDecl, ctx: WorkflowContext): WorkflowSetup {
     const settings = this.settingsOf(wf);
-    const id = ctx.caller === undefined ? wf.path : callNodeId(ctx.caller, ctx.remote?.display ?? wf.path);
+    const shown = shownPath(wf, ctx);
+    const id = ctx.caller === undefined ? wf.path : callNodeId(ctx.caller, shown);
     this.settingsDiagnostics(settings, wf.path, id);
     const scenario = ctx.secrets === undefined ? this.scenario : { ...this.scenario, secrets: ctx.secrets };
     const triggered = ctx.triggered ?? this.refusal(wf, id, this.triggerDecision(settings, id));
     const inputs = ctx.inputs ?? dispatchInputs(wf, scenario);
-    return { settings, id, scenario, triggered, inputs, wfName: wf.name ?? wf.path };
+    return { settings, id, scenario, triggered, inputs, wfName: wf.name ?? shown };
   }
 
   private settingsOf(wf: WorkflowDecl): WorkflowSettings {
@@ -543,11 +546,12 @@ class Planner {
       failFast: plan.matrix?.failFast ?? known(true),
       total: exp.combos.length || 1,
     };
+    const shownUses = this.shownUses(job, ctx.scope);
     plan.legs = this.legsOf(job, exp, segments, legCtx);
     for (const leg of plan.legs) {
       const location: Location = { workflow: ctx.wfPath, chain: [...ctx.chain, legLinkOf(job, leg)] };
       this.units.set(leg.id, { location, kind: 'job' });
-      this.applyLegFacts(job, leg, jobNode, location);
+      this.applyLegFacts(job, leg, jobNode, location, shownUses);
     }
     this.failFast(plan);
     plan.result = this.jobResultOf(runs, cond, continueOnError, plan.legs);
@@ -559,8 +563,14 @@ class Planner {
    * A mock on the job or one of its legs (`test[node=22]`, or `test` with `matrix:`): its outcome is the leg's result
    * (the steps stay planned), its outputs overlay the leg's. The job's result and outputs are then read from its legs.
    */
-  private applyLegFacts(job: JobDecl, leg: LegPlan, jobNode: NodeId, location: Location): void {
-    const facts = this.mocks.factsFor(location, leg.id, job.uses?.raw);
+  private applyLegFacts(
+    job: JobDecl,
+    leg: LegPlan,
+    jobNode: NodeId,
+    location: Location,
+    uses: string | undefined,
+  ): void {
+    const facts = this.mocks.factsFor(location, leg.id, uses);
     if (facts.outcome) {
       leg.result = facts.outcome.value;
       this.record(facts.outcome.by, leg.id, 'outcome');
@@ -579,6 +589,11 @@ class Planner {
       names: declared,
       what: `job ${job.id}`,
     });
+  }
+
+  /** The `uses:` that `uses:` mocks match: a remote's as the plan shows it (a remote's `./` is its own repository's). */
+  private shownUses(job: JobDecl, scope: Scope): string | undefined {
+    return job.uses && (this.remoteTarget(scope, job.uses)?.display ?? job.uses.raw);
   }
 
   /** A diagnostic said once: every leg of a matrix that meets the same mock says the same thing. */
@@ -1081,11 +1096,21 @@ class Planner {
   ): StepTarget {
     if (!step.uses) return {};
     const remote = this.remoteTarget(scope, step.uses);
-    if (remote) this.useRemote(remote, sid, scope, step.uses);
-    const action = remote || scope.unit.external ? undefined : this.index.actionOf(step);
-    if (action)
-      return { action, scope: { unit: action, ...(scope.running ? { running: scope.running } : {}) } };
-    return this.modelTarget(remote?.display ?? step.uses.raw, sid, withValues);
+    if (!remote) return this.localStep(step, sid, withValues, scope);
+    this.useRemote(remote, sid, scope, step.uses);
+    return { ...this.modelTarget(remote.display, sid, withValues), shown: remote.display };
+  }
+
+  /** A step whose `uses:` names no remote: this repository's action, else a model or nothing (a remote's `./`, docker). */
+  private localStep(
+    step: StepDecl,
+    sid: NodeId,
+    withValues: Record<string, Value<string>>,
+    scope: Scope,
+  ): StepTarget {
+    const action = scope.unit.external ? undefined : this.index.actionOf(step);
+    if (!action) return this.modelTarget(step.uses!.raw, sid, withValues);
+    return { action, scope: { unit: action, ...(scope.running ? { running: scope.running } : {}) } };
   }
 
   private modelTarget(uses: string, sid: NodeId, withValues: Record<string, Value<string>>): StepTarget {
@@ -1109,7 +1134,7 @@ class Planner {
     location: Location,
   ): StepProduct {
     if (runs.verdict === 'no') return { outcome: known('skipped'), outputs: {}, open: false, envWrites: {} };
-    const facts = this.mocks.factsFor(location, sid, step.uses?.raw, target.model);
+    const facts = this.mocks.factsFor(location, sid, target.shown ?? step.uses?.raw, target.model);
     const envWrites = this.envWrites(step, sid, state, facts);
     const { produced, base } = this.producedOutcome(facts, runs, cond, sid);
     if (target.action?.using === 'composite') {
@@ -1385,7 +1410,7 @@ function workflowShell(
 ): WorkflowPlan {
   const plan: WorkflowPlan = {
     id,
-    path: ctx.remote?.display ?? wf.path,
+    path: shownPath(wf, ctx),
     on: Object.keys(settings.events),
     triggered,
     conclusion: known('skipped'),
@@ -1491,6 +1516,9 @@ const contextRank = (c: PinContext): number => (c.actionsLock !== undefined ? 2 
 /** By code unit, not locale, so every host orders alike. */
 const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
+/** A workflow's path as the plan shows it: a called remote's ref as shown, so no id or name holds a commit. */
+const shownPath = (wf: WorkflowDecl, ctx: WorkflowContext): string => ctx.remote?.display ?? wf.path;
+
 /** A remote named through its unit's own repository, shown at the ref name the unit is shown at (GitHub records it so, lab R2). */
 const atRefName = (ref: RemoteRef, refName: string | undefined): string =>
   `${ref.owner}/${ref.repo}${ref.path ? `/${ref.path}` : ''}@${refName ?? ref.ref}`;
@@ -1514,10 +1542,9 @@ function callProblem(
   job: JobDecl,
   remote: RemoteTarget | undefined,
 ): { code: string; message: string } {
-  if (remote?.state === 'failed') {
-    const { failure, message } = remote.failure!;
-    return { code: 'remote-fetch-failed', message: `${shown}: not read (${failure}): ${message}` };
-  }
+  // The kind, not the host's message: that may name the commit, and a lockfile bump must not churn a snapshot.
+  if (remote?.state === 'failed')
+    return { code: 'remote-fetch-failed', message: `${shown}: not read (${remote.failure!.failure})` };
   if (remote?.state === 'limit')
     return {
       code: 'remote-limit',
