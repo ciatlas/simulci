@@ -125,13 +125,13 @@ describe('reports', () => {
     const plan = simulate({
       files: {
         '.github/workflows/ci.yml':
-          'name: "a\\"]\\nclick n1 href \\"https://evil.example\\"\\n<b>#quot;"\non: push\njobs:\n  b: { runs-on: x, steps: [{ run: t }] }\n',
+          'name: "a\\"]\\nclick n1 href \\"https://evil.example\\"\\n<b>#quot; %%{init: {}}%%"\non: push\njobs:\n  b: { runs-on: x, steps: [{ run: t }] }\n',
       },
       scenario: { event: 'push', branch: 'main' },
     });
     const graph = renderMermaid(plan).split('\n');
     expect(graph[1]).toBe(
-      '  subgraph n1["a#quot;] click n1 href #quot;https://evil.example#quot; #lt;b#gt;#35;quot;"]',
+      '  subgraph n1["a#quot;] click n1 href #quot;https://evil.example#quot; #lt;b#gt;#35;quot; #37;#37;#123;init: #123;#125;#125;#37;#37;"]',
     );
     expect(graph.filter((l) => l.includes('click'))).toHaveLength(1);
   });

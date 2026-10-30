@@ -39,12 +39,22 @@ function jobLabel(job: JobPlan): string {
   return `${job.jobId}${legs}${verdict}`;
 }
 
-/** A quoted label: quotes and tags as Mermaid's entity codes, line breaks and control characters as spaces. */
-const escapeLabel = (s: string): string =>
-  s
+/**
+ * A quoted label: quotes, tags and what a `%%{init}%%` directive is made of as Mermaid's entity codes, line breaks and
+ * control characters as spaces.
+ */
+function escapeLabel(s: string): string {
+  let flat = '';
+  for (const c of s) flat += breaks(c.charCodeAt(0)) ? ' ' : c;
+  return flat
     .replace(/#/g, '#35;')
     .replace(/"/g, '#quot;')
     .replace(/</g, '#lt;')
     .replace(/>/g, '#gt;')
-    // oxlint-disable-next-line no-control-regex -- a line break or control character would end the statement
-    .replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, ' ');
+    .replace(/%/g, '#37;')
+    .replace(/\{/g, '#123;')
+    .replace(/\}/g, '#125;');
+}
+
+/** A character that would end the statement it is in. */
+const breaks = (code: number): boolean => code < 0x20 || code === 0x7f || code === 0x2028 || code === 0x2029;

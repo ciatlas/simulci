@@ -97,7 +97,7 @@ export type RemotesLock = z.infer<typeof RemotesLockSchema>;
 export function parseRemotesLock(text: string): { lock: RemotesLock } | { error: string } {
   let data: unknown;
   try {
-    data = parse(text);
+    data = parse(text, { logLevel: 'error' });
   } catch (e) {
     return { error: `not valid YAML: ${(e as Error).message.split('\n')[0]}` };
   }
