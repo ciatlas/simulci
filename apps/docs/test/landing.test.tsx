@@ -15,13 +15,11 @@ const root = new URL('../../../', import.meta.url);
 const read = (path: string): string => readFileSync(new URL(path, root), 'utf8');
 const measured = JSON.parse(read('fixtures/routes-lab/accuracy.json')) as Accuracy;
 
+/**
+ * The page as markup. The sentences checked here are one text node each and hold nothing React escapes (their
+ * quotes are typographic), so they show in the markup as written.
+ */
 const html = renderToStaticMarkup(<HomePage />);
-/** The page's text, tags dropped and the entities React writes decoded. */
-const text = html
-  .replace(/<[^>]+>/g, '')
-  .replace(/&#x27;/g, "'")
-  .replace(/&quot;/g, '"')
-  .replace(/&amp;/g, '&');
 
 describe('the accuracy figure', () => {
   const f = figure(measured);
@@ -39,7 +37,7 @@ describe('the accuracy figure', () => {
         `exactly, ${f.maybe} as “might” while naming the unknown, and ${measured.wrong} wrongly, given which ` +
         `scripted steps failed.`,
     );
-    expect(text).toContain(f.sentence);
+    expect(html).toContain(`>${f.sentence}<`);
     for (const n of [f.outcomes, f.exact, f.maybe, f.wrong]) expect(html).toContain(`>${n}</dd>`);
   });
 
@@ -59,7 +57,7 @@ describe('the accuracy figure', () => {
   });
 
   it('says remote reusable workflows are not lab-verified, until L3 adds the remote runs', () => {
-    expect(text).toContain('Remote reusable workflows: not yet lab-verified.');
+    expect(html).toContain('>Remote reusable workflows: not yet lab-verified.<');
   });
 });
 
