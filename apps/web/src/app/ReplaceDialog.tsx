@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { patchName } from '../lib/repo-words';
 import type { Replacing } from '../state/store';
 import { useModal } from './modal';
 import { useApp, useSession } from './providers';
@@ -28,6 +29,7 @@ function ReplaceDialog({ replacing: { what, paths } }: { replacing: Replacing })
   const several = count > 1;
   const saves = useSession((s) => canSave(s));
   const folder = useSession((s) => (s.source.kind === 'folder' ? s.source.name : ''));
+  const patch = useSession((s) => patchName(s.source));
   const cancel = useCallback(() => prompt.answer('cancel'), [prompt]);
   const dialog = useModal(cancel);
   return (
@@ -44,7 +46,7 @@ function ReplaceDialog({ replacing: { what, paths } }: { replacing: Replacing })
         <p id="replace-body" className="text-sm">
           {several ? `${names} have unsaved edits.` : `${names} has unsaved edits.`} {what} drops them.
           {saves && ` Save writes them to ${folder} first.`}
-          {several && ' Download patch saves every edit as one file, simulci-changes.patch, for git apply.'}
+          {several && ` Download patch saves every edit as one file, ${patch}, for git apply.`}
         </p>
         <div className="flex flex-wrap justify-end gap-2">
           <button type="button" className={button} onClick={cancel}>

@@ -53,6 +53,7 @@ export function AddCase({ workflow, testCase, onGiven, onAdded }: AddCaseProps) 
   const { store } = useApp();
   const to = usePlacement(workflow, onGiven);
   const saves = useSession(savesToFolder);
+  const github = useSession((s) => s.source.kind === 'github');
   const suggested = testCase?.name ?? '';
   const [typed, setTyped] = useState<{ for: string; name: string }>();
   const name = typed?.for === suggested ? typed.name : suggested;
@@ -91,7 +92,7 @@ export function AddCase({ workflow, testCase, onGiven, onAdded }: AddCaseProps) 
         >
           {to.kind === 'add' ? 'Add to' : 'Create'} {fileLabel(to.path)}
         </button>
-        <Where to={to} saves={saves} />
+        <Where to={to} saves={saves} github={github} />
       </div>
       <RefusalNote
         seq={seq}
@@ -146,7 +147,7 @@ function NameField({
  * The file the case goes to, how many cases it holds, whether its `given` applies to the case, and what writes it to
  * the repository.
  */
-function Where({ to, saves }: { to: Placement; saves: boolean }) {
+function Where({ to, saves, github }: { to: Placement; saves: boolean; github: boolean }) {
   const count = to.kind === 'add' ? to.cases : 0;
   return (
     <p className="min-w-0 flex-1 text-muted text-xs">
@@ -160,7 +161,8 @@ function Where({ to, saves }: { to: Placement; saves: boolean }) {
           with the file&apos;s <code className="font-mono">given</code>, which the case above is planned under
         </>
       )}
-      . It stays unsaved until you {saves ? 'save it to the folder' : 'download it'}.
+      . It stays unsaved until you{' '}
+      {saves ? 'save it to the folder' : `download it${github ? ' in a patch' : ''}`}.
     </p>
   );
 }

@@ -7,6 +7,10 @@ export default defineConfig({
   resolve: {
     alias: {
       // @ciatlas/core is a git dependency that ships its TypeScript source (github:ciatlas/core#vX.Y.Z), never built.
+      // Its subpath first (the web app's GitHub source), for the same prefix reason as below.
+      '@ciatlas/core/remote-fetch': fileURLToPath(
+        new URL('./node_modules/@ciatlas/core/src/remote-fetch.ts', import.meta.url),
+      ),
       '@ciatlas/core': fileURLToPath(new URL('./node_modules/@ciatlas/core/src/index.ts', import.meta.url)),
       // Subpaths before the root: an alias matches by prefix, so the root would swallow `@simulci/engine/plan`.
       '@simulci/engine/plan': fileURLToPath(new URL('./packages/engine/src/plan/index.ts', import.meta.url)),

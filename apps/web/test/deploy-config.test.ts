@@ -43,12 +43,12 @@ const directives = (policy: string): Record<string, string> =>
 const csp = (pathname: string, mode: HostMode): Record<string, string> =>
   directives(headersFor(pathname, mode).get('content-security-policy') ?? '');
 
-/** The policy Vercel serves today; only connect-src differs by mode. */
+/** The policy Vercel serves; only connect-src differs by mode. */
 const POLICY = {
   'default-src': "'self'",
   'script-src': "'self'",
   'worker-src': "'self'",
-  'connect-src': "'none'",
+  'connect-src': 'https://api.github.com',
   'img-src': "'self' data:",
   'style-src': "'self'",
   'font-src': "'self'",
@@ -59,7 +59,7 @@ const POLICY = {
 
 /** Where the page may fetch from in each mode. */
 const CONNECT: Record<string, string> = {
-  'static, github.com': "'none'",
+  'static, github.com': 'https://api.github.com',
   'static, GHES': "'none'",
   'server, github.com': "'self' https://api.github.com",
   'server, GHES': "'self'",
@@ -100,12 +100,18 @@ describe('the header table', () => {
         expect(csp(path, mode), `${name} ${path}`).toEqual({ ...POLICY, 'connect-src': CONNECT[name] });
   });
 
-  it('lets the page fetch from nothing on a static host, and from its server and the API of the GitHub it reads on a server', () => {
+  it("lets the page fetch from github.com's API, from its server too on a server, and from nothing on a static host for a GHES", () => {
     const connect = Object.entries(MODES).map(([name, mode]) => [
       name,
       directives(cspFor(mode))['connect-src'],
     ]);
     expect(Object.fromEntries(connect)).toEqual(CONNECT);
+  });
+
+  it('keeps every response of every host out of the browsing context group of a window it opens', () => {
+    for (const mode of Object.values(MODES))
+      for (const path of ['/', '/some/link', '/config.js', '/assets/index-a1.js', '/api/session'])
+        expect(headersFor(path, mode).get('cross-origin-opener-policy'), path).toBe('same-origin');
   });
 
   it('caches hashed assets for good and has everything else revalidated', () => {

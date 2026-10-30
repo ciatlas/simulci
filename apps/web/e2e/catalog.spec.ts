@@ -3,7 +3,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 
 /**
  * The action palette with the bundled catalog (synthesis § 4.8, § 9.2 C8), in a real browser under the deployment's
- * CSP (`connect-src 'none'`): the catalog's chunk loads from the app's own origin as the palette opens, a common action
+ * CSP (`connect-src` only api.github.com, for a GitHub source): the catalog's chunk loads from the app's own origin as the palette opens, a common action
  * the repository does not use yet is inserted at the catalog's ref, Properties lists its inputs from the catalog and
  * warns of a required one not set, Pin to SHA writes the commit the catalog recorded with the tag as a comment, and
  * undoing it all gives the file's bytes back. Nothing is fetched from GitHub.

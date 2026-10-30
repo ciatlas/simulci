@@ -1,4 +1,5 @@
 import type { ScenarioInput } from '@simulci/engine';
+import type { Source } from '../state/store';
 import type { Outline, OutlineEvent, OutlineWorkflow } from '../worker/protocol';
 
 /**
@@ -64,6 +65,24 @@ export function defaultScenario(outline: Outline, defaultBranch = 'main'): Defau
   }
   if (event.types?.narrowed) add('action', event.types.allowed[0]);
   return { scenario, assumed: Array.from(new Set(assumed)), focus: workflow.path };
+}
+
+/** The branch the defaults name for a branch push or a pull request's base: a GitHub repository's default branch. */
+export const defaultBranchOf = (source: Source): string | undefined =>
+  source.kind === 'github' ? source.defaultBranch : undefined;
+
+/**
+ * The scenario the engine is given (M4 synthesis § 5.5): a GitHub repository names itself (`repository`) and its
+ * default branch, which the engine reads for the ref of a scheduled run and a pull request's base, unless the scenario
+ * names them.
+ */
+export function scenarioFor(scenario: ScenarioInput, source: Source): ScenarioInput {
+  if (source.kind !== 'github') return scenario;
+  return {
+    ...scenario,
+    repository: scenario.repository ?? `${source.owner}/${source.repo}`,
+    defaultBranch: scenario.defaultBranch ?? source.defaultBranch,
+  };
 }
 
 /** The events the form offers: the focused workflow's first, then every other event a workflow listens to. */
