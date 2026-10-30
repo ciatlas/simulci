@@ -391,6 +391,9 @@ importers:
 
   packages/cli:
     devDependencies:
+      '@ciatlas/core':
+        specifier: github:ciatlas/core#v2.6.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/e718844f8459c64bb3a585cd94cff10fef40aec8
       '@simulci/engine':
         specifier: workspace:*
         version: link:../engine
