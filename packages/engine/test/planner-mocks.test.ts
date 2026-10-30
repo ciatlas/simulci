@@ -335,6 +335,97 @@ jobs:
   });
 });
 
+describe('assume: uses: entries naming reusable workflow calls', () => {
+  const calls = `
+on: push
+jobs:
+  stage:
+    uses: octo/ship/.github/workflows/deploy.yml@v1
+  prod:
+    uses: octo/ship/.github/workflows/deploy.yml@v2
+  local:
+    uses: ./.github/workflows/callee.yml
+  smoke:
+    needs: [stage, prod]
+    if: needs.stage.outputs.url != '' && needs.prod.outputs.url != ''
+    runs-on: ubuntu-latest
+    steps: [{ run: echo }]
+`;
+  const callee = {
+    '.github/workflows/callee.yml':
+      'on:\n  workflow_call:\n    outputs:\n      o:\n        value: from-callee\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps: [{ run: echo }]\n',
+  };
+  const plan = (assume: unknown[]) => run(calls, { event: 'push' }, assume, callee);
+  const ci = (p: RunPlan) => p.workflows.find((w) => w.path === '.github/workflows/ci.yml')!;
+  const job = (p: RunPlan, id: string) => ci(p).jobs.find((j) => j.jobId === id)!;
+  const notUnsupported = (p: RunPlan) => codes(p).filter((c) => c !== 'unsupported');
+
+  it('mocks every call to a remote workflow, any ref without @, that ref alone with it', () => {
+    const every = plan([
+      { uses: 'octo/ship/.github/workflows/deploy.yml', outcome: 'success', outputs: { url: 'https://x' } },
+    ]);
+    expect(job(every, 'stage').outputs.url).toEqual({ known: true, value: 'https://x', by: 'assume[0]' });
+    expect(job(every, 'prod').outputs.url).toEqual({ known: true, value: 'https://x', by: 'assume[0]' });
+    expect(job(every, 'smoke').runs.verdict).toBe('yes');
+    expect(every.mocks.map((m) => m.at)).toEqual([
+      '.github/workflows/ci.yml#stage',
+      '.github/workflows/ci.yml#prod',
+    ]);
+    // Was SC102: a uses: entry matched steps only.
+    expect(notUnsupported(every)).toEqual([]);
+
+    const pinned = plan([
+      {
+        uses: 'octo/ship/.github/workflows/deploy.yml@v1',
+        outcome: 'success',
+        outputs: { url: 'https://x' },
+      },
+    ]);
+    expect(job(pinned, 'stage').outputs.url).toMatchObject({ known: true, value: 'https://x' });
+    // The other ref is unmocked, so smoke reads its output as unknown.
+    expect(job(pinned, 'prod').outputs.url).toBeUndefined();
+    expect(job(pinned, 'smoke').runs.verdict).toBe('maybe');
+    expect(pinned.unknowns.map((u) => u.id)).toContain('.github/workflows/ci.yml#prod.outputs.url');
+  });
+
+  it('sets a remote call’s outcome, which drops its call unknown, and matches a local call by its path', () => {
+    const failed = plan([{ uses: 'octo/ship/.github/workflows/deploy.yml@v2', outcome: 'failure' }]);
+    expect(jobs(failed).prod).toEqual({ runs: 'yes', result: 'failure' });
+    expect(jobs(failed).smoke!.runs).toBe('no');
+    expect(failed.unknowns.map((u) => u.id)).not.toContain('.github/workflows/ci.yml#prod.call');
+    expect(failed.unknowns.map((u) => u.id)).toContain('.github/workflows/ci.yml#stage.call');
+
+    const local = plan([{ uses: './.github/workflows/callee.yml', outputs: { o: 'mocked' } }]);
+    expect(job(local, 'local').outputs.o).toEqual({ known: true, value: 'mocked', by: 'assume[0]' });
+    expect(job(local, 'local').legs[0]!.call!.outputs.o).toEqual({ known: true, value: 'from-callee' });
+    expect(notUnsupported(local)).toEqual([]);
+    // A loaded callee's interface is closed.
+    expect(notUnsupported(plan([{ uses: './.github/workflows/callee.yml', outputs: { p: 'x' } }]))).toEqual([
+      'SC101',
+    ]);
+  });
+
+  it('ranks a job: entry over a uses: entry scoped to the job, and that over a bare uses: entry', () => {
+    const p = plan([
+      { uses: 'octo/ship/.github/workflows/deploy.yml', outcome: 'failure' },
+      { uses: 'octo/ship/.github/workflows/deploy.yml', job: 'stage', outcome: 'success' },
+      { job: 'prod', outcome: 'success' },
+    ]);
+    expect(jobs(p).stage).toEqual({ runs: 'yes', result: 'success' });
+    expect(jobs(p).prod).toEqual({ runs: 'yes', result: 'success' });
+    expect(p.mocks.map((m) => [m.ref, m.at])).toEqual([
+      ['assume[1]', '.github/workflows/ci.yml#stage'],
+      ['assume[2]', '.github/workflows/ci.yml#prod'],
+    ]);
+    expect(notUnsupported(p)).toEqual([]);
+  });
+
+  it('still reports a uses: entry that names no call or step (SC102)', () => {
+    const p = plan([{ uses: 'octo/ship/.github/workflows/release.yml', outcome: 'failure' }]);
+    expect(notUnsupported(p)).toEqual(['SC102']);
+  });
+});
+
 describe('assume: validation', () => {
   it('reports entries that match nothing (SC102) and conflicts (SC103), and rejects malformed entries', () => {
     const plan = run(pipeline, { event: 'push' }, [

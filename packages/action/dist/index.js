@@ -36048,7 +36048,7 @@ function addLeg(path, matrix) {
 		...Object.fromEntries(Object.entries(matrix).map(([k, v]) => [k, String(v)]))
 	};
 }
-/** Whether an entry names the unit: a step entry a step, a job entry a job, a uses entry a step using the action. */
+/** Whether an entry names the unit: a step entry a step, a job entry a job, a uses entry a step or a calling job using what it names. */
 function namesUnit(c, location, uses) {
 	const isStep = location.chain.at(-1)?.kind === "step";
 	if (c.entry.uses !== void 0) return usesEntryNames(c, location, isStep, uses);
@@ -36056,11 +36056,12 @@ function namesUnit(c, location, uses) {
 	return c.entry.step !== void 0 === isStep && pathMatches(c.path, location);
 }
 function usesEntryNames(c, location, isStep, uses) {
-	if (!isStep || uses === void 0 || !usesMatches(c.uses, uses)) return false;
+	if (uses === void 0 || !usesMatches(c.uses, uses)) return false;
 	if (c.entry.workflow !== void 0 && !workflowMatches(c.entry.workflow, location.workflow)) return false;
+	const chain = isStep ? location.chain.slice(0, -1) : location.chain;
 	return !c.path || pathMatches(c.path, {
 		workflow: location.workflow,
-		chain: location.chain.slice(0, -1)
+		chain
 	});
 }
 /** What a shipped model produces at the unit, as the layer under the author's. */
@@ -41679,7 +41680,7 @@ const AssumeEntrySchema = strictObject({
 	step: string().min(1).optional(),
 	/** A job, by unit path (`deploy`, `rel/build`); its `outcome` applies at the job boundary. */
 	job: string().min(1).optional(),
-	/** Every step whose `uses:` matches (`actions/cache`, `actions/cache@v4`, `./.github/actions/x`), within `job` when given. */
+	/** Every step or calling job whose `uses:` matches (`actions/cache@v4`, `./.github/actions/x`, `o/r/.github/workflows/d.yml`), within `job` when given. */
 	uses: string().min(1).optional(),
 	/** Matrix values that select legs, as an alternative to `[k=v]` in the path. */
 	matrix: record(string(), Scalar$1).optional(),
@@ -45585,7 +45586,7 @@ var Planner = class {
 	* (the steps stay planned), its outputs overlay the leg's. The job's result and outputs are then read from its legs.
 	*/
 	applyLegFacts(job, leg, jobNode, location) {
-		const facts = this.mocks.factsFor(location, leg.id);
+		const facts = this.mocks.factsFor(location, leg.id, job.uses?.raw);
 		if (facts.outcome) {
 			leg.result = facts.outcome.value;
 			this.record(facts.outcome.by, leg.id, "outcome");
