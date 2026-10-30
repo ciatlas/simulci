@@ -16521,2863 +16521,6 @@ function info(message) {
 	process.stdout.write(message + os$1.EOL);
 }
 //#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/ast.js
-var Expr = class {};
-var Literal = class extends Expr {
-	constructor(literal, token) {
-		super();
-		this.literal = literal;
-		this.token = token;
-	}
-	accept(v) {
-		return v.visitLiteral(this);
-	}
-};
-var Unary = class extends Expr {
-	constructor(operator, expr) {
-		super();
-		this.operator = operator;
-		this.expr = expr;
-	}
-	accept(v) {
-		return v.visitUnary(this);
-	}
-};
-var FunctionCall = class extends Expr {
-	constructor(functionName, args) {
-		super();
-		this.functionName = functionName;
-		this.args = args;
-	}
-	accept(v) {
-		return v.visitFunctionCall(this);
-	}
-};
-var Binary = class extends Expr {
-	constructor(left, operator, right) {
-		super();
-		this.left = left;
-		this.operator = operator;
-		this.right = right;
-	}
-	accept(v) {
-		return v.visitBinary(this);
-	}
-};
-var Logical = class extends Expr {
-	constructor(operator, args) {
-		super();
-		this.operator = operator;
-		this.args = args;
-	}
-	accept(v) {
-		return v.visitLogical(this);
-	}
-};
-var Grouping = class extends Expr {
-	constructor(group) {
-		super();
-		this.group = group;
-	}
-	accept(v) {
-		return v.visitGrouping(this);
-	}
-};
-var ContextAccess = class extends Expr {
-	constructor(name) {
-		super();
-		this.name = name;
-	}
-	accept(v) {
-		return v.visitContextAccess(this);
-	}
-};
-var IndexAccess = class extends Expr {
-	constructor(expr, index) {
-		super();
-		this.expr = expr;
-		this.index = index;
-	}
-	accept(v) {
-		return v.visitIndexAccess(this);
-	}
-};
-var Star = class extends Expr {
-	accept() {
-		throw new Error("Method not implemented.");
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/expressiondata.js
-var Kind;
-(function(Kind) {
-	Kind[Kind["String"] = 0] = "String";
-	Kind[Kind["Array"] = 1] = "Array";
-	Kind[Kind["Dictionary"] = 2] = "Dictionary";
-	Kind[Kind["Boolean"] = 3] = "Boolean";
-	Kind[Kind["Number"] = 4] = "Number";
-	Kind[Kind["CaseSensitiveDictionary"] = 5] = "CaseSensitiveDictionary";
-	Kind[Kind["Null"] = 6] = "Null";
-})(Kind || (Kind = {}));
-function kindStr(k) {
-	switch (k) {
-		case Kind.Array: return "Array";
-		case Kind.Boolean: return "Boolean";
-		case Kind.Null: return "Null";
-		case Kind.Number: return "Number";
-		case Kind.Dictionary: return "Object";
-		case Kind.String: return "String";
-	}
-	return "unknown";
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/dictionary.js
-var Dictionary = class {
-	constructor(...pairs) {
-		this.keys = [];
-		this.v = [];
-		this.indexMap = {};
-		this.kind = Kind.Dictionary;
-		this.primitive = false;
-		for (const p of pairs) this.add(p.key, p.value);
-	}
-	coerceString() {
-		return kindStr(this.kind);
-	}
-	number() {
-		return NaN;
-	}
-	add(key, value) {
-		if (key.toLowerCase() in this.indexMap) return;
-		this.keys.push(key);
-		this.v.push(value);
-		this.indexMap[key.toLowerCase()] = this.v.length - 1;
-	}
-	get(key) {
-		const index = this.indexMap[key.toLowerCase()];
-		if (index === void 0) return;
-		return this.v[index];
-	}
-	values() {
-		return this.v;
-	}
-	pairs() {
-		const result = [];
-		for (const key of this.keys) result.push({
-			key,
-			value: this.v[this.indexMap[key.toLowerCase()]]
-		});
-		return result;
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/array.js
-var Array$1 = class {
-	constructor(...data) {
-		this.v = [];
-		this.kind = Kind.Array;
-		this.primitive = false;
-		for (const d of data) this.add(d);
-	}
-	coerceString() {
-		return kindStr(this.kind);
-	}
-	number() {
-		return NaN;
-	}
-	add(value) {
-		this.v.push(value);
-	}
-	get(index) {
-		return this.v[index];
-	}
-	values() {
-		return this.v;
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/boolean.js
-var BooleanData = class {
-	constructor(value) {
-		this.value = value;
-		this.kind = Kind.Boolean;
-		this.primitive = true;
-	}
-	coerceString() {
-		if (this.value) return "true";
-		return "false";
-	}
-	number() {
-		if (this.value) return 1;
-		return 0;
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/null.js
-var Null = class {
-	constructor() {
-		this.kind = Kind.Null;
-		this.primitive = true;
-	}
-	coerceString() {
-		return "";
-	}
-	number() {
-		return 0;
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/number.js
-var NumberData = class {
-	constructor(value) {
-		this.value = value;
-		this.kind = Kind.Number;
-		this.primitive = true;
-	}
-	coerceString() {
-		if (this.value === 0) return "0";
-		return (+this.value.toFixed(15)).toString();
-	}
-	number() {
-		return this.value;
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/string.js
-var StringData = class {
-	constructor(value) {
-		this.value = value;
-		this.kind = Kind.String;
-		this.primitive = true;
-	}
-	coerceString() {
-		return this.value;
-	}
-	number() {
-		return Number(this.value);
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/replacer.js
-/**
-* Replacer can be passed to JSON.stringify to convert an ExpressionData object into plain JSON
-*
-* See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#replacer
-*/
-function replacer(_key, value) {
-	if (value instanceof Null) return null;
-	if (value instanceof BooleanData) return value.value;
-	if (value instanceof NumberData) return value.number();
-	if (value instanceof StringData) return value.coerceString();
-	if (value instanceof Array$1) return value.values();
-	if (value instanceof Dictionary) {
-		const pairs = value.pairs();
-		const r = {};
-		for (const p of pairs) r[p.key] = p.value;
-		return r;
-	}
-	return value;
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/reviver.js
-/**
-* Reviver can be passed to `JSON.parse` to convert plain JSON into an `ExpressionData` object.
-*
-* See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse#reviver
-*/
-function reviver(_key, val) {
-	if (val === null) return new Null();
-	if (typeof val === "string") return new StringData(val);
-	if (typeof val === "number") return new NumberData(val);
-	if (typeof val === "boolean") return new BooleanData(val);
-	if (Array.isArray(val)) return new Array$1(...val);
-	if (typeof val === "object") return new Dictionary(...Object.keys(val).map((k) => ({
-		key: k,
-		value: val[k]
-	})));
-	return val;
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/lexer.js
-var TokenType$1;
-(function(TokenType) {
-	TokenType[TokenType["UNKNOWN"] = 0] = "UNKNOWN";
-	TokenType[TokenType["LEFT_PAREN"] = 1] = "LEFT_PAREN";
-	TokenType[TokenType["RIGHT_PAREN"] = 2] = "RIGHT_PAREN";
-	TokenType[TokenType["LEFT_BRACKET"] = 3] = "LEFT_BRACKET";
-	TokenType[TokenType["RIGHT_BRACKET"] = 4] = "RIGHT_BRACKET";
-	TokenType[TokenType["COMMA"] = 5] = "COMMA";
-	TokenType[TokenType["DOT"] = 6] = "DOT";
-	TokenType[TokenType["BANG"] = 7] = "BANG";
-	TokenType[TokenType["BANG_EQUAL"] = 8] = "BANG_EQUAL";
-	TokenType[TokenType["EQUAL_EQUAL"] = 9] = "EQUAL_EQUAL";
-	TokenType[TokenType["GREATER"] = 10] = "GREATER";
-	TokenType[TokenType["GREATER_EQUAL"] = 11] = "GREATER_EQUAL";
-	TokenType[TokenType["LESS"] = 12] = "LESS";
-	TokenType[TokenType["LESS_EQUAL"] = 13] = "LESS_EQUAL";
-	TokenType[TokenType["AND"] = 14] = "AND";
-	TokenType[TokenType["OR"] = 15] = "OR";
-	TokenType[TokenType["STAR"] = 16] = "STAR";
-	TokenType[TokenType["NUMBER"] = 17] = "NUMBER";
-	TokenType[TokenType["STRING"] = 18] = "STRING";
-	TokenType[TokenType["IDENTIFIER"] = 19] = "IDENTIFIER";
-	TokenType[TokenType["TRUE"] = 20] = "TRUE";
-	TokenType[TokenType["FALSE"] = 21] = "FALSE";
-	TokenType[TokenType["NULL"] = 22] = "NULL";
-	TokenType[TokenType["EOF"] = 23] = "EOF";
-})(TokenType$1 || (TokenType$1 = {}));
-function tokenString(tok) {
-	switch (tok.type) {
-		case TokenType$1.EOF: return "EOF";
-		case TokenType$1.NUMBER: return tok.lexeme;
-		case TokenType$1.STRING: return tok.value.toString();
-		default: return tok.lexeme;
-	}
-}
-var Lexer = class {
-	constructor(input) {
-		this.input = input;
-		this.start = 0;
-		this.offset = 0;
-		this.line = 0;
-		this.lastLineOffset = 0;
-		this.tokens = [];
-	}
-	lex() {
-		if (this.input.length > 21e3) throw new Error("ErrorExceededMaxLength");
-		while (!this.atEnd()) {
-			this.start = this.offset;
-			const c = this.next();
-			switch (c) {
-				case "(":
-					this.addToken(TokenType$1.LEFT_PAREN);
-					break;
-				case ")":
-					this.addToken(TokenType$1.RIGHT_PAREN);
-					break;
-				case "[":
-					this.addToken(TokenType$1.LEFT_BRACKET);
-					break;
-				case "]":
-					this.addToken(TokenType$1.RIGHT_BRACKET);
-					break;
-				case ",":
-					this.addToken(TokenType$1.COMMA);
-					break;
-				case ".":
-					if (this.previous() != TokenType$1.IDENTIFIER && this.previous() != TokenType$1.RIGHT_BRACKET && this.previous() != TokenType$1.RIGHT_PAREN && this.previous() != TokenType$1.STAR) this.consumeNumber();
-					else this.addToken(TokenType$1.DOT);
-					break;
-				case "-":
-				case "+":
-					this.consumeNumber();
-					break;
-				case "!":
-					this.addToken(this.match("=") ? TokenType$1.BANG_EQUAL : TokenType$1.BANG);
-					break;
-				case "=":
-					if (!this.match("=")) {
-						this.consumeIdentifier();
-						break;
-					}
-					this.addToken(TokenType$1.EQUAL_EQUAL);
-					break;
-				case "<":
-					this.addToken(this.match("=") ? TokenType$1.LESS_EQUAL : TokenType$1.LESS);
-					break;
-				case ">":
-					this.addToken(this.match("=") ? TokenType$1.GREATER_EQUAL : TokenType$1.GREATER);
-					break;
-				case "&":
-					if (!this.match("&")) {
-						this.consumeIdentifier();
-						break;
-					}
-					this.addToken(TokenType$1.AND);
-					break;
-				case "|":
-					if (!this.match("|")) {
-						this.consumeIdentifier();
-						break;
-					}
-					this.addToken(TokenType$1.OR);
-					break;
-				case "*":
-					this.addToken(TokenType$1.STAR);
-					break;
-				case " ":
-				case "\r":
-				case "	": break;
-				case "\n":
-					++this.line;
-					this.lastLineOffset = this.offset;
-					break;
-				case "'":
-					this.consumeString();
-					break;
-				default: switch (true) {
-					case isDigit(c):
-						this.consumeNumber();
-						break;
-					default: this.consumeIdentifier();
-				}
-			}
-		}
-		this.tokens.push({
-			type: TokenType$1.EOF,
-			lexeme: "",
-			range: this.range()
-		});
-		return { tokens: this.tokens };
-	}
-	pos() {
-		return {
-			line: this.line,
-			column: this.start - this.lastLineOffset
-		};
-	}
-	endPos() {
-		return {
-			line: this.line,
-			column: this.offset - this.lastLineOffset
-		};
-	}
-	range() {
-		return {
-			start: this.pos(),
-			end: this.endPos()
-		};
-	}
-	atEnd() {
-		return this.offset >= this.input.length;
-	}
-	peek() {
-		if (this.atEnd()) return "\0";
-		return this.input[this.offset];
-	}
-	peekNext() {
-		if (this.offset + 1 >= this.input.length) return "\0";
-		return this.input[this.offset + 1];
-	}
-	previous() {
-		const l = this.tokens.length;
-		if (l == 0) return TokenType$1.EOF;
-		return this.tokens[l - 1].type;
-	}
-	next() {
-		return this.input[this.offset++];
-	}
-	match(expected) {
-		if (this.atEnd()) return false;
-		if (this.input[this.offset] !== expected) return false;
-		this.offset++;
-		return true;
-	}
-	addToken(type, value) {
-		this.tokens.push({
-			type,
-			lexeme: this.input.substring(this.start, this.offset),
-			range: this.range(),
-			value
-		});
-	}
-	consumeNumber() {
-		while (!this.atEnd() && (!isBoundary(this.peek()) || this.peek() == ".")) this.next();
-		const lexeme = this.input.substring(this.start, this.offset);
-		const value = new StringData(lexeme).number();
-		if (isNaN(value)) throw new Error(`Unexpected symbol: '${lexeme}'. Located at position ${this.start + 1} within expression: ${this.input}`);
-		this.addToken(TokenType$1.NUMBER, value);
-	}
-	consumeString() {
-		while ((this.peek() !== "'" || this.peekNext() === "'") && !this.atEnd()) {
-			if (this.peek() === "\n") this.line++;
-			if (this.peek() === "'" && this.peekNext() === "'") this.next();
-			this.next();
-		}
-		if (this.atEnd()) throw new Error(`Unexpected symbol: '${this.input.substring(this.start)}'. Located at position ${this.start + 1} within expression: ${this.input}`);
-		this.next();
-		let value = this.input.substring(this.start + 1, this.offset - 1);
-		value = value.replace("''", "'");
-		this.addToken(TokenType$1.STRING, value);
-	}
-	consumeIdentifier() {
-		while (!this.atEnd() && !isBoundary(this.peek())) this.next();
-		let tokenType = TokenType$1.IDENTIFIER;
-		let tokenValue = void 0;
-		const lexeme = this.input.substring(this.start, this.offset);
-		if (this.previous() != TokenType$1.DOT) switch (lexeme) {
-			case "true":
-				tokenType = TokenType$1.TRUE;
-				break;
-			case "false":
-				tokenType = TokenType$1.FALSE;
-				break;
-			case "null":
-				tokenType = TokenType$1.NULL;
-				break;
-			case "NaN":
-				tokenType = TokenType$1.NUMBER;
-				tokenValue = NaN;
-				break;
-			case "Infinity":
-				tokenType = TokenType$1.NUMBER;
-				tokenValue = Infinity;
-		}
-		if (!isLegalIdentifier(lexeme)) throw new Error(`Unexpected symbol: '${lexeme}'. Located at position ${this.start + 1} within expression: ${this.input}`);
-		this.addToken(tokenType, tokenValue);
-	}
-};
-function isDigit(c) {
-	return c >= "0" && c <= "9";
-}
-function isBoundary(c) {
-	switch (c) {
-		case "(":
-		case "[":
-		case ")":
-		case "]":
-		case ",":
-		case ".":
-		case "!":
-		case ">":
-		case "<":
-		case "=":
-		case "&":
-		case "|": return true;
-	}
-	return /\s/.test(c);
-}
-function isLegalIdentifier(str) {
-	if (str == "") return false;
-	const first = str[0];
-	if (first >= "a" && first <= "z" || first >= "A" && first <= "Z" || first == "_") {
-		for (const c of str.substring(1).split("")) if (c >= "a" && c <= "z" || c >= "A" && c <= "Z" || c >= "0" && c <= "9" || c == "_" || c == "-") {} else return false;
-		return true;
-	}
-	return false;
-}
-const MAX_EXPRESSION_LENGTH = 21e3;
-var ErrorType;
-(function(ErrorType) {
-	ErrorType[ErrorType["ErrorUnexpectedSymbol"] = 0] = "ErrorUnexpectedSymbol";
-	ErrorType[ErrorType["ErrorUnrecognizedNamedValue"] = 1] = "ErrorUnrecognizedNamedValue";
-	ErrorType[ErrorType["ErrorUnexpectedEndOfExpression"] = 2] = "ErrorUnexpectedEndOfExpression";
-	ErrorType[ErrorType["ErrorExceededMaxDepth"] = 3] = "ErrorExceededMaxDepth";
-	ErrorType[ErrorType["ErrorExceededMaxLength"] = 4] = "ErrorExceededMaxLength";
-	ErrorType[ErrorType["ErrorTooFewParameters"] = 5] = "ErrorTooFewParameters";
-	ErrorType[ErrorType["ErrorTooManyParameters"] = 6] = "ErrorTooManyParameters";
-	ErrorType[ErrorType["ErrorEvenParameters"] = 7] = "ErrorEvenParameters";
-	ErrorType[ErrorType["ErrorUnrecognizedContext"] = 8] = "ErrorUnrecognizedContext";
-	ErrorType[ErrorType["ErrorUnrecognizedFunction"] = 9] = "ErrorUnrecognizedFunction";
-})(ErrorType || (ErrorType = {}));
-var ExpressionError = class extends Error {
-	constructor(typ, tok) {
-		super(`${errorDescription(typ)}: '${tokenString(tok)}'`);
-		this.typ = typ;
-		this.tok = tok;
-		this.pos = this.tok.range.start;
-	}
-};
-function errorDescription(typ) {
-	switch (typ) {
-		case ErrorType.ErrorUnexpectedEndOfExpression: return "Unexpected end of expression";
-		case ErrorType.ErrorUnexpectedSymbol: return "Unexpected symbol";
-		case ErrorType.ErrorUnrecognizedNamedValue: return "Unrecognized named-value";
-		case ErrorType.ErrorExceededMaxDepth: return `Exceeded max expression depth 50`;
-		case ErrorType.ErrorExceededMaxLength: return `Exceeded max expression length ${MAX_EXPRESSION_LENGTH}`;
-		case ErrorType.ErrorTooFewParameters: return "Too few parameters supplied";
-		case ErrorType.ErrorTooManyParameters: return "Too many parameters supplied";
-		case ErrorType.ErrorEvenParameters: return "Even number of parameters supplied, requires an odd number of parameters";
-		case ErrorType.ErrorUnrecognizedContext: return "Unrecognized named-value";
-		case ErrorType.ErrorUnrecognizedFunction: return "Unrecognized function";
-		default: return "Unknown error";
-	}
-}
-var ExpressionEvaluationError = class extends Error {};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/case.js
-const caseFunc = {
-	name: "case",
-	description: "`case( pred1, val1, pred2, val2, ..., default )`\n\nEvaluates predicates in order and returns the value corresponding to the first predicate that evaluates to `true`. If no predicate matches, it returns the last argument as the default value.",
-	minArgs: 3,
-	maxArgs: Number.MAX_SAFE_INTEGER,
-	call: (...args) => {
-		for (let i = 0; i < args.length - 1; i += 2) {
-			const predicate = args[i];
-			if (predicate.kind !== Kind.Boolean) throw new Error("case predicate must evaluate to a boolean value");
-			if (predicate.value) return args[i + 1];
-		}
-		return args[args.length - 1];
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/result.js
-function coerceTypes(li, ri) {
-	let lv = li;
-	let rv = ri;
-	if (li.kind === ri.kind) return [lv, rv];
-	switch (li.kind) {
-		case Kind.Number:
-			if (ri.kind === Kind.String) {
-				rv = new NumberData(ri.number());
-				return [lv, rv];
-			}
-			break;
-		case Kind.String:
-			if (ri.kind === Kind.Number) {
-				lv = new NumberData(li.number());
-				return [lv, rv];
-			}
-			break;
-		case Kind.Null:
-		case Kind.Boolean:
-			lv = new NumberData(li.number());
-			return coerceTypes(lv, rv);
-	}
-	switch (ri.kind) {
-		case Kind.Null:
-		case Kind.Boolean:
-			rv = new NumberData(ri.number());
-			return coerceTypes(lv, rv);
-	}
-	return [lv, rv];
-}
-function equals(lhs, rhs) {
-	const [lv, rv] = coerceTypes(lhs, rhs);
-	if (lv.kind != rv.kind) return false;
-	switch (lv.kind) {
-		case Kind.Null: return true;
-		case Kind.Number: {
-			const ld = lv.value;
-			const rd = rv.value;
-			if (isNaN(ld) || isNaN(rd)) return false;
-			return ld == rd;
-		}
-		case Kind.String: {
-			const ls = lv.value;
-			const rs = rv.value;
-			return toUpperSpecial(ls) === toUpperSpecial(rs);
-		}
-		case Kind.Boolean: return lv.value == rv.value;
-		case Kind.Dictionary:
-		case Kind.Array: return lv === rv;
-	}
-	return false;
-}
-function toUpperSpecial(s) {
-	const sb = [];
-	let i = 0;
-	const len = s.length;
-	let found = s.indexOf("ı");
-	while (i < len) if (i < found) {
-		sb.push(s.substring(i, found).toUpperCase());
-		i = found;
-	} else if (i == found) {
-		sb.push(s.substring(i, i + 1));
-		i += 1;
-		found = s.indexOf("ı", i);
-	} else {
-		sb.push(s.substring(i).toUpperCase());
-		break;
-	}
-	return sb.join("");
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/contains.js
-const contains = {
-	name: "contains",
-	description: "`contains( search, item )`\n\nReturns `true` if `search` contains `item`. If `search` is an array, this function returns `true` if the `item` is an element in the array. If `search` is a string, this function returns `true` if the `item` is a substring of `search`. This function is not case sensitive. Casts values to a string.",
-	minArgs: 2,
-	maxArgs: 2,
-	call: (...args) => {
-		const left = args[0];
-		const right = args[1];
-		if (left.primitive) {
-			const ls = left.coerceString();
-			if (right.primitive) {
-				const rs = right.coerceString();
-				return new BooleanData(ls.toLowerCase().includes(rs.toLowerCase()));
-			}
-		} else if (left.kind === Kind.Array) {
-			const la = left;
-			if (la.values().length === 0) return new BooleanData(false);
-			for (const v of la.values()) if (equals(right, v)) return new BooleanData(true);
-		}
-		return new BooleanData(false);
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/endswith.js
-const endswith = {
-	name: "endsWith",
-	description: "`endsWith( searchString, searchValue )`\n\nReturns `true` if `searchString` ends with `searchValue`. This function is not case sensitive. Casts values to a string.",
-	minArgs: 2,
-	maxArgs: 2,
-	call: (...args) => {
-		const left = args[0];
-		if (!left.primitive) return new BooleanData(false);
-		const right = args[1];
-		if (!right.primitive) return new BooleanData(false);
-		const ls = toUpperSpecial(left.coerceString());
-		const rs = toUpperSpecial(right.coerceString());
-		return new BooleanData(ls.endsWith(rs));
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/format.js
-const format = {
-	name: "format",
-	description: "`format( string, replaceValue0, replaceValue1, ..., replaceValueN)`\n\nReplaces values in the `string`, with the variable `replaceValueN`. Variables in the `string` are specified using the `{N}` syntax, where `N` is an integer. You must specify at least one `replaceValue` and `string`. There is no maximum for the number of variables (`replaceValueN`) you can use. Escape curly braces using double braces.",
-	minArgs: 1,
-	maxArgs: 255,
-	call: (...args) => {
-		const fs = args[0].coerceString();
-		const result = [];
-		let index = 0;
-		while (index < fs.length) {
-			const lbrace = fs.indexOf("{", index);
-			const rbrace = fs.indexOf("}", index);
-			if (lbrace >= 0 && (rbrace < 0 || rbrace > lbrace)) {
-				if (safeCharAt(fs, lbrace + 1) === "{") {
-					result.push(fs.substr(index, lbrace - index + 1));
-					index = lbrace + 2;
-					continue;
-				}
-				if (rbrace > lbrace + 1) {
-					const argIndex = readArgIndex(fs, lbrace + 1);
-					if (argIndex.success) {
-						if (1 + argIndex.result > args.length - 1) throw new Error(`The following format string references more arguments than were supplied: ${fs}`);
-						if (lbrace > index) result.push(fs.substr(index, lbrace - index));
-						result.push(`${args[1 + argIndex.result].coerceString()}`);
-						index = rbrace + 1;
-						continue;
-					}
-				}
-				throw new Error(`The following format string is invalid: ${fs}`);
-			} else if (rbrace >= 0) {
-				if (safeCharAt(fs, rbrace + 1) === "}") {
-					result.push(fs.substr(index, rbrace - index + 1));
-					index = rbrace + 2;
-				} else throw new Error(`The following format string is invalid: ${fs}`);
-			} else {
-				result.push(fs.substr(index));
-				break;
-			}
-		}
-		return new StringData(result.join(""));
-	}
-};
-function safeCharAt(string, index) {
-	if (string.length > index) return string[index];
-	return "\0";
-}
-function readArgIndex(string, startIndex) {
-	let length = 0;
-	for (;;) {
-		const nextChar = safeCharAt(string, startIndex + length);
-		if (nextChar >= "0" && nextChar <= "9") length++;
-		else break;
-	}
-	if (length < 1) return { success: false };
-	const endIndex = startIndex + length - 1;
-	const result = parseInt(string.substr(startIndex, length));
-	return {
-		success: !isNaN(result),
-		result,
-		endIndex
-	};
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs.js
-const wellKnownFunctions = {
-	case: caseFunc,
-	contains,
-	endswith,
-	format,
-	fromjson: {
-		name: "fromJson",
-		description: "`fromJSON(value)`\n\nReturns a JSON object or JSON data type for `value`. You can use this function to provide a JSON object as an evaluated expression or to convert environment variables from a string.",
-		minArgs: 1,
-		maxArgs: 1,
-		call: (...args) => {
-			const is = args[0].coerceString();
-			if (is.trim() === "") throw new Error("empty input");
-			try {
-				return JSON.parse(is, reviver);
-			} catch (e) {
-				throw new ExpressionEvaluationError("Error parsing JSON when evaluating fromJson", { cause: e });
-			}
-		}
-	},
-	join: {
-		name: "join",
-		description: "`join( array, optionalSeparator )`\n\nThe value for `array` can be an array or a string. All values in `array` are concatenated into a string. If you provide `optionalSeparator`, it is inserted between the concatenated values. Otherwise, the default separator `,` is used. Casts values to a string.",
-		minArgs: 1,
-		maxArgs: 2,
-		call: (...args) => {
-			if (args[0].primitive) return new StringData(args[0].coerceString());
-			if (args[0].kind === Kind.Array) {
-				let separator = ",";
-				if (args.length > 1 && args[1].primitive) separator = args[1].coerceString();
-				return new StringData(args[0].values().map((item) => item.coerceString()).join(separator));
-			}
-			return new StringData("");
-		}
-	},
-	startswith: {
-		name: "startsWith",
-		description: "`startsWith( searchString, searchValue )`\n\nReturns `true` when `searchString` starts with `searchValue`. This function is not case sensitive. Casts values to a string.",
-		minArgs: 2,
-		maxArgs: 2,
-		call: (...args) => {
-			const left = args[0];
-			if (!left.primitive) return new BooleanData(false);
-			const right = args[1];
-			if (!right.primitive) return new BooleanData(false);
-			const ls = toUpperSpecial(left.coerceString());
-			const rs = toUpperSpecial(right.coerceString());
-			return new BooleanData(ls.startsWith(rs));
-		}
-	},
-	tojson: {
-		name: "toJson",
-		description: "`toJSON(value)`\n\nReturns a pretty-print JSON representation of `value`. You can use this function to debug the information provided in contexts.",
-		minArgs: 1,
-		maxArgs: 1,
-		call: (...args) => {
-			return new StringData(JSON.stringify(args[0], replacer, "  "));
-		}
-	}
-};
-function validateFunction(context, identifier, argCount) {
-	const name = identifier.lexeme.toLowerCase();
-	let f;
-	f = wellKnownFunctions[name];
-	if (!f) {
-		f = context.extensionFunctions.get(name);
-		if (!f) {
-			if (!context.allowUnknownKeywords) throw new ExpressionError(ErrorType.ErrorUnrecognizedFunction, identifier);
-			return;
-		}
-	}
-	if (argCount < f.minArgs) throw new ExpressionError(ErrorType.ErrorTooFewParameters, identifier);
-	if (argCount > f.maxArgs) throw new ExpressionError(ErrorType.ErrorTooManyParameters, identifier);
-	if (name === "case" && argCount % 2 === 0) throw new ExpressionError(ErrorType.ErrorEvenParameters, identifier);
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/features.js
-/**
-* All known experimental feature keys.
-* This list must be kept in sync with the ExperimentalFeatures interface.
-*/
-const allFeatureKeys = [
-	"missingInputsQuickfix",
-	"blockScalarChompingWarning",
-	"allowCaseFunction",
-	"allowCopilotRequestsPermission",
-	"allowDrivesPermissionAutocomplete",
-	"allowBackgroundSteps"
-];
-var FeatureFlags = class {
-	constructor(features) {
-		this.features = features ?? {};
-	}
-	/**
-	* Check if an experimental feature is enabled.
-	*
-	* Resolution order:
-	* 1. Explicit feature flag (if set)
-	* 2. `all` flag (if set)
-	* 3. false (default)
-	*/
-	isEnabled(feature) {
-		const explicit = this.features[feature];
-		if (explicit !== void 0) return explicit;
-		return this.features.all ?? false;
-	}
-	/**
-	* Returns list of all enabled experimental features.
-	*/
-	getEnabledFeatures() {
-		return allFeatureKeys.filter((key) => this.isEnabled(key));
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/parser.js
-var Parser = class {
-	/**
-	* Constructs a new parser for the given tokens
-	*
-	* @param tokens Tokens to build a parse tree from
-	* @param extensionContexts Available context names
-	* @param extensionFunctions Available functions (beyond the built-in ones)
-	*/
-	constructor(tokens, extensionContexts, extensionFunctions) {
-		this.tokens = tokens;
-		this.offset = 0;
-		this.depth = 0;
-		this.extContexts = /* @__PURE__ */ new Map();
-		this.extFuncs = /* @__PURE__ */ new Map();
-		for (const contextName of extensionContexts) this.extContexts.set(contextName.toLowerCase(), true);
-		for (const { name, func } of extensionFunctions.map((x) => ({
-			name: x.name,
-			func: x
-		}))) this.extFuncs.set(name.toLowerCase(), func);
-		this.context = {
-			allowUnknownKeywords: false,
-			extensionContexts: this.extContexts,
-			extensionFunctions: this.extFuncs
-		};
-	}
-	parse() {
-		let result;
-		if (this.atEnd()) return result;
-		result = this.expression();
-		if (!this.atEnd()) throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
-		return result;
-	}
-	expression() {
-		this.incrDepth();
-		try {
-			return this.logicalOr();
-		} finally {
-			this.decrDepth();
-		}
-	}
-	logicalOr() {
-		let expr = this.logicalAnd();
-		if (this.check(TokenType$1.OR)) {
-			this.incrDepth();
-			try {
-				const logical = new Logical(this.peek(), [expr]);
-				expr = logical;
-				while (this.match(TokenType$1.OR)) {
-					const right = this.logicalAnd();
-					logical.args.push(right);
-				}
-			} finally {
-				this.decrDepth();
-			}
-		}
-		return expr;
-	}
-	logicalAnd() {
-		let expr = this.equality();
-		if (this.check(TokenType$1.AND)) {
-			this.incrDepth();
-			try {
-				const logical = new Logical(this.peek(), [expr]);
-				expr = logical;
-				while (this.match(TokenType$1.AND)) {
-					const right = this.equality();
-					logical.args.push(right);
-				}
-			} finally {
-				this.decrDepth();
-			}
-		}
-		return expr;
-	}
-	equality() {
-		let expr = this.comparison();
-		while (this.match(TokenType$1.BANG_EQUAL, TokenType$1.EQUAL_EQUAL)) {
-			const operator = this.previous();
-			const right = this.comparison();
-			expr = new Binary(expr, operator, right);
-		}
-		return expr;
-	}
-	comparison() {
-		let expr = this.unary();
-		while (this.match(TokenType$1.GREATER, TokenType$1.GREATER_EQUAL, TokenType$1.LESS, TokenType$1.LESS_EQUAL)) {
-			const operator = this.previous();
-			const right = this.unary();
-			expr = new Binary(expr, operator, right);
-		}
-		return expr;
-	}
-	unary() {
-		if (this.match(TokenType$1.BANG)) {
-			this.incrDepth();
-			const operator = this.previous();
-			const unary = this.unary();
-			try {
-				return new Unary(operator, unary);
-			} finally {
-				this.decrDepth();
-			}
-		}
-		return this.index();
-	}
-	index() {
-		let expr = this.call();
-		let depthIncreased = 0;
-		if (expr instanceof Grouping || expr instanceof FunctionCall || expr instanceof ContextAccess) {
-			let cont = true;
-			while (cont) switch (true) {
-				case this.match(TokenType$1.LEFT_BRACKET): {
-					let indexExpr;
-					if (this.match(TokenType$1.STAR)) indexExpr = new Star();
-					else indexExpr = this.expression();
-					this.consume(TokenType$1.RIGHT_BRACKET, ErrorType.ErrorUnexpectedSymbol);
-					this.incrDepth();
-					depthIncreased++;
-					expr = new IndexAccess(expr, indexExpr);
-					break;
-				}
-				case this.match(TokenType$1.DOT):
-					this.incrDepth();
-					depthIncreased++;
-					if (this.match(TokenType$1.IDENTIFIER)) {
-						const property = this.previous();
-						expr = new IndexAccess(expr, new Literal(new StringData(property.lexeme), property));
-					} else if (this.match(TokenType$1.STAR)) expr = new IndexAccess(expr, new Star());
-					else throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
-					break;
-				default: cont = false;
-			}
-		}
-		for (let i = 0; i < depthIncreased; i++) this.decrDepth();
-		return expr;
-	}
-	call() {
-		if (!this.check(TokenType$1.IDENTIFIER)) return this.primary();
-		const identifier = this.next();
-		if (!this.match(TokenType$1.LEFT_PAREN)) {
-			if (!this.extContexts.has(identifier.lexeme.toLowerCase())) throw this.buildError(ErrorType.ErrorUnrecognizedContext, identifier);
-			return new ContextAccess(identifier);
-		}
-		const args = [];
-		while (!this.match(TokenType$1.RIGHT_PAREN)) {
-			const aexp = this.expression();
-			args.push(aexp);
-			if (!this.check(TokenType$1.RIGHT_PAREN)) this.consume(TokenType$1.COMMA, ErrorType.ErrorUnexpectedSymbol);
-		}
-		validateFunction(this.context, identifier, args.length);
-		return new FunctionCall(identifier, args);
-	}
-	primary() {
-		switch (true) {
-			case this.match(TokenType$1.FALSE): return new Literal(new BooleanData(false), this.previous());
-			case this.match(TokenType$1.TRUE): return new Literal(new BooleanData(true), this.previous());
-			case this.match(TokenType$1.NULL): return new Literal(new Null(), this.previous());
-			case this.match(TokenType$1.NUMBER): return new Literal(new NumberData(this.previous().value), this.previous());
-			case this.match(TokenType$1.STRING): return new Literal(new StringData(this.previous().value), this.previous());
-			case this.match(TokenType$1.LEFT_PAREN): {
-				const expr = this.expression();
-				if (this.atEnd()) throw this.buildError(ErrorType.ErrorUnexpectedEndOfExpression, this.previous());
-				this.consume(TokenType$1.RIGHT_PAREN, ErrorType.ErrorUnexpectedSymbol);
-				return new Grouping(expr);
-			}
-			case this.atEnd(): throw this.buildError(ErrorType.ErrorUnexpectedEndOfExpression, this.previous());
-		}
-		throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
-	}
-	match(...tokenTypes) {
-		for (const tokenType of tokenTypes) if (this.check(tokenType)) {
-			this.next();
-			return true;
-		}
-		return false;
-	}
-	check(tokenType) {
-		if (this.atEnd()) return false;
-		return this.peek().type == tokenType;
-	}
-	atEnd() {
-		return this.peek().type == TokenType$1.EOF;
-	}
-	next() {
-		if (!this.atEnd()) this.offset++;
-		return this.previous();
-	}
-	peek() {
-		return this.tokens[this.offset];
-	}
-	previous() {
-		return this.tokens[this.offset - 1];
-	}
-	consume(tokenType, errorType) {
-		if (this.check(tokenType)) {
-			this.next();
-			return;
-		}
-		throw this.buildError(errorType, this.peek());
-	}
-	incrDepth() {
-		this.depth++;
-		if (this.depth > 50) throw this.buildError(ErrorType.ErrorExceededMaxDepth, this.peek());
-	}
-	decrDepth() {
-		this.depth--;
-	}
-	buildError(errType, token) {
-		return new ExpressionError(errType, token);
-	}
-};
-//#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/expressions.ts
-/** Every named context the GitHub Actions runtime knows about. */
-const KNOWN_CONTEXTS = [
-	"github",
-	"env",
-	"vars",
-	"job",
-	"jobs",
-	"steps",
-	"runner",
-	"secrets",
-	"strategy",
-	"matrix",
-	"needs",
-	"inputs"
-];
-/** The error of a `${{` that has no closing `}}`. */
-const UNTERMINATED_EXPRESSION = "Unterminated expression: missing closing '}}'";
-/** Splits a string into literal text and `${{ }}` expressions, respecting quoted strings inside expressions. */
-function findTemplateSegments(text) {
-	const segments = [];
-	let i = 0;
-	while (i < text.length) {
-		const open = text.indexOf("${{", i);
-		if (open < 0) break;
-		let j = open + 3;
-		let inString = false;
-		let close = -1;
-		while (j < text.length) {
-			const ch = text[j];
-			if (inString) {
-				if (ch === "'") {
-					if (text[j + 1] === "'") j++;
-					else inString = false;
-				}
-			} else if (ch === "'") inString = true;
-			else if (ch === "}" && text[j + 1] === "}") {
-				close = j;
-				break;
-			}
-			j++;
-		}
-		if (close < 0) {
-			const inner = text.slice(open + 3);
-			segments.push({
-				start: open,
-				end: text.length,
-				innerStart: open + 3,
-				expr: {
-					source: inner.trim(),
-					refs: [],
-					error: {
-						message: UNTERMINATED_EXPRESSION,
-						offset: 0
-					}
-				}
-			});
-			break;
-		}
-		const rawInner = text.slice(open + 3, close);
-		const lead = rawInner.length - rawInner.trimStart().length;
-		segments.push({
-			start: open,
-			end: close + 2,
-			innerStart: open + 3 + lead,
-			expr: parseExpression(rawInner.trim())
-		});
-		i = close + 2;
-	}
-	return segments;
-}
-/**
-* The parser's message without its trailing "Located at position N…" (and the period and spaces before it). Found
-* with indexOf: the message repeats the offending token, and `/\.?\s*Located at position.*$/s` retried a long run of
-* spaces from every position (CodeQL js/polynomial-redos).
-*/
-function withoutPosition(message) {
-	const at = message.indexOf("Located at position");
-	if (at < 0) return message;
-	let end = at;
-	while (end > 0 && /\s/.test(message[end - 1])) end--;
-	if (message[end - 1] === ".") end--;
-	return message.slice(0, end);
-}
-/** Functions that exist only in some contexts; the parser treats them as extensions. */
-const CONTEXT_FUNCTIONS = [
-	{
-		name: "hashFiles",
-		minArgs: 1,
-		maxArgs: 255
-	},
-	{
-		name: "success",
-		minArgs: 0,
-		maxArgs: 0
-	},
-	{
-		name: "always",
-		minArgs: 0,
-		maxArgs: 0
-	},
-	{
-		name: "failure",
-		minArgs: 0,
-		maxArgs: 0
-	},
-	{
-		name: "cancelled",
-		minArgs: 0,
-		maxArgs: 0
-	}
-];
-const exprCache = /* @__PURE__ */ new Map();
-function parseExpression(source) {
-	const cached = exprCache.get(source);
-	if (cached) return cached;
-	let result;
-	try {
-		const tokens = new Lexer(source).lex().tokens;
-		const ast = new Parser(tokens, [...KNOWN_CONTEXTS], CONTEXT_FUNCTIONS).parse();
-		result = {
-			source,
-			ast,
-			refs: collectRefs(ast, source)
-		};
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		const tokRange = err.tok?.range;
-		const posMatch = /Located at position (\d+)/.exec(message);
-		const offset = tokRange ? offsetOf$1(source, tokRange.start.line, tokRange.start.column) : posMatch ? Math.max(0, Number(posMatch[1]) - 1) : 0;
-		result = {
-			source,
-			refs: [],
-			error: {
-				message: withoutPosition(message),
-				offset
-			}
-		};
-	}
-	exprCache.set(source, result);
-	return result;
-}
-/**
-* The offset of a position the lexer of `@actions/expressions` gives a token. Its `line` counts every newline before the
-* token's end, those inside string literals included, but its `column` counts from the last newline outside a string:
-* a newline inside `'…'` moves the line and not the start of the column. So the column is added to the offset after the
-* last newline outside a string among the first `line`. A quote toggles the string: a `''` escape toggles it twice.
-*/
-function offsetOf$1(source, line, column) {
-	let lineStart = 0;
-	let newlines = 0;
-	let inString = false;
-	for (let i = 0; i < source.length && newlines < line; i++) if (source[i] === "'") inString = !inString;
-	else if (source[i] === "\n") {
-		newlines++;
-		if (!inString) lineStart = i + 1;
-	}
-	return lineStart + column;
-}
-function collectRefs(root, source) {
-	const refs = [];
-	const startOf = (t) => offsetOf$1(source, t.range.start.line, t.range.start.column);
-	const endOf = (t) => offsetOf$1(source, t.range.end.line, t.range.end.column);
-	/** Returns the chain for `a.b['c']` or undefined when the base is not a context. */
-	const chainOf = (e) => {
-		if (e instanceof ContextAccess) return {
-			ctx: e,
-			path: [],
-			end: endOf(e.name)
-		};
-		if (e instanceof IndexAccess) {
-			const base = chainOf(e.expr);
-			if (!base) return void 0;
-			const idx = e.index;
-			if (idx instanceof Star) return {
-				...base,
-				path: [...base.path, "*"]
-			};
-			if (idx instanceof Literal && idx.literal.kind === Kind.String) return {
-				...base,
-				path: [...base.path, idx.literal.coerceString()],
-				end: Math.max(base.end, endOf(idx.token))
-			};
-			if (idx instanceof Literal && idx.literal.kind === Kind.Number) return {
-				...base,
-				path: [...base.path, String(idx.literal.number())],
-				end: base.end
-			};
-			return {
-				...base,
-				path: [...base.path, "?"]
-			};
-		}
-	};
-	const visit = (e) => {
-		if (e instanceof ContextAccess || e instanceof IndexAccess) {
-			const chain = chainOf(e);
-			if (chain) {
-				refs.push({
-					context: chain.ctx.name.lexeme.toLowerCase(),
-					path: chain.path,
-					dynamic: chain.path.length === 0 || chain.path.includes("?"),
-					start: startOf(chain.ctx.name),
-					end: chain.end
-				});
-				let cur = e;
-				while (cur instanceof IndexAccess) {
-					if (!(cur.index instanceof Literal) && !(cur.index instanceof Star)) visit(cur.index);
-					cur = cur.expr;
-				}
-				return;
-			}
-			if (e instanceof IndexAccess) {
-				visit(e.expr);
-				if (!(e.index instanceof Literal) && !(e.index instanceof Star)) visit(e.index);
-			}
-			return;
-		}
-		if (e instanceof Unary) visit(e.expr);
-		else if (e instanceof Binary) {
-			visit(e.left);
-			visit(e.right);
-		} else if (e instanceof Logical || e instanceof FunctionCall) for (const arg of e.args) visit(arg);
-		else if (e instanceof Grouping) visit(e.group);
-	};
-	visit(root);
-	for (const r of refs) r.end = Math.max(r.end, refEndFromSource(source, r));
-	return refs;
-}
-function refEndFromSource(source, ref) {
-	const m = /^[A-Za-z_][\w-]*(?:\s*(?:\.\s*(?:[A-Za-z_*][\w-]*)|\[\s*'(?:[^']|'')*'\s*\]|\[\s*\d+\s*\]|\[\s*\*\s*\]))*/.exec(source.slice(ref.start));
-	return m ? ref.start + m[0].length : ref.end;
-}
-/** The functions an expression calls, by name as written (`hashFiles`, `toJSON`), each call's before its arguments'. */
-function calledFunctions(expr) {
-	const names = [];
-	const visit = (e) => {
-		if (e instanceof FunctionCall) names.push(e.functionName.lexeme);
-		for (const inner of operandsOf(e)) visit(inner);
-	};
-	if (expr.ast) visit(expr.ast);
-	return names;
-}
-/** The expressions directly inside `e`: its operands, arguments or index. */
-function operandsOf(e) {
-	if (e instanceof Unary) return [e.expr];
-	if (e instanceof Binary) return [e.left, e.right];
-	if (e instanceof Logical || e instanceof FunctionCall) return e.args;
-	if (e instanceof Grouping) return [e.group];
-	if (e instanceof IndexAccess) return [e.expr, e.index];
-	return [];
-}
-const UNKNOWN = {
-	known: false,
-	taint: []
-};
-const known$2 = (value, taint = []) => ({
-	known: true,
-	value,
-	taint
-});
-const mergeTaint = (...vals) => {
-	const out = [];
-	for (const v of vals) for (const t of v.taint) if (!out.some((o) => o.key === t.key)) out.push(t);
-	return out;
-};
-function truthy(v) {
-	if (v === null) return false;
-	if (typeof v === "boolean") return v;
-	if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
-	if (typeof v === "string") return v.length > 0;
-	return true;
-}
-function toNumber(v) {
-	if (v === null) return 0;
-	if (typeof v === "boolean") return v ? 1 : 0;
-	if (typeof v === "number") return v;
-	if (typeof v === "string") {
-		const s = v.trim();
-		if (s === "") return 0;
-		if (/^0x[0-9a-f]+$/i.test(s)) return Number.parseInt(s, 16);
-		if (/^0o[0-7]+$/i.test(s)) return Number.parseInt(s.slice(2), 8);
-		const n = Number(s);
-		return Number.isNaN(n) ? NaN : n;
-	}
-	return NaN;
-}
-/** Formats a number like .NET's `ToString("G15")`, which GitHub uses to convert numbers to strings. */
-function formatNumber(n) {
-	if (!Number.isFinite(n)) return String(n);
-	if (n === 0) return "0";
-	const trim = (s) => s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
-	const [m, x] = n.toExponential(14).split("e");
-	const power = Number(x);
-	if (power > -5 && power < 15) return trim(n.toPrecision(15));
-	return `${trim(m)}E${power < 0 ? "-" : "+"}${String(Math.abs(power)).padStart(2, "0")}`;
-}
-function toStr(v) {
-	if (v === null) return "";
-	if (typeof v === "boolean") return v ? "true" : "false";
-	if (typeof v === "number") return formatNumber(v);
-	if (typeof v === "string") return v;
-	return Array.isArray(v) ? "Array" : "Object";
-}
-function looseEquals(a, b) {
-	const ta = jsonType(a);
-	const tb = jsonType(b);
-	if (ta !== tb) {
-		if (ta === "object" || tb === "object" || ta === "array" || tb === "array") return false;
-		return toNumber(a) === toNumber(b);
-	}
-	if (ta === "string") return a.toUpperCase() === b.toUpperCase();
-	if (ta === "number" || ta === "boolean" || ta === "null") return a === b;
-	return a === b;
-}
-function compare(a, b) {
-	if (typeof a === "string" && typeof b === "string") {
-		const x = a.toUpperCase();
-		const y = b.toUpperCase();
-		return x < y ? -1 : x > y ? 1 : 0;
-	}
-	const x = toNumber(a);
-	const y = toNumber(b);
-	if (Number.isNaN(x) || Number.isNaN(y)) return void 0;
-	return x - y;
-}
-function jsonType(v) {
-	if (v === null) return "null";
-	if (Array.isArray(v)) return "array";
-	return typeof v;
-}
-function literalToJson(lit) {
-	switch (lit.literal.kind) {
-		case Kind.String: return lit.literal.coerceString();
-		case Kind.Number: return lit.literal.number();
-		case Kind.Boolean: return lit.token.type === TokenType$1.TRUE;
-		case Kind.Null: return null;
-		default: return null;
-	}
-}
-/** Evaluates as much of the expression as possible; anything that depends on runtime state yields `known: false`. */
-function evaluate(e, resolve, options = {}) {
-	if (e instanceof Literal) return known$2(literalToJson(e));
-	if (e instanceof Grouping) return evaluate(e.group, resolve, options);
-	if (e instanceof ContextAccess || e instanceof IndexAccess) {
-		const chain = refChain(e, resolve, options);
-		if (chain) return resolve(chain) ?? UNKNOWN;
-		if (e instanceof IndexAccess) {
-			const base = evaluate(e.expr, resolve, options);
-			const idx = e.index instanceof Star ? void 0 : evaluate(e.index, resolve, options);
-			if (!base.known || !idx?.known) return {
-				known: false,
-				taint: mergeTaint(base, ...idx ? [idx] : [])
-			};
-			return known$2(indexInto(base.value, idx.value), mergeTaint(base, idx));
-		}
-		return UNKNOWN;
-	}
-	if (e instanceof Unary) {
-		const v = evaluate(e.expr, resolve, options);
-		return v.known ? known$2(!truthy(v.value)) : UNKNOWN;
-	}
-	if (e instanceof Logical) {
-		const isAnd = e.operator.type === TokenType$1.AND;
-		let last = UNKNOWN;
-		for (const [i, arg] of e.args.entries()) {
-			const v = evaluate(arg, resolve, options);
-			last = v;
-			if (!v.known) return v;
-			if (isAnd ? !truthy(v.value) : truthy(v.value)) return isAnd && i < e.args.length - 1 ? {
-				...v,
-				taint: []
-			} : v;
-		}
-		return last;
-	}
-	if (e instanceof Binary) {
-		const l = evaluate(e.left, resolve, options);
-		const r = evaluate(e.right, resolve, options);
-		const taint = [];
-		if (!l.known || !r.known) return UNKNOWN;
-		switch (e.operator.type) {
-			case TokenType$1.EQUAL_EQUAL: return known$2(looseEquals(l.value, r.value), taint);
-			case TokenType$1.BANG_EQUAL: return known$2(!looseEquals(l.value, r.value), taint);
-			case TokenType$1.GREATER:
-			case TokenType$1.GREATER_EQUAL:
-			case TokenType$1.LESS:
-			case TokenType$1.LESS_EQUAL: {
-				const c = compare(l.value, r.value);
-				if (c === void 0) return known$2(false, taint);
-				const t = e.operator.type;
-				return known$2(t === TokenType$1.GREATER ? c > 0 : t === TokenType$1.GREATER_EQUAL ? c >= 0 : t === TokenType$1.LESS ? c < 0 : c <= 0, taint);
-			}
-			default: return {
-				known: false,
-				taint
-			};
-		}
-	}
-	if (e instanceof FunctionCall) return evalCall(e, resolve, options);
-	return UNKNOWN;
-}
-function refChain(e, resolve, options) {
-	if (e instanceof ContextAccess) return {
-		context: e.name.lexeme.toLowerCase(),
-		path: []
-	};
-	if (e instanceof IndexAccess) {
-		const base = refChain(e.expr, resolve, options);
-		if (!base) return void 0;
-		if (e.index instanceof Star) return void 0;
-		if (e.index instanceof Literal) return {
-			...base,
-			path: [...base.path, toStr(literalToJson(e.index))]
-		};
-		const idx = evaluate(e.index, resolve, options);
-		if (idx.known && (typeof idx.value === "string" || typeof idx.value === "number")) return {
-			...base,
-			path: [...base.path, String(idx.value)]
-		};
-		return;
-	}
-}
-function indexInto(base, idx) {
-	if (Array.isArray(base)) {
-		const n = Math.floor(toNumber(idx));
-		return n >= 0 && n < base.length ? base[n] ?? null : null;
-	}
-	if (base && typeof base === "object") {
-		const key = toStr(idx).toLowerCase();
-		const hit = Object.keys(base).find((k) => k.toLowerCase() === key);
-		return hit === void 0 ? null : base[hit] ?? null;
-	}
-	return null;
-}
-/**
-* The functions whose value depends on the run (the job status and the workspace files), by name in lower case;
-* `always()` is not one, it is always true. Unknown unless `EvaluateOptions.runtime` answers them.
-*/
-const RUNTIME_FUNCTIONS = /* @__PURE__ */ new Set([
-	"success",
-	"failure",
-	"cancelled",
-	"hashfiles"
-]);
-/** What the run answers for a runtime function; without an answer the call stays unknown, with its arguments' taint. */
-function runtimeCall(name, args, taint, options) {
-	return options.runtime?.(name, args) ?? {
-		known: false,
-		taint
-	};
-}
-function evalCall(e, resolve, options) {
-	const name = e.functionName.lexeme.toLowerCase();
-	const args = e.args.map((a) => evaluate(a, resolve, options));
-	const taint = mergeTaint(...args);
-	const allKnown = args.every((a) => a.known);
-	const vals = args.map((a) => a.known ? a.value : null);
-	if (name === "always") return known$2(true, taint);
-	if (RUNTIME_FUNCTIONS.has(name)) return runtimeCall(name, args, taint, options);
-	if (!allKnown) return {
-		known: false,
-		taint
-	};
-	switch (name) {
-		case "format": {
-			const out = toStr(vals[0] ?? null).replace(/\{\{|\}\}|\{(\d+)\}/g, (m, d) => {
-				if (m === "{{") return "{";
-				if (m === "}}") return "}";
-				return toStr(vals[Number(d) + 1] ?? null);
-			});
-			return known$2(out, taint);
-		}
-		case "contains": {
-			const [hay, needle] = [vals[0] ?? null, vals[1] ?? null];
-			if (Array.isArray(hay)) return known$2(hay.some((h) => looseEquals(h, needle)), []);
-			return known$2(toStr(hay).toUpperCase().includes(toStr(needle).toUpperCase()), []);
-		}
-		case "startswith": return known$2(toStr(vals[0] ?? null).toUpperCase().startsWith(toStr(vals[1] ?? null).toUpperCase()), []);
-		case "endswith": return known$2(toStr(vals[0] ?? null).toUpperCase().endsWith(toStr(vals[1] ?? null).toUpperCase()), []);
-		case "join": {
-			const arr = vals[0] ?? null;
-			const sep = vals.length > 1 ? toStr(vals[1] ?? null) : ",";
-			return known$2(Array.isArray(arr) ? arr.map(toStr).join(sep) : toStr(arr), taint);
-		}
-		case "tojson": return known$2(JSON.stringify(vals[0] ?? null, null, 2), taint);
-		case "fromjson": try {
-			return known$2(JSON.parse(toStr(vals[0] ?? null)), taint);
-		} catch {
-			return {
-				known: false,
-				taint
-			};
-		}
-		default: return {
-			known: false,
-			taint
-		};
-	}
-}
-/**
-* True when a condition is falsy whatever the runtime-only parts evaluate to — e.g. `always() && matrix.k` in a
-* combination without `k`. Used to decide that a guarded step or job is skipped; values are never derived from it.
-*/
-function definitelyFalsy(e, resolve, options = {}) {
-	if (e instanceof Grouping) return definitelyFalsy(e.group, resolve, options);
-	if (e instanceof Logical) return e.operator.type === TokenType$1.AND ? e.args.some((a) => definitelyFalsy(a, resolve, options)) : e.args.every((a) => definitelyFalsy(a, resolve, options));
-	if (e instanceof Unary) return definitelyTruthy(e.expr, resolve, options);
-	const v = evaluate(e, resolve, options);
-	return v.known && !truthy(v.value);
-}
-function definitelyTruthy(e, resolve, options = {}) {
-	if (e instanceof Grouping) return definitelyTruthy(e.group, resolve, options);
-	if (e instanceof Logical) return e.operator.type === TokenType$1.AND ? e.args.every((a) => definitelyTruthy(a, resolve, options)) : e.args.some((a) => definitelyTruthy(a, resolve, options));
-	if (e instanceof Unary) return definitelyFalsy(e.expr, resolve, options);
-	const v = evaluate(e, resolve, options);
-	return v.known && truthy(v.value);
-}
-/**
-* Evaluates a whole YAML scalar that may mix literal text and `${{ }}` segments.
-* A scalar that is exactly one segment keeps the expression's type; otherwise the result is a string.
-*/
-function evaluateTemplate(text, resolve, options = {}) {
-	const segments = findTemplateSegments(text);
-	if (segments.length === 0) return known$2(text);
-	const first = segments[0];
-	if (segments.length === 1 && first.start === 0 && first.end === text.length) return first.expr.ast ? evaluate(first.expr.ast, resolve, options) : UNKNOWN;
-	let out = "";
-	let cursor = 0;
-	const parts = [];
-	for (const seg of segments) {
-		out += text.slice(cursor, seg.start);
-		const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve, options) : UNKNOWN;
-		parts.push(v);
-		if (!v.known) return {
-			known: false,
-			taint: mergeTaint(...parts)
-		};
-		out += toStr(v.value);
-		cursor = seg.end;
-	}
-	out += text.slice(cursor);
-	return known$2(out, mergeTaint(...parts));
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/ir.ts
-/** Case-insensitive lookup of an own key, matching how GitHub resolves context property names. */
-function lookup(rec, key) {
-	if (Object.hasOwn(rec, key)) return rec[key];
-	const lower = key.toLowerCase();
-	for (const k of Object.keys(rec)) if (k.toLowerCase() === lower) return rec[k];
-}
-/**
-* The site of the scalar GitHub's parser reports a problem in, by the start of the scalar it gives in the message
-* (`Diagnostic.at`): the parser's range is off for multi-line scalars.
-*/
-function siteAt(sites, at) {
-	return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
-}
-function jsonEqual(a, b) {
-	if (a === b) return true;
-	if (typeof a === "string" && typeof b === "string") return a === b;
-	if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
-	if (Array.isArray(a) !== Array.isArray(b)) return false;
-	if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => jsonEqual(x, b[i]));
-	const ka = Object.keys(a);
-	const kb = Object.keys(b);
-	return ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k) && jsonEqual(a[k], b[k]));
-}
-/** Three-valued cell comparison: `undefined` when an unknown value is involved. */
-function cellMatches(cell, value) {
-	if (!cell) return false;
-	if (!cell.known) return void 0;
-	return jsonEqual(cell.value, value);
-}
-/**
-* How many product combinations survive `exclude`, without listing the product: only the dimensions some exclude
-* entry names are enumerated, the others multiply. Falls back to a lower bound (each entry removes at most its share of
-* the product) when even that is too large. Undefined when part of the matrix is an expression.
-*/
-function minJobsAfterExclude(m, productSize) {
-	if (m.excludeDynamic || m.includeDynamic) return void 0;
-	if (m.dims.some((d) => d.values === null || d.unknownIndexes.length > 0)) return void 0;
-	if (m.exclude.some((e) => e.dynamicKeys.length > 0)) return void 0;
-	const size = new Map(m.dims.map((d) => [d.name, Math.max(1, d.values.length)]));
-	const named = m.dims.filter((d) => m.exclude.some((e) => Object.hasOwn(e.values, d.name)));
-	const subSize = named.reduce((n, d) => n * size.get(d.name), 1);
-	const effective = m.exclude.filter((e) => Object.keys(e.values).every((k) => size.has(k)));
-	if (subSize <= 2e4) {
-		let survivors = 0;
-		const walk = (i, values) => {
-			if (i === named.length) {
-				if (!effective.some((e) => Object.entries(e.values).every(([k, v]) => jsonEqual(values[k], v)))) survivors++;
-				return;
-			}
-			const d = named[i];
-			for (const v of d.values) walk(i + 1, {
-				...values,
-				[d.name]: v
-			});
-		};
-		walk(0, {});
-		return survivors * (productSize / subSize);
-	}
-	const removed = effective.reduce((n, e) => n + productSize / Object.keys(e.values).reduce((p, k) => p * size.get(k), 1), 0);
-	return Math.max(0, productSize - removed);
-}
-/**
-* Expands a matrix exactly the way GitHub does:
-* 1. cartesian product of the dimensions,
-* 2. `exclude` removes product combinations whose listed keys all match,
-* 3. each `include` entry is merged into every *original* combination it does not conflict with
-*    (original values are never overwritten; values added by earlier includes may be); if it fits none,
-*    it becomes a new combination.
-*/
-function expandMatrix(m) {
-	if (!m) return {
-		combos: [],
-		keys: [],
-		exact: true,
-		dynamic: false,
-		truncated: false
-	};
-	if (m.dynamic) return {
-		combos: [],
-		keys: [],
-		exact: false,
-		dynamic: true,
-		truncated: false
-	};
-	let exact = !m.includeDynamic && !m.excludeDynamic;
-	const truncated = false;
-	const dimNames = m.dims.map((d) => d.name);
-	const productSize = m.dims.reduce((n, d) => n * (d.values === null ? 1 : Math.max(1, d.values.length)), 1);
-	const truncatedResult = (minJobs) => {
-		const keys = [...dimNames];
-		for (const e of m.include) for (const k of Object.keys(e.values)) if (!keys.includes(k)) keys.push(k);
-		return {
-			combos: [],
-			keys,
-			exact: false,
-			dynamic: false,
-			truncated: true,
-			productSize,
-			...minJobs !== void 0 ? { minJobs } : {}
-		};
-	};
-	const large = m.dims.length > 0 && productSize > 2e4;
-	if (large) {
-		const minJobs = minJobsAfterExclude(m, productSize);
-		if (minJobs === void 0 || minJobs > 2e4) return truncatedResult(minJobs);
-	}
-	const pruneAt = /* @__PURE__ */ new Map();
-	for (const ex of m.exclude) {
-		const idx = Object.keys(ex.values).map((k) => dimNames.indexOf(k));
-		if (ex.dynamicKeys.length || idx.length === 0 || idx.includes(-1)) continue;
-		const at = Math.max(...idx);
-		pruneAt.set(at, [...pruneAt.get(at) ?? [], ex]);
-	}
-	let product = [];
-	if (m.dims.length > 0) {
-		product = [{
-			values: {},
-			origin: "product",
-			includes: []
-		}];
-		for (const [i, dim] of m.dims.entries()) {
-			const cells = dim.values === null ? [{ known: false }] : dim.values.map((v, i) => dim.unknownIndexes.includes(i) ? { known: false } : {
-				known: true,
-				value: v
-			});
-			if (dim.values === null || dim.unknownIndexes.length > 0) exact = false;
-			const prune = pruneAt.get(i) ?? [];
-			const next = [];
-			for (const combo of product) for (const cell of cells) {
-				const values = {
-					...combo.values,
-					[dim.name]: cell
-				};
-				if (prune.some((ex) => Object.entries(ex.values).every(([k, v]) => cellMatches(values[k], v) === true))) continue;
-				next.push({
-					origin: "product",
-					includes: [],
-					values
-				});
-			}
-			if (large && next.length > 2e4) return truncatedResult(minJobsAfterExclude(m, productSize));
-			product = next;
-		}
-	}
-	for (const ex of m.exclude) product = product.filter((combo) => {
-		let all = true;
-		for (const [k, v] of Object.entries(ex.values)) {
-			if (ex.dynamicKeys.includes(k)) {
-				exact = false;
-				all = false;
-				break;
-			}
-			const r = cellMatches(combo.values[k], v);
-			if (r === void 0) exact = false;
-			if (r !== true) {
-				all = false;
-				break;
-			}
-		}
-		return !all;
-	});
-	const originals = product;
-	const created = [];
-	m.include.forEach((entry, idx) => {
-		const entryCells = {};
-		for (const [k, v] of Object.entries(entry.values)) entryCells[k] = entry.dynamicKeys.includes(k) ? { known: false } : {
-			known: true,
-			value: v
-		};
-		let merged = false;
-		for (const combo of originals) {
-			let fits = true;
-			for (const [k, cell] of Object.entries(entryCells)) {
-				if (!dimNames.includes(k)) continue;
-				if (!cell.known) {
-					exact = false;
-					continue;
-				}
-				const r = cellMatches(combo.values[k], cell.value);
-				if (r === void 0) exact = false;
-				if (r === false) {
-					fits = false;
-					break;
-				}
-			}
-			if (!fits) continue;
-			for (const [k, cell] of Object.entries(entryCells)) if (!dimNames.includes(k)) combo.values[k] = cell;
-			combo.includes.push(idx);
-			merged = true;
-		}
-		if (!merged) created.push({
-			values: { ...entryCells },
-			origin: "include",
-			includes: [idx]
-		});
-	});
-	const combos = [...originals, ...created];
-	const keys = [];
-	for (const c of combos) for (const k of Object.keys(c.values)) if (!keys.includes(k)) keys.push(k);
-	return {
-		combos,
-		keys,
-		exact,
-		dynamic: false,
-		truncated,
-		productSize
-	};
-}
-/** Resolver that answers `matrix.*` from a concrete combination, marking missing keys with a taint. */
-function matrixResolver(combo) {
-	return ({ context, path }) => {
-		if (context !== "matrix") return void 0;
-		if (path.length === 0) return UNKNOWN;
-		const key = path[0];
-		const cell = lookup(combo.values, key);
-		if (!cell) return known$2(null, [{
-			kind: "missing-matrix-key",
-			key
-		}]);
-		if (!cell.known) return UNKNOWN;
-		let value = cell.value;
-		for (const seg of path.slice(1)) if (value && typeof value === "object" && !Array.isArray(value)) value = lookup(value, seg) ?? null;
-		else if (Array.isArray(value)) value = value[Math.floor(Number(seg))] ?? null;
-		else value = null;
-		return known$2(value);
-	};
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/checks.ts
-/**
-* Check-run names of jobs, as GitHub reports them (and as branch protection requires them).
-*
-* The rules come from GitHub's actual check runs in a lab repository (fixtures/checknames-lab):
-* - The name is the job's `name`, trimmed at both ends; the job id when there is none or it is blank.
-* - A matrix job gets ` (v1, v2, …)` unless its `name` is dynamic: a template with text around an expression, or an
-*   expression that is not a single literal (`Build ${{ matrix.os }}`, `${{ matrix.os }}`, `Lit ${{ 'X' }}` get no
-*   suffix; `${{ 'Only' }}` does).
-* - The suffix lists the combination's values: the matrix dimensions in declared order for product combinations
-*   (keys an `include` adds to them are left out), every key of the entry for combinations an `include` created.
-*   `null` and `''` are skipped, objects and arrays are flattened, numbers are formatted like .NET's "G15".
-* - A job in a called workflow reports `<caller> / <callee>`, one ` / ` per level; callee names read the caller's
-*   `with:` values (or the input defaults).
-*/
-/** A matrix value as it appears in the suffix: flattened, with `null` and `''` left out. */
-function suffixValues(value) {
-	if (value === null || value === "") return [];
-	if (typeof value === "boolean") return [value ? "true" : "false"];
-	if (typeof value === "number") return [formatNumber(value)];
-	if (typeof value === "string") return [value];
-	if (Array.isArray(value)) return value.flatMap(suffixValues);
-	return Object.values(value).flatMap(suffixValues);
-}
-const toText = (v) => {
-	if (!v.known) return void 0;
-	const value = v.value;
-	if (value === null) return "";
-	if (typeof value === "number") return formatNumber(value);
-	if (typeof value === "string" || typeof value === "boolean") return String(value);
-};
-function nameKind(job) {
-	const raw = job.name ?? "";
-	const segments = findTemplateSegments(raw);
-	if (segments.length === 0) return {
-		kind: "static",
-		text: raw.trim()
-	};
-	const only = segments.length === 1 && raw.trim() === raw.slice(segments[0].start, segments[0].end).trim();
-	const ast = segments[0].expr.ast;
-	if (only && ast instanceof Literal) return {
-		kind: "static",
-		text: (toText(evaluate(ast, () => void 0)) ?? "").trim()
-	};
-	return {
-		kind: "dynamic",
-		template: raw,
-		segments
-	};
-}
-function suffix(combo, exp, job) {
-	const m = job.matrix;
-	const keys = combo.origin === "include" ? Object.keys(m.include[combo.includes[0]]?.values ?? {}) : m.dims.map((d) => d.name);
-	let certain = exp.exact;
-	const parts = [];
-	for (const key of keys) {
-		const cell = lookup(combo.values, key);
-		if (!cell) continue;
-		if (!cell.known) {
-			certain = false;
-			continue;
-		}
-		parts.push(...suffixValues(cell.value));
-	}
-	return {
-		text: parts.length ? ` (${parts.join(", ")})` : "",
-		certain
-	};
-}
-/** The template with `…` for each expression (`Build …`), from the parsed segments rather than a backtracking regex. */
-function templateStem(template, segments) {
-	let out = "";
-	let at = 0;
-	for (const seg of segments) {
-		out += `${template.slice(at, seg.start)}…`;
-		at = seg.end;
-	}
-	return (out + template.slice(at)).trim();
-}
-/** The resolver for a job's `name`: matrix values of the combination and the (caller-supplied) inputs. */
-function nameResolver(combo, inputs) {
-	const matrix = combo ? matrixResolver(combo) : void 0;
-	return (ref) => {
-		if (ref.context === "matrix") return matrix ? matrix(ref) : known$2(null);
-		if (ref.context === "inputs") {
-			if (ref.path.length !== 1) return UNKNOWN;
-			const v = lookup(inputs, ref.path[0]);
-			return v?.known ? known$2(v.value) : UNKNOWN;
-		}
-	};
-}
-/**
-* The check names one job produces when it runs (one per matrix combination), without the caller prefix. A job that
-* calls a reusable workflow returns the caller segments only; see `workflowChecks` for the composed names.
-*/
-function jobSegments(job, inputs = {}) {
-	const kind = nameKind(job);
-	const exp = job.matrix ? expandMatrix(job.matrix) : void 0;
-	const combos = exp && !exp.dynamic && !exp.truncated && exp.combos.length ? exp.combos : [void 0];
-	const matrixUnknown = !!exp && (exp.dynamic || exp.truncated);
-	const stem = kind.kind === "static" ? `${kind.text || job.id}${exp ? " (…)" : ""}` : templateStem(kind.template, kind.segments);
-	return combos.map((combo) => {
-		if (kind.kind === "static") {
-			const base = kind.text || job.id;
-			if (!combo || !exp) return {
-				name: matrixUnknown ? `${base} (…)` : base,
-				stem,
-				certain: !matrixUnknown
-			};
-			const s = suffix(combo, exp, job);
-			return {
-				name: `${base}${s.text}`,
-				stem,
-				certain: s.certain,
-				combo
-			};
-		}
-		const text = toText(evaluateTemplate(kind.template, nameResolver(combo, inputs)))?.trim();
-		const certain = text !== void 0 && !matrixUnknown && (!exp || exp.exact);
-		return {
-			name: text === void 0 ? kind.template.trim() : text || job.id,
-			stem,
-			certain,
-			...combo ? { combo } : {}
-		};
-	});
-}
-/** The single check GitHub reports for a job that is skipped (its `if:` is false, or a job it needs failed). */
-function skippedCheckName(job) {
-	const kind = nameKind(job);
-	return kind.kind === "static" ? kind.text || job.id : kind.template.trim();
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/text.ts
-/**
-* `s` without runs of `ch` at its end (and at its start with `start: true`). A loop rather than `/x+$/`, which
-* backtracks quadratically on long runs that are not at the end (CodeQL js/polynomial-redos).
-*/
-function trimChar(s, ch, { start = false } = {}) {
-	let from = 0;
-	let to = s.length;
-	if (start) while (from < to && s[from] === ch) from++;
-	while (to > from && s[to - 1] === ch) to--;
-	return s.slice(from, to);
-}
-function editDistance$1(a, b) {
-	const x = a.toLowerCase();
-	const y = b.toLowerCase();
-	const dp = Array.from({ length: x.length + 1 }, (_, i) => [i, ...Array(y.length).fill(0)]);
-	for (let j = 1; j <= y.length; j++) dp[0][j] = j;
-	for (let i = 1; i <= x.length; i++) for (let j = 1; j <= y.length; j++) dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
-	return dp[x.length][y.length];
-}
-/** Suggests the closest name, treating `-`/`_` as equivalent. */
-function didYouMean(name, candidates) {
-	const norm = (s) => s.toLowerCase().replace(/[-_]/g, "");
-	let best;
-	for (const c of candidates) {
-		const [a, b] = [norm(name), norm(c)];
-		const prefix = Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a));
-		const d = a === b ? 0 : prefix ? 1 : editDistance$1(name, c);
-		if (!best || d < best.d) best = {
-			c,
-			d
-		};
-	}
-	if (!best) return void 0;
-	return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
-}
-//#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/glob.ts
-/** Minimal glob: `*` matches within a segment, `**` across segments; plain strings match as path prefixes. */
-function matchesPattern(path, pattern) {
-	if (!pattern.includes("*")) return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
-	return new RegExp(`^${pattern.split("**/").map((chunk) => chunk.split("**").map((part) => part.split("*").map(escapeRe).join("[^/]*")).join(".*")).join("(?:[^/]*/)*")}$`).test(path);
-}
-const escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-//#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/queries.ts
-/** Every reference in a unit's expressions, with the site it is in. */
-function* refsOf(unit) {
-	for (const site of unit.sites) for (const seg of site.segments) for (const ref of seg.refs) yield {
-		site,
-		ref
-	};
-}
-/** Secrets every workflow can read without declaring them (lowercase): the automatic `GITHUB_TOKEN`. */
-const BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
-//#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/graph.ts
-/** A path segment that names no key: the end of the path, a `*` filter or a `?` computed index. */
-const computed = (s) => s === void 0 || s === "*" || s === "?";
-/** Whether a path segment names the property `key` (lowercase): GitHub looks properties up ignoring case. */
-const isKey = (s, key) => s?.toLowerCase() === key;
-/** The reads of each member of a whole object, once per symbol, as reads the reference does not name. */
-function wholeReads(reads) {
-	const first = /* @__PURE__ */ new Map();
-	for (const r of reads) if (!first.has(r.symbol)) first.set(r.symbol, {
-		...r,
-		whole: true
-	});
-	return [...first.values()];
-}
-/** The names of declared inputs, secrets or env variables, or of the keys a job passes, as written. */
-const declaredNames = (decls) => Object.values(decls ?? {}).map((d) => d.name);
-/** The secret every workflow holds, in the spelling GitHub documents it by. */
-const GITHUB_TOKEN = "GITHUB_TOKEN";
-/** The secrets a workflow reads by name, each spelling once, as written. */
-function namedSecrets(wf) {
-	const names = /* @__PURE__ */ new Set();
-	for (const { ref } of refsOf(wf)) if (ref.context === "secrets" && !computed(ref.path[0])) names.add(ref.path[0]);
-	return [...names];
-}
-/** `names`, then each of `more` whose name, ignoring case, is not among them yet. */
-function addNames(names, more) {
-	const seen = new Set(names.map((n) => n.toLowerCase()));
-	const added = [];
-	for (const name of more) {
-		if (seen.has(name.toLowerCase())) continue;
-		seen.add(name.toLowerCase());
-		added.push(name);
-	}
-	return [...names, ...added];
-}
-/** The inputs a unit declares (a workflow's `workflow_call` and `workflow_dispatch` inputs of one name are one). */
-function inputNames(unit) {
-	if (unit.kind === "action") return declaredNames(unit.inputs);
-	return [...declaredNames(unit.call?.inputs), ...dispatchInputNames(unit)];
-}
-/** The inputs a workflow declares under `workflow_dispatch`. */
-function dispatchInputNames(unit) {
-	return unit.kind === "workflow" ? declaredNames(unit.dispatch?.inputs) : [];
-}
-/**
-* The inputs of its own that `github.event.inputs` may hold at a site: a workflow's `workflow_dispatch` inputs, which
-* it holds when the workflow is dispatched. None in an action, whose `github` is its job's, nor at a site GitHub
-* evaluates only when the workflow is called, with the caller's `github` context: a `workflow_call` output's value, or
-* an input's default (a `workflow_dispatch` input's default allows no context).
-*/
-function eventInputsAt(unit, site) {
-	if (unit.kind !== "workflow" || onlyWhenCalled(site)) return {};
-	return unit.dispatch?.inputs ?? {};
-}
-/** Whether GitHub evaluates a workflow's site only when the workflow is called (see `eventInputsAt`). */
-const onlyWhenCalled = (site) => site.field === "input.default" || site.field === "workflow.output";
-/**
-* The dispatch inputs a `github` reference reads without naming them, each as a reference naming it
-* (`github.event.inputs.<name>`). It may read them when each of its first two properties is `event` and `inputs`
-* (ignoring case), stands for any key (a `*` filter, a computed key) or is missing: a whole or computed `github`,
-* `github.event` or `github.event.inputs` reads every dispatch input it may hold at the site (see `eventInputsAt`), and
-* `github[x].inputs.<name>` the one it names. `undefined` for a reference that names its input outright (`resolveRef`
-* reads it) or can read none.
-*/
-function eventMemberRefs(unit, site, ref) {
-	const [event, inputs, name] = ref.path;
-	if (!(computed(event) || isKey(event, "event")) || !(computed(inputs) || isKey(inputs, "inputs"))) return void 0;
-	if (![
-		event,
-		inputs,
-		name
-	].some(computed)) return void 0;
-	return declaredNames(eventInputsAt(unit, site)).filter((n) => computed(name) || isKey(n, name.toLowerCase())).map((n) => ({
-		...ref,
-		path: [
-			"event",
-			"inputs",
-			n,
-			...ref.path.slice(3)
-		]
-	}));
-}
-/** The job a site is in. */
-function jobAt(unit, site) {
-	return unit.kind === "workflow" && site.job ? unit.jobs[site.job] : void 0;
-}
-/** The steps a site's `steps` context names: an action's, or those of the site's job. */
-function stepsAt(unit, site) {
-	return unit.kind === "action" ? unit.steps : jobAt(unit, site)?.steps ?? [];
-}
-/** The job in the symbol of a step output read at a site: the site's job in a workflow, none in an action. */
-const stepJob = (unit, site) => unit.kind === "workflow" ? site.job : void 0;
-/**
-* The outputs among `names` that `<job or step>.<b>.<c>` reads: all of them, one by name, or none
-* (`needs.build.result`).
-*/
-function pickOutputs(names, [, b, c]) {
-	if (computed(b)) return names;
-	if (!isKey(b, "outputs")) return [];
-	if (computed(c)) return names;
-	return names.filter((n) => n.toLowerCase() === c.toLowerCase());
-}
-/** The keys of a job's matrix: its dimensions and the keys its `include` entries add. */
-function matrixKeys(job) {
-	const m = job?.matrix;
-	return m ? [...m.dims.map((d) => d.name), ...m.include.flatMap((inc) => Object.keys(inc.keyLocs))] : [];
-}
-/**
-* The key of a remote `uses:` reference (`owner/repo/path@ref`): GitHub matches the owner and repository in any letter
-* case, and the path and ref as written.
-*/
-function remoteKey(raw) {
-	const [owner = "", repo = "", ...rest] = raw.trim().split("/");
-	return [
-		owner.toLowerCase(),
-		repo.toLowerCase(),
-		...rest
-	].join("/");
-}
-const sym = {
-	input: (unit, name) => `${unit}#inputs.${name}`,
-	secret: (unit, name) => `${unit}#secrets.${name}`,
-	output: (unit, name) => `${unit}#outputs.${name}`,
-	job: (unit, job) => `${unit}#jobs.${job}`,
-	jobOutput: (unit, job, name) => `${unit}#jobs.${job}.outputs.${name}`,
-	stepOutput: (unit, job, step, name) => job === void 0 ? `${unit}#steps.${step}.outputs.${name}` : `${unit}#jobs.${job}.steps.${step}.outputs.${name}`,
-	env: (unit, job, name) => job === void 0 ? `${unit}#env.${name}` : `${unit}#jobs.${job}.env.${name}`,
-	/** A step, by its id (in a job, or in an action, which has no jobs). */
-	step: (unit, job, id) => job === void 0 ? `${unit}#steps.${id}` : `${unit}#jobs.${job}.steps.${id}`,
-	/** A variable of a step's own `env:`, by the step's index: a step needs no id. */
-	stepEnv: (unit, job, step, name) => job === void 0 ? `${unit}#steps[${step}].env.${name}` : `${unit}#jobs.${job}.steps[${step}].env.${name}`,
-	matrix: (unit, job, key) => `${unit}#jobs.${job}.matrix.${key}`,
-	var: (name) => `vars.${name}`,
-	remote: (raw) => `remote:${raw}`
-};
-/** A declared secret of a workflow, by its declared case, or the name as written: secrets need no declaration. */
-function resolveSecret(unit, name) {
-	if (unit.kind !== "workflow") return void 0;
-	const decl = unit.call ? lookup(unit.call.secrets, name) : void 0;
-	return sym.secret(unit.path, decl?.name ?? name);
-}
-/**
-* The analyzed repository as a queryable graph: who calls whom, which expression reads which symbol,
-* and where each value flows next.
-*/
-var ProjectIndex = class {
-	project;
-	nodes = /* @__PURE__ */ new Map();
-	edges = [];
-	usages = /* @__PURE__ */ new Map();
-	callSites = [];
-	actionUses = [];
-	sitesById = /* @__PURE__ */ new Map();
-	definitions = /* @__PURE__ */ new Map();
-	/** The secrets a whole `secrets` reads in each workflow, by path, once computed (see `secretNames`). */
-	heldSecrets = /* @__PURE__ */ new Map();
-	constructor(project) {
-		this.project = project;
-		for (const wf of project.workflows.values()) this.indexWorkflow(wf);
-		for (const a of project.actions.values()) this.indexAction(a);
-		for (const unit of this.units()) for (const site of unit.sites) this.indexSite(unit, site);
-		for (const unit of this.units()) this.indexLiterals(unit);
-	}
-	units() {
-		return [...this.project.workflows.values(), ...this.project.actions.values()];
-	}
-	unit(path) {
-		return this.project.workflows.get(path) ?? this.project.actions.get(path);
-	}
-	site(id) {
-		return this.sitesById.get(id);
-	}
-	callersOf(workflowPath) {
-		return this.callSites.filter((c) => c.callee.path === workflowPath);
-	}
-	usersOf(actionPath) {
-		return this.actionUses.filter((u) => u.action.path === actionPath);
-	}
-	/** The reusable workflow a job calls. Workflows without `on.workflow_call` are not callable (see `targetOf`). */
-	calleeOf(job) {
-		const wf = this.targetOf(job);
-		return wf?.call ? wf : void 0;
-	}
-	/** The local workflow file a job's `uses:` points at, reusable or not. */
-	targetOf(job) {
-		if (job.uses?.kind !== "local-workflow" || !job.uses.target || job.uses.selfRef !== void 0) return void 0;
-		if (!/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(job.uses.target)) return void 0;
-		return this.project.workflows.get(job.uses.target);
-	}
-	/**
-	* The interface a job calls: its local reusable workflow, or the external unit of its remote one (see
-	* `Project.external`). Only checks of what a caller passes and reads use it; `calleeOf` never returns an external unit.
-	*/
-	interfaceOf(job) {
-		if (job.uses?.kind !== "remote-workflow") return this.calleeOf(job);
-		const unit = this.project.external?.get(remoteKey(job.uses.raw));
-		return unit?.kind === "workflow" && unit.call ? unit : void 0;
-	}
-	/** The interface a step uses: its local action, or the external unit of its remote one (see `interfaceOf`). */
-	actionInterfaceOf(step) {
-		if (step.uses?.kind !== "remote-action") return this.actionOf(step);
-		const unit = this.project.external?.get(remoteKey(step.uses.raw));
-		return unit?.kind === "action" ? unit : void 0;
-	}
-	actionOf(step) {
-		if (step.uses?.kind !== "local-action" || !step.uses.target || step.uses.selfRef !== void 0) return void 0;
-		return this.project.actions.get(step.uses.target);
-	}
-	usagesOf(symbol) {
-		return this.usages.get(symbol) ?? [];
-	}
-	/**
-	* What sets a symbol's value. Expressions (see `sinkOf`): each caller's `with:` for a reusable workflow's input, each
-	* `with:` of a step using an action for the action's input, a job's `outputs:` entry for its output, and so on. Plain
-	* values of env variables and outputs. A caller's or step's plain value or omission of an input is not listed: `trace`
-	* reads those from the calls.
-	*/
-	definitionsOf(symbol) {
-		return this.definitions.get(symbol) ?? [];
-	}
-	outgoing(symbol, kind) {
-		return this.edges.filter((e) => e.from === symbol && (!kind || e.kind === kind));
-	}
-	incoming(symbol, kind) {
-		return this.edges.filter((e) => e.to === symbol && (!kind || e.kind === kind));
-	}
-	/** Serializable snapshot: every node and edge, in a stable order. */
-	toJSON() {
-		return {
-			nodes: [...this.nodes.values()].sort((a, b) => a.id.localeCompare(b.id)),
-			edges: [...this.edges].sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.kind.localeCompare(b.kind))
-		};
-	}
-	node(n) {
-		if (!this.nodes.has(n.id)) this.nodes.set(n.id, n);
-		return n.id;
-	}
-	edge(e) {
-		this.edges.push(e);
-	}
-	indexWorkflow(wf) {
-		const u = wf.path;
-		this.node({
-			id: u,
-			kind: "workflow",
-			label: wf.name ?? u,
-			unit: u
-		});
-		for (const i of Object.values(wf.call?.inputs ?? {})) this.node({
-			id: sym.input(u, i.name),
-			kind: "input",
-			label: `inputs.${i.name}`,
-			unit: u,
-			loc: i.loc
-		});
-		for (const i of Object.values(wf.dispatch?.inputs ?? {})) this.node({
-			id: sym.input(u, i.name),
-			kind: "input",
-			label: `inputs.${i.name}`,
-			unit: u,
-			loc: i.loc
-		});
-		for (const s of Object.values(wf.call?.secrets ?? {})) this.node({
-			id: sym.secret(u, s.name),
-			kind: "secret",
-			label: `secrets.${s.name}`,
-			unit: u,
-			loc: s.loc
-		});
-		for (const o of Object.values(wf.call?.outputs ?? {})) this.node({
-			id: sym.output(u, o.name),
-			kind: "output",
-			label: `outputs.${o.name}`,
-			unit: u,
-			loc: o.loc
-		});
-		for (const e of Object.values(wf.env)) this.node({
-			id: sym.env(u, void 0, e.name),
-			kind: "env",
-			label: `env.${e.name}`,
-			unit: u,
-			loc: e.loc
-		});
-		for (const job of Object.values(wf.jobs)) {
-			const jid = this.node({
-				id: sym.job(u, job.id),
-				kind: "job",
-				label: `jobs.${job.id}`,
-				unit: u,
-				loc: job.loc
-			});
-			for (const n of job.needs) this.edge({
-				from: jid,
-				to: sym.job(u, n.id),
-				kind: "needs",
-				loc: n.loc
-			});
-			for (const o of Object.values(job.outputs)) this.node({
-				id: sym.jobOutput(u, job.id, o.name),
-				kind: "job-output",
-				label: `jobs.${job.id}.outputs.${o.name}`,
-				unit: u,
-				loc: o.loc
-			});
-			for (const e of Object.values(job.env)) this.node({
-				id: sym.env(u, job.id, e.name),
-				kind: "env",
-				label: `env.${e.name}`,
-				unit: u,
-				loc: e.loc
-			});
-			for (const d of job.matrix?.dims ?? []) this.node({
-				id: sym.matrix(u, job.id, d.name),
-				kind: "matrix",
-				label: `matrix.${d.name}`,
-				unit: u,
-				loc: d.loc
-			});
-			for (const inc of job.matrix?.include ?? []) for (const [k, loc] of Object.entries(inc.keyLocs)) this.node({
-				id: sym.matrix(u, job.id, k),
-				kind: "matrix",
-				label: `matrix.${k}`,
-				unit: u,
-				loc
-			});
-			if (job.uses) {
-				const callee = this.calleeOf(job);
-				if (callee) {
-					this.callSites.push({
-						caller: wf,
-						job,
-						callee
-					});
-					this.edge({
-						from: jid,
-						to: callee.path,
-						kind: "calls",
-						loc: job.uses.loc
-					});
-					for (const o of Object.values(callee.call?.outputs ?? {})) {
-						const jo = this.node({
-							id: sym.jobOutput(u, job.id, o.name),
-							kind: "job-output",
-							label: `jobs.${job.id}.outputs.${o.name}`,
-							unit: u,
-							loc: job.loc
-						});
-						this.edge({
-							from: sym.output(callee.path, o.name),
-							to: jo,
-							kind: "flows",
-							loc: o.loc
-						});
-					}
-					if (job.secretsInherit) this.edge({
-						from: jid,
-						to: callee.path,
-						kind: "inherits",
-						...job.secretsLoc ? { loc: job.secretsLoc } : {}
-					});
-				} else if (job.uses.kind === "remote-workflow") {
-					const r = this.node({
-						id: sym.remote(job.uses.raw),
-						kind: "remote",
-						label: job.uses.raw
-					});
-					this.edge({
-						from: jid,
-						to: r,
-						kind: "calls",
-						loc: job.uses.loc
-					});
-				}
-			}
-			for (const step of job.steps) this.indexStep(wf, job, step);
-		}
-	}
-	indexStep(unit, job, step) {
-		const action = this.actionOf(step);
-		if (!action) return;
-		this.actionUses.push({
-			unit,
-			...job ? { job } : {},
-			step,
-			action
-		});
-		if (step.uses) {
-			const from = job ? sym.job(unit.path, job.id) : unit.path;
-			this.edge({
-				from,
-				to: action.path,
-				kind: "uses",
-				loc: step.uses.loc
-			});
-		}
-		if (step.id) for (const o of Object.values(action.outputs)) {
-			const so = this.node({
-				id: sym.stepOutput(unit.path, job?.id, step.id, o.name),
-				kind: "step-output",
-				label: `steps.${step.id}.outputs.${o.name}`,
-				unit: unit.path,
-				loc: step.idLoc ?? step.loc
-			});
-			this.edge({
-				from: sym.output(action.path, o.name),
-				to: so,
-				kind: "flows",
-				loc: o.loc
-			});
-		}
-	}
-	indexAction(a) {
-		const u = a.path;
-		this.node({
-			id: u,
-			kind: "action",
-			label: a.name ?? u,
-			unit: u
-		});
-		for (const i of Object.values(a.inputs)) this.node({
-			id: sym.input(u, i.name),
-			kind: "input",
-			label: `inputs.${i.name}`,
-			unit: u,
-			loc: i.loc
-		});
-		for (const o of Object.values(a.outputs)) this.node({
-			id: sym.output(u, o.name),
-			kind: "output",
-			label: `outputs.${o.name}`,
-			unit: u,
-			loc: o.loc
-		});
-		for (const step of a.steps) this.indexStep(a, void 0, step);
-	}
-	/** Which symbol does the site's value define? (e.g. `with: { foo: ... }` on a reusable call defines the callee's `inputs.foo`). */
-	sinkOf(unit, site) {
-		const key = site.key;
-		if (key === void 0) return void 0;
-		switch (site.field) {
-			case "job.with":
-			case "job.secrets": {
-				const job = unit.kind === "workflow" && site.job ? unit.jobs[site.job] : void 0;
-				const callee = job && this.calleeOf(job);
-				if (!callee) return void 0;
-				const decls = site.field === "job.with" ? callee.call?.inputs : callee.call?.secrets;
-				const name = (decls && lookup(decls, key)?.name) ?? key;
-				return site.field === "job.with" ? sym.input(callee.path, name) : sym.secret(callee.path, name);
-			}
-			case "step.with": {
-				const step = this.stepOf(unit, site);
-				const action = step && this.actionOf(step);
-				if (!action) return void 0;
-				return sym.input(action.path, lookup(action.inputs, key)?.name ?? key);
-			}
-			case "job.output": return site.job ? sym.jobOutput(unit.path, site.job, key) : void 0;
-			case "workflow.output":
-			case "action.output": return sym.output(unit.path, key);
-			case "workflow.env": return sym.env(unit.path, void 0, key);
-			case "job.env": return site.job ? sym.env(unit.path, site.job, key) : void 0;
-			default: return;
-		}
-	}
-	stepOf(unit, site) {
-		if (site.step === void 0) return void 0;
-		if (unit.kind === "action") return unit.steps[site.step];
-		return site.job ? unit.jobs[site.job]?.steps[site.step] : void 0;
-	}
-	/**
-	* Resolves a reference inside `site` to the symbol it reads, or `undefined` for runtime-only contexts. Property names
-	* are compared ignoring case, as GitHub looks them up (`github.Event.Inputs.x`, `needs.build.Outputs.y`).
-	*/
-	resolveRef(unit, site, ref) {
-		if (ref.context === "github") return this.resolveEventInput(unit, site, ref.path);
-		const [a] = ref.path;
-		if (computed(a)) return void 0;
-		switch (ref.context) {
-			case "inputs": return sym.input(unit.path, this.canonicalInput(unit, a));
-			case "secrets": return resolveSecret(unit, a);
-			case "vars": return sym.var(a);
-			case "matrix": return site.job ? sym.matrix(unit.path, site.job, a) : void 0;
-			case "env": return this.resolveEnv(unit, site, a);
-			default: return this.resolveOutput(unit, site, ref);
-		}
-	}
-	/**
-	* `github.event.inputs.<name>`: this workflow's own input only when it is dispatched directly, so only an input it
-	* declares under `workflow_dispatch`. GitHub accepts no other input in a dispatch, and a workflow that is called gets
-	* its caller's event, so a name only `workflow_call` declares, or none does, reads no input: it is the context. So
-	* does any name in an input's default or a `workflow_call` output's value, which GitHub evaluates only when the
-	* workflow is called (see `eventInputsAt`).
-	*/
-	resolveEventInput(unit, site, [a, b, c]) {
-		if (!isKey(a, "event") || !isKey(b, "inputs") || computed(c)) return void 0;
-		const input = lookup(eventInputsAt(unit, site), c);
-		return input && sym.input(unit.path, this.canonicalInput(unit, input.name));
-	}
-	/**
-	* An env variable of the job or the workflow. A step's own `env:` shadows the job's and the workflow's in the rest of
-	* the step (it is not a symbol); its values are evaluated before it applies, so they read the outer env.
-	*/
-	resolveEnv(unit, site, name) {
-		const step = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
-		if (step && lookup(step.env, name)) return void 0;
-		const job = jobAt(unit, site);
-		const own = job && lookup(job.env, name);
-		if (own) return sym.env(unit.path, job.id, own.name);
-		const top = unit.kind === "workflow" ? lookup(unit.env, name) : void 0;
-		return top && sym.env(unit.path, void 0, top.name);
-	}
-	/**
-	* `needs.<job>.outputs.<name>`, `jobs.<job>.outputs.<name>` (in a workflow output only) and
-	* `steps.<id>.outputs.<name>`: the one output they name.
-	*/
-	resolveOutput(unit, site, ref) {
-		const [a, b, c] = ref.path;
-		if (!isKey(b, "outputs") || computed(c)) return void 0;
-		switch (ref.context) {
-			case "steps": return this.resolveStepOutput(unit, site, a, c);
-			case "needs": return this.resolveJobOutput(unit, a, c);
-			case "jobs": return site.field === "workflow.output" ? this.resolveJobOutput(unit, a, c) : void 0;
-			default: return;
-		}
-	}
-	/** The output `name` of the job `id` of a workflow. */
-	resolveJobOutput(unit, id, name) {
-		const job = unit.kind === "workflow" ? lookup(unit.jobs, id) : void 0;
-		return job && sym.jobOutput(unit.path, job.id, this.canonicalJobOutput(job, name));
-	}
-	/** The output `name` of the step `id` of the site's job, or of an action. */
-	resolveStepOutput(unit, site, id, name) {
-		const step = stepsAt(unit, site).find((s) => s.id?.toLowerCase() === id.toLowerCase());
-		if (!step?.id) return void 0;
-		const action = this.actionOf(step);
-		const output = (action && lookup(action.outputs, name)?.name) ?? name;
-		return sym.stepOutput(unit.path, stepJob(unit, site), step.id, output);
-	}
-	/**
-	* Every symbol a reference reads. Besides the single symbol of `resolveRef`, a reference that stops at a whole object
-	* or indexes it with a computed key reads each member it may stand for:
-	* - outputs: `toJSON(needs.build.outputs)`, `needs.build`, `steps.meta.outputs`, `needs.build.outputs[matrix.key]`,
-	*   `toJSON(needs)` (every job the reading job needs) or `toJSON(steps)` (every step that ran before the reading
-	*   step);
-	* - `toJSON(inputs)` or `inputs[inputs.which]`: every input the unit declares;
-	* - in a workflow that can be dispatched, whose `github.event` holds its `workflow_dispatch` inputs when it is
-	*   dispatched: `toJSON(github)`, `github[x]`, `github.*`, `toJSON(github.event)`, `github.event[x]`,
-	*   `github.event.*`, `toJSON(github.event.inputs)` or `github.event.inputs[x]` read every one of them, and
-	*   `github[x].inputs.<name>` the one it names (see `eventMemberRefs`). A workflow that is called gets its caller's
-	*   `github`, and an action its job's, so there they read none of the unit's inputs, nor in an input's default or a
-	*   `workflow_call` output's value, which GitHub evaluates only when the workflow is called;
-	* - `toJSON(matrix)` or `matrix[inputs.key]`: every key of the job's matrix;
-	* - `toJSON(secrets)` or `secrets[inputs.name]`: every secret the workflow holds that the files name (see
-	*   `secretNames`): those it declares under `workflow_call`, reads by name or is passed by name, `GITHUB_TOKEN`, and
-	*   those callers that hand it every secret through `secrets: inherit` name;
-	* - `toJSON(env)` or `env[inputs.name]`: every env variable in scope, a step's own read through their values.
-	*
-	* Variables are set in the repository's settings, not in its files, so a whole `vars` reads nothing. See
-	* `Usage.whole`.
-	*/
-	readsOf(unit, site, ref) {
-		return this.reads(unit, site, ref).map((r) => r.symbol);
-	}
-	reads(unit, site, ref) {
-		const one = this.resolveRef(unit, site, ref);
-		if (one) return [{
-			symbol: one,
-			whole: false
-		}];
-		const members = this.memberRefs(unit, site, ref);
-		if (members) return wholeReads(members.flatMap((m) => this.memberReads(unit, site, m)));
-		if (ref.context === "env") return this.ownEnvReads(unit, site, ref);
-		return this.outputReads(unit, site, ref).map((symbol) => ({
-			symbol,
-			whole: true
-		}));
-	}
-	/** What a reference naming one member of a whole object reads: the member, or what a step's own env value reads. */
-	memberReads(unit, site, member) {
-		const one = this.resolveRef(unit, site, member);
-		return one ? [{
-			symbol: one,
-			whole: true,
-			member
-		}] : this.reads(unit, site, member);
-	}
-	/** A step's own env value is not a symbol: a read of it reads what the value reads (from the outer env). */
-	ownEnvReads(unit, site, ref) {
-		const [a] = ref.path;
-		if (computed(a) || site.field === "step.env") return [];
-		const own = lookup(this.stepOf(unit, site)?.env ?? {}, a)?.site;
-		return own ? own.segments.flatMap((s) => s.refs.flatMap((r) => this.reads(unit, own, r))) : [];
-	}
-	/**
-	* A whole object or computed key of `inputs`, `matrix`, `secrets`, `env` or `github` as one reference per member,
-	* each naming it (`toJSON(inputs)` → `inputs.a`, `inputs.b`, …; see `eventMemberRefs` for `github`), so each
-	* resolves the way the name written out does. `undefined` for any other reference.
-	*/
-	memberRefs(unit, site, ref) {
-		if (ref.context === "github") return eventMemberRefs(unit, site, ref);
-		if (!computed(ref.path[0])) return void 0;
-		return this.memberNames(unit, site, ref.context)?.map((name) => ({
-			...ref,
-			path: [name, ...ref.path.slice(1)]
-		}));
-	}
-	/** The names a whole `inputs`, `matrix`, `secrets` or `env` holds at `site`; `undefined` for other contexts. */
-	memberNames(unit, site, context) {
-		switch (context) {
-			case "inputs": return inputNames(unit);
-			case "matrix": return matrixKeys(jobAt(unit, site));
-			case "secrets": return unit.kind === "workflow" ? this.secretNames(unit) : [];
-			case "env": return this.envNames(unit, site);
-			default: return;
-		}
-	}
-	/**
-	* The secrets a whole `secrets` holds in a workflow that the files name: each spelling of one it names itself (see
-	* `ownSecretNames`), then those it gets through `secrets: inherit` that the callers handing them on name themselves
-	* (see `inheritedSecretNames`), and `GITHUB_TOKEN`, which GitHub gives every workflow. GitHub looks secret names up
-	* ignoring case, so those last two leave out a secret named before them in another case. A secret that neither the
-	* workflow nor those callers name, such as a repository secret no file names or one only another of their callees
-	* reads, has no symbol here.
-	*/
-	secretNames(wf) {
-		const known = this.heldSecrets.get(wf.path);
-		if (known) return known;
-		const names = addNames(this.ownSecretNames(wf), [...this.inheritedSecretNames(wf), GITHUB_TOKEN]);
-		this.heldSecrets.set(wf.path, names);
-		return names;
-	}
-	/**
-	* The secrets a workflow names itself, as written: those it declares under `workflow_call`, reads by name, or is
-	* passed by name under a caller's `secrets:`. GitHub rejects a secret passed to a workflow that does not declare it,
-	* but the files still send its value there (see `sinkOf`). A spelling of a declared secret is that secret (see
-	* `resolveSecret`); any other is a symbol of its own, as for a reference.
-	*/
-	ownSecretNames(wf) {
-		const passed = this.callersOf(wf.path).flatMap((c) => declaredNames(c.job.secrets));
-		return [
-			...declaredNames(wf.call?.secrets),
-			...namedSecrets(wf),
-			...passed
-		];
-	}
-	/**
-	* The secrets a workflow gets through `secrets: inherit` that the callers handing them on name themselves (see
-	* `ownSecretNames`): each workflow that hands it every secret, directly or through others that do. Not
-	* `GITHUB_TOKEN`, which `secrets: inherit` does not pass.
-	*/
-	inheritedSecretNames(wf) {
-		return this.inheritingCallers(wf).flatMap((caller) => this.ownSecretNames(caller)).filter((name) => !BUILTIN_SECRETS.has(name.toLowerCase()));
-	}
-	/** The workflows that hand `wf` every secret through `secrets: inherit`, and those that hand them every secret, … */
-	inheritingCallers(wf) {
-		const found = /* @__PURE__ */ new Map([[wf.path, wf]]);
-		for (const unit of found.values()) for (const c of this.callersOf(unit.path)) if (c.job.secretsInherit && !found.has(c.caller.path)) found.set(c.caller.path, c.caller);
-		found.delete(wf.path);
-		return [...found.values()];
-	}
-	/** The env variables in scope at a site: the step's own, the job's and the workflow's. */
-	envNames(unit, site) {
-		const step = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
-		const workflow = unit.kind === "workflow" ? unit.env : void 0;
-		return [
-			...declaredNames(step?.env),
-			...declaredNames(jobAt(unit, site)?.env),
-			...declaredNames(workflow)
-		];
-	}
-	/**
-	* The job and step outputs a `needs`, `jobs` or `steps` reference reads when it names no single output: every output
-	* of a whole object or computed key, or the one named output of every job or step a computed key may stand for.
-	*/
-	outputReads(unit, site, ref) {
-		switch (ref.context) {
-			case "needs":
-			case "jobs":
-				if (unit.kind !== "workflow") return [];
-				if (ref.context === "jobs" && site.field !== "workflow.output") return [];
-				return this.jobsRead(unit, site, ref).flatMap((job) => pickOutputs(this.jobOutputNames(job), ref.path).map((n) => sym.jobOutput(unit.path, job.id, n)));
-			case "steps": return this.stepOutputReads(unit, site, ref);
-			default: return [];
-		}
-	}
-	/** The jobs a `needs` or `jobs` reference reads: the one it names, or each one a computed key may stand for. */
-	jobsRead(wf, site, ref) {
-		const [a] = ref.path;
-		if (!computed(a)) {
-			const job = lookup(wf.jobs, a);
-			return job ? [job] : [];
-		}
-		if (ref.context === "jobs") return Object.values(wf.jobs);
-		return ((site.job ? wf.jobs[site.job] : void 0)?.needs ?? []).flatMap((n) => lookup(wf.jobs, n.id) ?? []);
-	}
-	/**
-	* The step outputs a `steps` reference reads: of the step it names, or of each step a computed key may stand for
-	* (from a step, only the steps before it), every output or the one it names (see `pickOutputs`).
-	*/
-	stepOutputReads(unit, site, ref) {
-		const [a] = ref.path;
-		const steps = stepsAt(unit, site);
-		const named = computed(a) ? steps.filter((s) => site.step === void 0 || s.index < site.step) : steps.filter((s) => s.id?.toLowerCase() === a.toLowerCase());
-		const job = stepJob(unit, site);
-		return named.flatMap((step) => {
-			const action = this.actionOf(step);
-			if (!step.id || !action) return [];
-			return pickOutputs(Object.keys(action.outputs), ref.path).map((n) => sym.stepOutput(unit.path, job, step.id, n));
-		});
-	}
-	/** Output names of a job: its own `outputs:`, or the callee's workflow outputs for a reusable call. */
-	jobOutputNames(job) {
-		const callee = this.calleeOf(job);
-		return Object.keys(callee ? callee.call?.outputs ?? {} : job.outputs);
-	}
-	canonicalInput(unit, name) {
-		if (unit.kind === "action") return lookup(unit.inputs, name)?.name ?? name;
-		return lookup(unit.call?.inputs ?? {}, name)?.name ?? lookup(unit.dispatch?.inputs ?? {}, name)?.name ?? name;
-	}
-	canonicalJobOutput(job, name) {
-		const own = lookup(job.outputs, name);
-		if (own) return own.name;
-		const callee = this.calleeOf(job);
-		return (callee?.call && lookup(callee.call.outputs, name)?.name) ?? name;
-	}
-	define(symbol, def) {
-		const list = this.definitions.get(symbol);
-		if (list) list.push(def);
-		else this.definitions.set(symbol, [def]);
-	}
-	/** Env variables and outputs written as plain values (an expression is a site, indexed by `indexSite`). */
-	indexLiterals(unit) {
-		const u = unit.path;
-		if (unit.kind === "action") {
-			this.literalOutputs(unit, unit.outputs, (name) => sym.output(u, name));
-			return;
-		}
-		this.literalEnv(unit, void 0, unit.env);
-		this.literalOutputs(unit, unit.call?.outputs ?? {}, (name) => sym.output(u, name));
-		for (const job of Object.values(unit.jobs)) {
-			this.literalEnv(unit, job.id, job.env);
-			this.literalOutputs(unit, job.outputs, (name) => sym.jobOutput(u, job.id, name), job.id);
-		}
-	}
-	literalEnv(unit, job, env) {
-		for (const e of Object.values(env)) if (!e.site) this.define(sym.env(unit.path, job, e.name), {
-			unit,
-			job,
-			value: e.value,
-			loc: e.valueLoc
-		});
-	}
-	literalOutputs(unit, outputs, symbolOf, job) {
-		for (const o of Object.values(outputs)) if (!o.site && o.value !== void 0) this.define(symbolOf(o.name), {
-			unit,
-			job,
-			value: o.value,
-			loc: o.loc
-		});
-	}
-	indexSite(unit, site) {
-		this.sitesById.set(site.id, site);
-		const sink = this.sinkOf(unit, site);
-		if (sink) this.define(sink, {
-			unit,
-			site
-		});
-		for (const seg of site.segments) for (const ref of seg.refs) for (const read of this.reads(unit, site, ref)) this.addUsage(unit, site, ref, read, sink);
-	}
-	addUsage(unit, site, ref, read, sink) {
-		const { symbol } = read;
-		if (!this.nodes.has(symbol)) {
-			const named = read.member ?? ref;
-			this.node({
-				id: symbol,
-				kind: named.context === "vars" ? "var" : "unresolved",
-				label: `${named.context}.${named.path.join(".")}`,
-				unit: unit.path
-			});
-		}
-		const usage = {
-			symbol,
-			site,
-			ref,
-			...sink ? { sink } : {},
-			...read.whole ? { whole: true } : {}
-		};
-		const list = this.usages.get(symbol);
-		if (list) list.push(usage);
-		else this.usages.set(symbol, [usage]);
-		if (sink) this.edge({
-			from: symbol,
-			to: sink,
-			kind: "flows",
-			loc: ref.loc,
-			siteId: site.id
-		});
-	}
-};
-//#endregion
 //#region ../../node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
 var require_identity = /* @__PURE__ */ __commonJSMin(((exports) => {
 	const ALIAS = Symbol.for("yaml.alias");
@@ -25985,7 +23128,7 @@ var require_public_api = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.stringify = stringify;
 }));
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/source.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/actions-lock.ts
 var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	var composer = require_composer();
 	var Document = require_Document();
@@ -26032,6 +23175,2887 @@ var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
 })))();
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/ast.js
+var Expr = class {};
+var Literal = class extends Expr {
+	constructor(literal, token) {
+		super();
+		this.literal = literal;
+		this.token = token;
+	}
+	accept(v) {
+		return v.visitLiteral(this);
+	}
+};
+var Unary = class extends Expr {
+	constructor(operator, expr) {
+		super();
+		this.operator = operator;
+		this.expr = expr;
+	}
+	accept(v) {
+		return v.visitUnary(this);
+	}
+};
+var FunctionCall = class extends Expr {
+	constructor(functionName, args) {
+		super();
+		this.functionName = functionName;
+		this.args = args;
+	}
+	accept(v) {
+		return v.visitFunctionCall(this);
+	}
+};
+var Binary = class extends Expr {
+	constructor(left, operator, right) {
+		super();
+		this.left = left;
+		this.operator = operator;
+		this.right = right;
+	}
+	accept(v) {
+		return v.visitBinary(this);
+	}
+};
+var Logical = class extends Expr {
+	constructor(operator, args) {
+		super();
+		this.operator = operator;
+		this.args = args;
+	}
+	accept(v) {
+		return v.visitLogical(this);
+	}
+};
+var Grouping = class extends Expr {
+	constructor(group) {
+		super();
+		this.group = group;
+	}
+	accept(v) {
+		return v.visitGrouping(this);
+	}
+};
+var ContextAccess = class extends Expr {
+	constructor(name) {
+		super();
+		this.name = name;
+	}
+	accept(v) {
+		return v.visitContextAccess(this);
+	}
+};
+var IndexAccess = class extends Expr {
+	constructor(expr, index) {
+		super();
+		this.expr = expr;
+		this.index = index;
+	}
+	accept(v) {
+		return v.visitIndexAccess(this);
+	}
+};
+var Star = class extends Expr {
+	accept() {
+		throw new Error("Method not implemented.");
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/expressiondata.js
+var Kind;
+(function(Kind) {
+	Kind[Kind["String"] = 0] = "String";
+	Kind[Kind["Array"] = 1] = "Array";
+	Kind[Kind["Dictionary"] = 2] = "Dictionary";
+	Kind[Kind["Boolean"] = 3] = "Boolean";
+	Kind[Kind["Number"] = 4] = "Number";
+	Kind[Kind["CaseSensitiveDictionary"] = 5] = "CaseSensitiveDictionary";
+	Kind[Kind["Null"] = 6] = "Null";
+})(Kind || (Kind = {}));
+function kindStr(k) {
+	switch (k) {
+		case Kind.Array: return "Array";
+		case Kind.Boolean: return "Boolean";
+		case Kind.Null: return "Null";
+		case Kind.Number: return "Number";
+		case Kind.Dictionary: return "Object";
+		case Kind.String: return "String";
+	}
+	return "unknown";
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/dictionary.js
+var Dictionary = class {
+	constructor(...pairs) {
+		this.keys = [];
+		this.v = [];
+		this.indexMap = {};
+		this.kind = Kind.Dictionary;
+		this.primitive = false;
+		for (const p of pairs) this.add(p.key, p.value);
+	}
+	coerceString() {
+		return kindStr(this.kind);
+	}
+	number() {
+		return NaN;
+	}
+	add(key, value) {
+		if (key.toLowerCase() in this.indexMap) return;
+		this.keys.push(key);
+		this.v.push(value);
+		this.indexMap[key.toLowerCase()] = this.v.length - 1;
+	}
+	get(key) {
+		const index = this.indexMap[key.toLowerCase()];
+		if (index === void 0) return;
+		return this.v[index];
+	}
+	values() {
+		return this.v;
+	}
+	pairs() {
+		const result = [];
+		for (const key of this.keys) result.push({
+			key,
+			value: this.v[this.indexMap[key.toLowerCase()]]
+		});
+		return result;
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/array.js
+var Array$1 = class {
+	constructor(...data) {
+		this.v = [];
+		this.kind = Kind.Array;
+		this.primitive = false;
+		for (const d of data) this.add(d);
+	}
+	coerceString() {
+		return kindStr(this.kind);
+	}
+	number() {
+		return NaN;
+	}
+	add(value) {
+		this.v.push(value);
+	}
+	get(index) {
+		return this.v[index];
+	}
+	values() {
+		return this.v;
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/boolean.js
+var BooleanData = class {
+	constructor(value) {
+		this.value = value;
+		this.kind = Kind.Boolean;
+		this.primitive = true;
+	}
+	coerceString() {
+		if (this.value) return "true";
+		return "false";
+	}
+	number() {
+		if (this.value) return 1;
+		return 0;
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/null.js
+var Null = class {
+	constructor() {
+		this.kind = Kind.Null;
+		this.primitive = true;
+	}
+	coerceString() {
+		return "";
+	}
+	number() {
+		return 0;
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/number.js
+var NumberData = class {
+	constructor(value) {
+		this.value = value;
+		this.kind = Kind.Number;
+		this.primitive = true;
+	}
+	coerceString() {
+		if (this.value === 0) return "0";
+		return (+this.value.toFixed(15)).toString();
+	}
+	number() {
+		return this.value;
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/string.js
+var StringData = class {
+	constructor(value) {
+		this.value = value;
+		this.kind = Kind.String;
+		this.primitive = true;
+	}
+	coerceString() {
+		return this.value;
+	}
+	number() {
+		return Number(this.value);
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/replacer.js
+/**
+* Replacer can be passed to JSON.stringify to convert an ExpressionData object into plain JSON
+*
+* See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify#replacer
+*/
+function replacer(_key, value) {
+	if (value instanceof Null) return null;
+	if (value instanceof BooleanData) return value.value;
+	if (value instanceof NumberData) return value.number();
+	if (value instanceof StringData) return value.coerceString();
+	if (value instanceof Array$1) return value.values();
+	if (value instanceof Dictionary) {
+		const pairs = value.pairs();
+		const r = {};
+		for (const p of pairs) r[p.key] = p.value;
+		return r;
+	}
+	return value;
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/reviver.js
+/**
+* Reviver can be passed to `JSON.parse` to convert plain JSON into an `ExpressionData` object.
+*
+* See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse#reviver
+*/
+function reviver(_key, val) {
+	if (val === null) return new Null();
+	if (typeof val === "string") return new StringData(val);
+	if (typeof val === "number") return new NumberData(val);
+	if (typeof val === "boolean") return new BooleanData(val);
+	if (Array.isArray(val)) return new Array$1(...val);
+	if (typeof val === "object") return new Dictionary(...Object.keys(val).map((k) => ({
+		key: k,
+		value: val[k]
+	})));
+	return val;
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/lexer.js
+var TokenType$1;
+(function(TokenType) {
+	TokenType[TokenType["UNKNOWN"] = 0] = "UNKNOWN";
+	TokenType[TokenType["LEFT_PAREN"] = 1] = "LEFT_PAREN";
+	TokenType[TokenType["RIGHT_PAREN"] = 2] = "RIGHT_PAREN";
+	TokenType[TokenType["LEFT_BRACKET"] = 3] = "LEFT_BRACKET";
+	TokenType[TokenType["RIGHT_BRACKET"] = 4] = "RIGHT_BRACKET";
+	TokenType[TokenType["COMMA"] = 5] = "COMMA";
+	TokenType[TokenType["DOT"] = 6] = "DOT";
+	TokenType[TokenType["BANG"] = 7] = "BANG";
+	TokenType[TokenType["BANG_EQUAL"] = 8] = "BANG_EQUAL";
+	TokenType[TokenType["EQUAL_EQUAL"] = 9] = "EQUAL_EQUAL";
+	TokenType[TokenType["GREATER"] = 10] = "GREATER";
+	TokenType[TokenType["GREATER_EQUAL"] = 11] = "GREATER_EQUAL";
+	TokenType[TokenType["LESS"] = 12] = "LESS";
+	TokenType[TokenType["LESS_EQUAL"] = 13] = "LESS_EQUAL";
+	TokenType[TokenType["AND"] = 14] = "AND";
+	TokenType[TokenType["OR"] = 15] = "OR";
+	TokenType[TokenType["STAR"] = 16] = "STAR";
+	TokenType[TokenType["NUMBER"] = 17] = "NUMBER";
+	TokenType[TokenType["STRING"] = 18] = "STRING";
+	TokenType[TokenType["IDENTIFIER"] = 19] = "IDENTIFIER";
+	TokenType[TokenType["TRUE"] = 20] = "TRUE";
+	TokenType[TokenType["FALSE"] = 21] = "FALSE";
+	TokenType[TokenType["NULL"] = 22] = "NULL";
+	TokenType[TokenType["EOF"] = 23] = "EOF";
+})(TokenType$1 || (TokenType$1 = {}));
+function tokenString(tok) {
+	switch (tok.type) {
+		case TokenType$1.EOF: return "EOF";
+		case TokenType$1.NUMBER: return tok.lexeme;
+		case TokenType$1.STRING: return tok.value.toString();
+		default: return tok.lexeme;
+	}
+}
+var Lexer = class {
+	constructor(input) {
+		this.input = input;
+		this.start = 0;
+		this.offset = 0;
+		this.line = 0;
+		this.lastLineOffset = 0;
+		this.tokens = [];
+	}
+	lex() {
+		if (this.input.length > 21e3) throw new Error("ErrorExceededMaxLength");
+		while (!this.atEnd()) {
+			this.start = this.offset;
+			const c = this.next();
+			switch (c) {
+				case "(":
+					this.addToken(TokenType$1.LEFT_PAREN);
+					break;
+				case ")":
+					this.addToken(TokenType$1.RIGHT_PAREN);
+					break;
+				case "[":
+					this.addToken(TokenType$1.LEFT_BRACKET);
+					break;
+				case "]":
+					this.addToken(TokenType$1.RIGHT_BRACKET);
+					break;
+				case ",":
+					this.addToken(TokenType$1.COMMA);
+					break;
+				case ".":
+					if (this.previous() != TokenType$1.IDENTIFIER && this.previous() != TokenType$1.RIGHT_BRACKET && this.previous() != TokenType$1.RIGHT_PAREN && this.previous() != TokenType$1.STAR) this.consumeNumber();
+					else this.addToken(TokenType$1.DOT);
+					break;
+				case "-":
+				case "+":
+					this.consumeNumber();
+					break;
+				case "!":
+					this.addToken(this.match("=") ? TokenType$1.BANG_EQUAL : TokenType$1.BANG);
+					break;
+				case "=":
+					if (!this.match("=")) {
+						this.consumeIdentifier();
+						break;
+					}
+					this.addToken(TokenType$1.EQUAL_EQUAL);
+					break;
+				case "<":
+					this.addToken(this.match("=") ? TokenType$1.LESS_EQUAL : TokenType$1.LESS);
+					break;
+				case ">":
+					this.addToken(this.match("=") ? TokenType$1.GREATER_EQUAL : TokenType$1.GREATER);
+					break;
+				case "&":
+					if (!this.match("&")) {
+						this.consumeIdentifier();
+						break;
+					}
+					this.addToken(TokenType$1.AND);
+					break;
+				case "|":
+					if (!this.match("|")) {
+						this.consumeIdentifier();
+						break;
+					}
+					this.addToken(TokenType$1.OR);
+					break;
+				case "*":
+					this.addToken(TokenType$1.STAR);
+					break;
+				case " ":
+				case "\r":
+				case "	": break;
+				case "\n":
+					++this.line;
+					this.lastLineOffset = this.offset;
+					break;
+				case "'":
+					this.consumeString();
+					break;
+				default: switch (true) {
+					case isDigit(c):
+						this.consumeNumber();
+						break;
+					default: this.consumeIdentifier();
+				}
+			}
+		}
+		this.tokens.push({
+			type: TokenType$1.EOF,
+			lexeme: "",
+			range: this.range()
+		});
+		return { tokens: this.tokens };
+	}
+	pos() {
+		return {
+			line: this.line,
+			column: this.start - this.lastLineOffset
+		};
+	}
+	endPos() {
+		return {
+			line: this.line,
+			column: this.offset - this.lastLineOffset
+		};
+	}
+	range() {
+		return {
+			start: this.pos(),
+			end: this.endPos()
+		};
+	}
+	atEnd() {
+		return this.offset >= this.input.length;
+	}
+	peek() {
+		if (this.atEnd()) return "\0";
+		return this.input[this.offset];
+	}
+	peekNext() {
+		if (this.offset + 1 >= this.input.length) return "\0";
+		return this.input[this.offset + 1];
+	}
+	previous() {
+		const l = this.tokens.length;
+		if (l == 0) return TokenType$1.EOF;
+		return this.tokens[l - 1].type;
+	}
+	next() {
+		return this.input[this.offset++];
+	}
+	match(expected) {
+		if (this.atEnd()) return false;
+		if (this.input[this.offset] !== expected) return false;
+		this.offset++;
+		return true;
+	}
+	addToken(type, value) {
+		this.tokens.push({
+			type,
+			lexeme: this.input.substring(this.start, this.offset),
+			range: this.range(),
+			value
+		});
+	}
+	consumeNumber() {
+		while (!this.atEnd() && (!isBoundary(this.peek()) || this.peek() == ".")) this.next();
+		const lexeme = this.input.substring(this.start, this.offset);
+		const value = new StringData(lexeme).number();
+		if (isNaN(value)) throw new Error(`Unexpected symbol: '${lexeme}'. Located at position ${this.start + 1} within expression: ${this.input}`);
+		this.addToken(TokenType$1.NUMBER, value);
+	}
+	consumeString() {
+		while ((this.peek() !== "'" || this.peekNext() === "'") && !this.atEnd()) {
+			if (this.peek() === "\n") this.line++;
+			if (this.peek() === "'" && this.peekNext() === "'") this.next();
+			this.next();
+		}
+		if (this.atEnd()) throw new Error(`Unexpected symbol: '${this.input.substring(this.start)}'. Located at position ${this.start + 1} within expression: ${this.input}`);
+		this.next();
+		let value = this.input.substring(this.start + 1, this.offset - 1);
+		value = value.replace("''", "'");
+		this.addToken(TokenType$1.STRING, value);
+	}
+	consumeIdentifier() {
+		while (!this.atEnd() && !isBoundary(this.peek())) this.next();
+		let tokenType = TokenType$1.IDENTIFIER;
+		let tokenValue = void 0;
+		const lexeme = this.input.substring(this.start, this.offset);
+		if (this.previous() != TokenType$1.DOT) switch (lexeme) {
+			case "true":
+				tokenType = TokenType$1.TRUE;
+				break;
+			case "false":
+				tokenType = TokenType$1.FALSE;
+				break;
+			case "null":
+				tokenType = TokenType$1.NULL;
+				break;
+			case "NaN":
+				tokenType = TokenType$1.NUMBER;
+				tokenValue = NaN;
+				break;
+			case "Infinity":
+				tokenType = TokenType$1.NUMBER;
+				tokenValue = Infinity;
+		}
+		if (!isLegalIdentifier(lexeme)) throw new Error(`Unexpected symbol: '${lexeme}'. Located at position ${this.start + 1} within expression: ${this.input}`);
+		this.addToken(tokenType, tokenValue);
+	}
+};
+function isDigit(c) {
+	return c >= "0" && c <= "9";
+}
+function isBoundary(c) {
+	switch (c) {
+		case "(":
+		case "[":
+		case ")":
+		case "]":
+		case ",":
+		case ".":
+		case "!":
+		case ">":
+		case "<":
+		case "=":
+		case "&":
+		case "|": return true;
+	}
+	return /\s/.test(c);
+}
+function isLegalIdentifier(str) {
+	if (str == "") return false;
+	const first = str[0];
+	if (first >= "a" && first <= "z" || first >= "A" && first <= "Z" || first == "_") {
+		for (const c of str.substring(1).split("")) if (c >= "a" && c <= "z" || c >= "A" && c <= "Z" || c >= "0" && c <= "9" || c == "_" || c == "-") {} else return false;
+		return true;
+	}
+	return false;
+}
+const MAX_EXPRESSION_LENGTH = 21e3;
+var ErrorType;
+(function(ErrorType) {
+	ErrorType[ErrorType["ErrorUnexpectedSymbol"] = 0] = "ErrorUnexpectedSymbol";
+	ErrorType[ErrorType["ErrorUnrecognizedNamedValue"] = 1] = "ErrorUnrecognizedNamedValue";
+	ErrorType[ErrorType["ErrorUnexpectedEndOfExpression"] = 2] = "ErrorUnexpectedEndOfExpression";
+	ErrorType[ErrorType["ErrorExceededMaxDepth"] = 3] = "ErrorExceededMaxDepth";
+	ErrorType[ErrorType["ErrorExceededMaxLength"] = 4] = "ErrorExceededMaxLength";
+	ErrorType[ErrorType["ErrorTooFewParameters"] = 5] = "ErrorTooFewParameters";
+	ErrorType[ErrorType["ErrorTooManyParameters"] = 6] = "ErrorTooManyParameters";
+	ErrorType[ErrorType["ErrorEvenParameters"] = 7] = "ErrorEvenParameters";
+	ErrorType[ErrorType["ErrorUnrecognizedContext"] = 8] = "ErrorUnrecognizedContext";
+	ErrorType[ErrorType["ErrorUnrecognizedFunction"] = 9] = "ErrorUnrecognizedFunction";
+})(ErrorType || (ErrorType = {}));
+var ExpressionError = class extends Error {
+	constructor(typ, tok) {
+		super(`${errorDescription(typ)}: '${tokenString(tok)}'`);
+		this.typ = typ;
+		this.tok = tok;
+		this.pos = this.tok.range.start;
+	}
+};
+function errorDescription(typ) {
+	switch (typ) {
+		case ErrorType.ErrorUnexpectedEndOfExpression: return "Unexpected end of expression";
+		case ErrorType.ErrorUnexpectedSymbol: return "Unexpected symbol";
+		case ErrorType.ErrorUnrecognizedNamedValue: return "Unrecognized named-value";
+		case ErrorType.ErrorExceededMaxDepth: return `Exceeded max expression depth 50`;
+		case ErrorType.ErrorExceededMaxLength: return `Exceeded max expression length ${MAX_EXPRESSION_LENGTH}`;
+		case ErrorType.ErrorTooFewParameters: return "Too few parameters supplied";
+		case ErrorType.ErrorTooManyParameters: return "Too many parameters supplied";
+		case ErrorType.ErrorEvenParameters: return "Even number of parameters supplied, requires an odd number of parameters";
+		case ErrorType.ErrorUnrecognizedContext: return "Unrecognized named-value";
+		case ErrorType.ErrorUnrecognizedFunction: return "Unrecognized function";
+		default: return "Unknown error";
+	}
+}
+var ExpressionEvaluationError = class extends Error {};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/case.js
+const caseFunc = {
+	name: "case",
+	description: "`case( pred1, val1, pred2, val2, ..., default )`\n\nEvaluates predicates in order and returns the value corresponding to the first predicate that evaluates to `true`. If no predicate matches, it returns the last argument as the default value.",
+	minArgs: 3,
+	maxArgs: Number.MAX_SAFE_INTEGER,
+	call: (...args) => {
+		for (let i = 0; i < args.length - 1; i += 2) {
+			const predicate = args[i];
+			if (predicate.kind !== Kind.Boolean) throw new Error("case predicate must evaluate to a boolean value");
+			if (predicate.value) return args[i + 1];
+		}
+		return args[args.length - 1];
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/result.js
+function coerceTypes(li, ri) {
+	let lv = li;
+	let rv = ri;
+	if (li.kind === ri.kind) return [lv, rv];
+	switch (li.kind) {
+		case Kind.Number:
+			if (ri.kind === Kind.String) {
+				rv = new NumberData(ri.number());
+				return [lv, rv];
+			}
+			break;
+		case Kind.String:
+			if (ri.kind === Kind.Number) {
+				lv = new NumberData(li.number());
+				return [lv, rv];
+			}
+			break;
+		case Kind.Null:
+		case Kind.Boolean:
+			lv = new NumberData(li.number());
+			return coerceTypes(lv, rv);
+	}
+	switch (ri.kind) {
+		case Kind.Null:
+		case Kind.Boolean:
+			rv = new NumberData(ri.number());
+			return coerceTypes(lv, rv);
+	}
+	return [lv, rv];
+}
+function equals(lhs, rhs) {
+	const [lv, rv] = coerceTypes(lhs, rhs);
+	if (lv.kind != rv.kind) return false;
+	switch (lv.kind) {
+		case Kind.Null: return true;
+		case Kind.Number: {
+			const ld = lv.value;
+			const rd = rv.value;
+			if (isNaN(ld) || isNaN(rd)) return false;
+			return ld == rd;
+		}
+		case Kind.String: {
+			const ls = lv.value;
+			const rs = rv.value;
+			return toUpperSpecial(ls) === toUpperSpecial(rs);
+		}
+		case Kind.Boolean: return lv.value == rv.value;
+		case Kind.Dictionary:
+		case Kind.Array: return lv === rv;
+	}
+	return false;
+}
+function toUpperSpecial(s) {
+	const sb = [];
+	let i = 0;
+	const len = s.length;
+	let found = s.indexOf("ı");
+	while (i < len) if (i < found) {
+		sb.push(s.substring(i, found).toUpperCase());
+		i = found;
+	} else if (i == found) {
+		sb.push(s.substring(i, i + 1));
+		i += 1;
+		found = s.indexOf("ı", i);
+	} else {
+		sb.push(s.substring(i).toUpperCase());
+		break;
+	}
+	return sb.join("");
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/contains.js
+const contains = {
+	name: "contains",
+	description: "`contains( search, item )`\n\nReturns `true` if `search` contains `item`. If `search` is an array, this function returns `true` if the `item` is an element in the array. If `search` is a string, this function returns `true` if the `item` is a substring of `search`. This function is not case sensitive. Casts values to a string.",
+	minArgs: 2,
+	maxArgs: 2,
+	call: (...args) => {
+		const left = args[0];
+		const right = args[1];
+		if (left.primitive) {
+			const ls = left.coerceString();
+			if (right.primitive) {
+				const rs = right.coerceString();
+				return new BooleanData(ls.toLowerCase().includes(rs.toLowerCase()));
+			}
+		} else if (left.kind === Kind.Array) {
+			const la = left;
+			if (la.values().length === 0) return new BooleanData(false);
+			for (const v of la.values()) if (equals(right, v)) return new BooleanData(true);
+		}
+		return new BooleanData(false);
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/endswith.js
+const endswith = {
+	name: "endsWith",
+	description: "`endsWith( searchString, searchValue )`\n\nReturns `true` if `searchString` ends with `searchValue`. This function is not case sensitive. Casts values to a string.",
+	minArgs: 2,
+	maxArgs: 2,
+	call: (...args) => {
+		const left = args[0];
+		if (!left.primitive) return new BooleanData(false);
+		const right = args[1];
+		if (!right.primitive) return new BooleanData(false);
+		const ls = toUpperSpecial(left.coerceString());
+		const rs = toUpperSpecial(right.coerceString());
+		return new BooleanData(ls.endsWith(rs));
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/format.js
+const format = {
+	name: "format",
+	description: "`format( string, replaceValue0, replaceValue1, ..., replaceValueN)`\n\nReplaces values in the `string`, with the variable `replaceValueN`. Variables in the `string` are specified using the `{N}` syntax, where `N` is an integer. You must specify at least one `replaceValue` and `string`. There is no maximum for the number of variables (`replaceValueN`) you can use. Escape curly braces using double braces.",
+	minArgs: 1,
+	maxArgs: 255,
+	call: (...args) => {
+		const fs = args[0].coerceString();
+		const result = [];
+		let index = 0;
+		while (index < fs.length) {
+			const lbrace = fs.indexOf("{", index);
+			const rbrace = fs.indexOf("}", index);
+			if (lbrace >= 0 && (rbrace < 0 || rbrace > lbrace)) {
+				if (safeCharAt(fs, lbrace + 1) === "{") {
+					result.push(fs.substr(index, lbrace - index + 1));
+					index = lbrace + 2;
+					continue;
+				}
+				if (rbrace > lbrace + 1) {
+					const argIndex = readArgIndex(fs, lbrace + 1);
+					if (argIndex.success) {
+						if (1 + argIndex.result > args.length - 1) throw new Error(`The following format string references more arguments than were supplied: ${fs}`);
+						if (lbrace > index) result.push(fs.substr(index, lbrace - index));
+						result.push(`${args[1 + argIndex.result].coerceString()}`);
+						index = rbrace + 1;
+						continue;
+					}
+				}
+				throw new Error(`The following format string is invalid: ${fs}`);
+			} else if (rbrace >= 0) {
+				if (safeCharAt(fs, rbrace + 1) === "}") {
+					result.push(fs.substr(index, rbrace - index + 1));
+					index = rbrace + 2;
+				} else throw new Error(`The following format string is invalid: ${fs}`);
+			} else {
+				result.push(fs.substr(index));
+				break;
+			}
+		}
+		return new StringData(result.join(""));
+	}
+};
+function safeCharAt(string, index) {
+	if (string.length > index) return string[index];
+	return "\0";
+}
+function readArgIndex(string, startIndex) {
+	let length = 0;
+	for (;;) {
+		const nextChar = safeCharAt(string, startIndex + length);
+		if (nextChar >= "0" && nextChar <= "9") length++;
+		else break;
+	}
+	if (length < 1) return { success: false };
+	const endIndex = startIndex + length - 1;
+	const result = parseInt(string.substr(startIndex, length));
+	return {
+		success: !isNaN(result),
+		result,
+		endIndex
+	};
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs.js
+const wellKnownFunctions = {
+	case: caseFunc,
+	contains,
+	endswith,
+	format,
+	fromjson: {
+		name: "fromJson",
+		description: "`fromJSON(value)`\n\nReturns a JSON object or JSON data type for `value`. You can use this function to provide a JSON object as an evaluated expression or to convert environment variables from a string.",
+		minArgs: 1,
+		maxArgs: 1,
+		call: (...args) => {
+			const is = args[0].coerceString();
+			if (is.trim() === "") throw new Error("empty input");
+			try {
+				return JSON.parse(is, reviver);
+			} catch (e) {
+				throw new ExpressionEvaluationError("Error parsing JSON when evaluating fromJson", { cause: e });
+			}
+		}
+	},
+	join: {
+		name: "join",
+		description: "`join( array, optionalSeparator )`\n\nThe value for `array` can be an array or a string. All values in `array` are concatenated into a string. If you provide `optionalSeparator`, it is inserted between the concatenated values. Otherwise, the default separator `,` is used. Casts values to a string.",
+		minArgs: 1,
+		maxArgs: 2,
+		call: (...args) => {
+			if (args[0].primitive) return new StringData(args[0].coerceString());
+			if (args[0].kind === Kind.Array) {
+				let separator = ",";
+				if (args.length > 1 && args[1].primitive) separator = args[1].coerceString();
+				return new StringData(args[0].values().map((item) => item.coerceString()).join(separator));
+			}
+			return new StringData("");
+		}
+	},
+	startswith: {
+		name: "startsWith",
+		description: "`startsWith( searchString, searchValue )`\n\nReturns `true` when `searchString` starts with `searchValue`. This function is not case sensitive. Casts values to a string.",
+		minArgs: 2,
+		maxArgs: 2,
+		call: (...args) => {
+			const left = args[0];
+			if (!left.primitive) return new BooleanData(false);
+			const right = args[1];
+			if (!right.primitive) return new BooleanData(false);
+			const ls = toUpperSpecial(left.coerceString());
+			const rs = toUpperSpecial(right.coerceString());
+			return new BooleanData(ls.startsWith(rs));
+		}
+	},
+	tojson: {
+		name: "toJson",
+		description: "`toJSON(value)`\n\nReturns a pretty-print JSON representation of `value`. You can use this function to debug the information provided in contexts.",
+		minArgs: 1,
+		maxArgs: 1,
+		call: (...args) => {
+			return new StringData(JSON.stringify(args[0], replacer, "  "));
+		}
+	}
+};
+function validateFunction(context, identifier, argCount) {
+	const name = identifier.lexeme.toLowerCase();
+	let f;
+	f = wellKnownFunctions[name];
+	if (!f) {
+		f = context.extensionFunctions.get(name);
+		if (!f) {
+			if (!context.allowUnknownKeywords) throw new ExpressionError(ErrorType.ErrorUnrecognizedFunction, identifier);
+			return;
+		}
+	}
+	if (argCount < f.minArgs) throw new ExpressionError(ErrorType.ErrorTooFewParameters, identifier);
+	if (argCount > f.maxArgs) throw new ExpressionError(ErrorType.ErrorTooManyParameters, identifier);
+	if (name === "case" && argCount % 2 === 0) throw new ExpressionError(ErrorType.ErrorEvenParameters, identifier);
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/features.js
+/**
+* All known experimental feature keys.
+* This list must be kept in sync with the ExperimentalFeatures interface.
+*/
+const allFeatureKeys = [
+	"missingInputsQuickfix",
+	"blockScalarChompingWarning",
+	"allowCaseFunction",
+	"allowCopilotRequestsPermission",
+	"allowDrivesPermissionAutocomplete",
+	"allowBackgroundSteps"
+];
+var FeatureFlags = class {
+	constructor(features) {
+		this.features = features ?? {};
+	}
+	/**
+	* Check if an experimental feature is enabled.
+	*
+	* Resolution order:
+	* 1. Explicit feature flag (if set)
+	* 2. `all` flag (if set)
+	* 3. false (default)
+	*/
+	isEnabled(feature) {
+		const explicit = this.features[feature];
+		if (explicit !== void 0) return explicit;
+		return this.features.all ?? false;
+	}
+	/**
+	* Returns list of all enabled experimental features.
+	*/
+	getEnabledFeatures() {
+		return allFeatureKeys.filter((key) => this.isEnabled(key));
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/parser.js
+var Parser = class {
+	/**
+	* Constructs a new parser for the given tokens
+	*
+	* @param tokens Tokens to build a parse tree from
+	* @param extensionContexts Available context names
+	* @param extensionFunctions Available functions (beyond the built-in ones)
+	*/
+	constructor(tokens, extensionContexts, extensionFunctions) {
+		this.tokens = tokens;
+		this.offset = 0;
+		this.depth = 0;
+		this.extContexts = /* @__PURE__ */ new Map();
+		this.extFuncs = /* @__PURE__ */ new Map();
+		for (const contextName of extensionContexts) this.extContexts.set(contextName.toLowerCase(), true);
+		for (const { name, func } of extensionFunctions.map((x) => ({
+			name: x.name,
+			func: x
+		}))) this.extFuncs.set(name.toLowerCase(), func);
+		this.context = {
+			allowUnknownKeywords: false,
+			extensionContexts: this.extContexts,
+			extensionFunctions: this.extFuncs
+		};
+	}
+	parse() {
+		let result;
+		if (this.atEnd()) return result;
+		result = this.expression();
+		if (!this.atEnd()) throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
+		return result;
+	}
+	expression() {
+		this.incrDepth();
+		try {
+			return this.logicalOr();
+		} finally {
+			this.decrDepth();
+		}
+	}
+	logicalOr() {
+		let expr = this.logicalAnd();
+		if (this.check(TokenType$1.OR)) {
+			this.incrDepth();
+			try {
+				const logical = new Logical(this.peek(), [expr]);
+				expr = logical;
+				while (this.match(TokenType$1.OR)) {
+					const right = this.logicalAnd();
+					logical.args.push(right);
+				}
+			} finally {
+				this.decrDepth();
+			}
+		}
+		return expr;
+	}
+	logicalAnd() {
+		let expr = this.equality();
+		if (this.check(TokenType$1.AND)) {
+			this.incrDepth();
+			try {
+				const logical = new Logical(this.peek(), [expr]);
+				expr = logical;
+				while (this.match(TokenType$1.AND)) {
+					const right = this.equality();
+					logical.args.push(right);
+				}
+			} finally {
+				this.decrDepth();
+			}
+		}
+		return expr;
+	}
+	equality() {
+		let expr = this.comparison();
+		while (this.match(TokenType$1.BANG_EQUAL, TokenType$1.EQUAL_EQUAL)) {
+			const operator = this.previous();
+			const right = this.comparison();
+			expr = new Binary(expr, operator, right);
+		}
+		return expr;
+	}
+	comparison() {
+		let expr = this.unary();
+		while (this.match(TokenType$1.GREATER, TokenType$1.GREATER_EQUAL, TokenType$1.LESS, TokenType$1.LESS_EQUAL)) {
+			const operator = this.previous();
+			const right = this.unary();
+			expr = new Binary(expr, operator, right);
+		}
+		return expr;
+	}
+	unary() {
+		if (this.match(TokenType$1.BANG)) {
+			this.incrDepth();
+			const operator = this.previous();
+			const unary = this.unary();
+			try {
+				return new Unary(operator, unary);
+			} finally {
+				this.decrDepth();
+			}
+		}
+		return this.index();
+	}
+	index() {
+		let expr = this.call();
+		let depthIncreased = 0;
+		if (expr instanceof Grouping || expr instanceof FunctionCall || expr instanceof ContextAccess) {
+			let cont = true;
+			while (cont) switch (true) {
+				case this.match(TokenType$1.LEFT_BRACKET): {
+					let indexExpr;
+					if (this.match(TokenType$1.STAR)) indexExpr = new Star();
+					else indexExpr = this.expression();
+					this.consume(TokenType$1.RIGHT_BRACKET, ErrorType.ErrorUnexpectedSymbol);
+					this.incrDepth();
+					depthIncreased++;
+					expr = new IndexAccess(expr, indexExpr);
+					break;
+				}
+				case this.match(TokenType$1.DOT):
+					this.incrDepth();
+					depthIncreased++;
+					if (this.match(TokenType$1.IDENTIFIER)) {
+						const property = this.previous();
+						expr = new IndexAccess(expr, new Literal(new StringData(property.lexeme), property));
+					} else if (this.match(TokenType$1.STAR)) expr = new IndexAccess(expr, new Star());
+					else throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
+					break;
+				default: cont = false;
+			}
+		}
+		for (let i = 0; i < depthIncreased; i++) this.decrDepth();
+		return expr;
+	}
+	call() {
+		if (!this.check(TokenType$1.IDENTIFIER)) return this.primary();
+		const identifier = this.next();
+		if (!this.match(TokenType$1.LEFT_PAREN)) {
+			if (!this.extContexts.has(identifier.lexeme.toLowerCase())) throw this.buildError(ErrorType.ErrorUnrecognizedContext, identifier);
+			return new ContextAccess(identifier);
+		}
+		const args = [];
+		while (!this.match(TokenType$1.RIGHT_PAREN)) {
+			const aexp = this.expression();
+			args.push(aexp);
+			if (!this.check(TokenType$1.RIGHT_PAREN)) this.consume(TokenType$1.COMMA, ErrorType.ErrorUnexpectedSymbol);
+		}
+		validateFunction(this.context, identifier, args.length);
+		return new FunctionCall(identifier, args);
+	}
+	primary() {
+		switch (true) {
+			case this.match(TokenType$1.FALSE): return new Literal(new BooleanData(false), this.previous());
+			case this.match(TokenType$1.TRUE): return new Literal(new BooleanData(true), this.previous());
+			case this.match(TokenType$1.NULL): return new Literal(new Null(), this.previous());
+			case this.match(TokenType$1.NUMBER): return new Literal(new NumberData(this.previous().value), this.previous());
+			case this.match(TokenType$1.STRING): return new Literal(new StringData(this.previous().value), this.previous());
+			case this.match(TokenType$1.LEFT_PAREN): {
+				const expr = this.expression();
+				if (this.atEnd()) throw this.buildError(ErrorType.ErrorUnexpectedEndOfExpression, this.previous());
+				this.consume(TokenType$1.RIGHT_PAREN, ErrorType.ErrorUnexpectedSymbol);
+				return new Grouping(expr);
+			}
+			case this.atEnd(): throw this.buildError(ErrorType.ErrorUnexpectedEndOfExpression, this.previous());
+		}
+		throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
+	}
+	match(...tokenTypes) {
+		for (const tokenType of tokenTypes) if (this.check(tokenType)) {
+			this.next();
+			return true;
+		}
+		return false;
+	}
+	check(tokenType) {
+		if (this.atEnd()) return false;
+		return this.peek().type == tokenType;
+	}
+	atEnd() {
+		return this.peek().type == TokenType$1.EOF;
+	}
+	next() {
+		if (!this.atEnd()) this.offset++;
+		return this.previous();
+	}
+	peek() {
+		return this.tokens[this.offset];
+	}
+	previous() {
+		return this.tokens[this.offset - 1];
+	}
+	consume(tokenType, errorType) {
+		if (this.check(tokenType)) {
+			this.next();
+			return;
+		}
+		throw this.buildError(errorType, this.peek());
+	}
+	incrDepth() {
+		this.depth++;
+		if (this.depth > 50) throw this.buildError(ErrorType.ErrorExceededMaxDepth, this.peek());
+	}
+	decrDepth() {
+		this.depth--;
+	}
+	buildError(errType, token) {
+		return new ExpressionError(errType, token);
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/expressions.ts
+/** Every named context the GitHub Actions runtime knows about. */
+const KNOWN_CONTEXTS = [
+	"github",
+	"env",
+	"vars",
+	"job",
+	"jobs",
+	"steps",
+	"runner",
+	"secrets",
+	"strategy",
+	"matrix",
+	"needs",
+	"inputs"
+];
+/** The error of a `${{` that has no closing `}}`. */
+const UNTERMINATED_EXPRESSION = "Unterminated expression: missing closing '}}'";
+/** Splits a string into literal text and `${{ }}` expressions, respecting quoted strings inside expressions. */
+function findTemplateSegments(text) {
+	const segments = [];
+	let i = 0;
+	while (i < text.length) {
+		const open = text.indexOf("${{", i);
+		if (open < 0) break;
+		let j = open + 3;
+		let inString = false;
+		let close = -1;
+		while (j < text.length) {
+			const ch = text[j];
+			if (inString) {
+				if (ch === "'") {
+					if (text[j + 1] === "'") j++;
+					else inString = false;
+				}
+			} else if (ch === "'") inString = true;
+			else if (ch === "}" && text[j + 1] === "}") {
+				close = j;
+				break;
+			}
+			j++;
+		}
+		if (close < 0) {
+			const inner = text.slice(open + 3);
+			segments.push({
+				start: open,
+				end: text.length,
+				innerStart: open + 3,
+				expr: {
+					source: inner.trim(),
+					refs: [],
+					error: {
+						message: UNTERMINATED_EXPRESSION,
+						offset: 0
+					}
+				}
+			});
+			break;
+		}
+		const rawInner = text.slice(open + 3, close);
+		const lead = rawInner.length - rawInner.trimStart().length;
+		segments.push({
+			start: open,
+			end: close + 2,
+			innerStart: open + 3 + lead,
+			expr: parseExpression(rawInner.trim())
+		});
+		i = close + 2;
+	}
+	return segments;
+}
+/**
+* The parser's message without its trailing "Located at position N…" (and the period and spaces before it). Found
+* with indexOf: the message repeats the offending token, and `/\.?\s*Located at position.*$/s` retried a long run of
+* spaces from every position (CodeQL js/polynomial-redos).
+*/
+function withoutPosition(message) {
+	const at = message.indexOf("Located at position");
+	if (at < 0) return message;
+	let end = at;
+	while (end > 0 && /\s/.test(message[end - 1])) end--;
+	if (message[end - 1] === ".") end--;
+	return message.slice(0, end);
+}
+/** Functions that exist only in some contexts; the parser treats them as extensions. */
+const CONTEXT_FUNCTIONS = [
+	{
+		name: "hashFiles",
+		minArgs: 1,
+		maxArgs: 255
+	},
+	{
+		name: "success",
+		minArgs: 0,
+		maxArgs: 0
+	},
+	{
+		name: "always",
+		minArgs: 0,
+		maxArgs: 0
+	},
+	{
+		name: "failure",
+		minArgs: 0,
+		maxArgs: 0
+	},
+	{
+		name: "cancelled",
+		minArgs: 0,
+		maxArgs: 0
+	}
+];
+const exprCache = /* @__PURE__ */ new Map();
+function parseExpression(source) {
+	const cached = exprCache.get(source);
+	if (cached) return cached;
+	let result;
+	try {
+		const tokens = new Lexer(source).lex().tokens;
+		const ast = new Parser(tokens, [...KNOWN_CONTEXTS], CONTEXT_FUNCTIONS).parse();
+		result = {
+			source,
+			ast,
+			refs: collectRefs(ast, source)
+		};
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		const tokRange = err.tok?.range;
+		const posMatch = /Located at position (\d+)/.exec(message);
+		const offset = tokRange ? offsetOf$1(source, tokRange.start.line, tokRange.start.column) : posMatch ? Math.max(0, Number(posMatch[1]) - 1) : 0;
+		result = {
+			source,
+			refs: [],
+			error: {
+				message: withoutPosition(message),
+				offset
+			}
+		};
+	}
+	exprCache.set(source, result);
+	return result;
+}
+/**
+* The offset of a position the lexer of `@actions/expressions` gives a token. Its `line` counts every newline before the
+* token's end, those inside string literals included, but its `column` counts from the last newline outside a string:
+* a newline inside `'…'` moves the line and not the start of the column. So the column is added to the offset after the
+* last newline outside a string among the first `line`. A quote toggles the string: a `''` escape toggles it twice.
+*/
+function offsetOf$1(source, line, column) {
+	let lineStart = 0;
+	let newlines = 0;
+	let inString = false;
+	for (let i = 0; i < source.length && newlines < line; i++) if (source[i] === "'") inString = !inString;
+	else if (source[i] === "\n") {
+		newlines++;
+		if (!inString) lineStart = i + 1;
+	}
+	return lineStart + column;
+}
+function collectRefs(root, source) {
+	const refs = [];
+	const startOf = (t) => offsetOf$1(source, t.range.start.line, t.range.start.column);
+	const endOf = (t) => offsetOf$1(source, t.range.end.line, t.range.end.column);
+	/** Returns the chain for `a.b['c']` or undefined when the base is not a context. */
+	const chainOf = (e) => {
+		if (e instanceof ContextAccess) return {
+			ctx: e,
+			path: [],
+			end: endOf(e.name)
+		};
+		if (e instanceof IndexAccess) {
+			const base = chainOf(e.expr);
+			if (!base) return void 0;
+			const idx = e.index;
+			if (idx instanceof Star) return {
+				...base,
+				path: [...base.path, "*"]
+			};
+			if (idx instanceof Literal && idx.literal.kind === Kind.String) return {
+				...base,
+				path: [...base.path, idx.literal.coerceString()],
+				end: Math.max(base.end, endOf(idx.token))
+			};
+			if (idx instanceof Literal && idx.literal.kind === Kind.Number) return {
+				...base,
+				path: [...base.path, String(idx.literal.number())],
+				end: base.end
+			};
+			return {
+				...base,
+				path: [...base.path, "?"]
+			};
+		}
+	};
+	const visit = (e) => {
+		if (e instanceof ContextAccess || e instanceof IndexAccess) {
+			const chain = chainOf(e);
+			if (chain) {
+				refs.push({
+					context: chain.ctx.name.lexeme.toLowerCase(),
+					path: chain.path,
+					dynamic: chain.path.length === 0 || chain.path.includes("?"),
+					start: startOf(chain.ctx.name),
+					end: chain.end
+				});
+				let cur = e;
+				while (cur instanceof IndexAccess) {
+					if (!(cur.index instanceof Literal) && !(cur.index instanceof Star)) visit(cur.index);
+					cur = cur.expr;
+				}
+				return;
+			}
+			if (e instanceof IndexAccess) {
+				visit(e.expr);
+				if (!(e.index instanceof Literal) && !(e.index instanceof Star)) visit(e.index);
+			}
+			return;
+		}
+		if (e instanceof Unary) visit(e.expr);
+		else if (e instanceof Binary) {
+			visit(e.left);
+			visit(e.right);
+		} else if (e instanceof Logical || e instanceof FunctionCall) for (const arg of e.args) visit(arg);
+		else if (e instanceof Grouping) visit(e.group);
+	};
+	visit(root);
+	for (const r of refs) r.end = Math.max(r.end, refEndFromSource(source, r));
+	return refs;
+}
+function refEndFromSource(source, ref) {
+	const m = /^[A-Za-z_][\w-]*(?:\s*(?:\.\s*(?:[A-Za-z_*][\w-]*)|\[\s*'(?:[^']|'')*'\s*\]|\[\s*\d+\s*\]|\[\s*\*\s*\]))*/.exec(source.slice(ref.start));
+	return m ? ref.start + m[0].length : ref.end;
+}
+/** The functions an expression calls, by name as written (`hashFiles`, `toJSON`), each call's before its arguments'. */
+function calledFunctions(expr) {
+	const names = [];
+	const visit = (e) => {
+		if (e instanceof FunctionCall) names.push(e.functionName.lexeme);
+		for (const inner of operandsOf(e)) visit(inner);
+	};
+	if (expr.ast) visit(expr.ast);
+	return names;
+}
+/** The expressions directly inside `e`: its operands, arguments or index. */
+function operandsOf(e) {
+	if (e instanceof Unary) return [e.expr];
+	if (e instanceof Binary) return [e.left, e.right];
+	if (e instanceof Logical || e instanceof FunctionCall) return e.args;
+	if (e instanceof Grouping) return [e.group];
+	if (e instanceof IndexAccess) return [e.expr, e.index];
+	return [];
+}
+const UNKNOWN = {
+	known: false,
+	taint: []
+};
+const known$2 = (value, taint = []) => ({
+	known: true,
+	value,
+	taint
+});
+const mergeTaint = (...vals) => {
+	const out = [];
+	for (const v of vals) for (const t of v.taint) if (!out.some((o) => o.key === t.key)) out.push(t);
+	return out;
+};
+function truthy(v) {
+	if (v === null) return false;
+	if (typeof v === "boolean") return v;
+	if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
+	if (typeof v === "string") return v.length > 0;
+	return true;
+}
+function toNumber(v) {
+	if (v === null) return 0;
+	if (typeof v === "boolean") return v ? 1 : 0;
+	if (typeof v === "number") return v;
+	if (typeof v === "string") {
+		const s = v.trim();
+		if (s === "") return 0;
+		if (/^0x[0-9a-f]+$/i.test(s)) return Number.parseInt(s, 16);
+		if (/^0o[0-7]+$/i.test(s)) return Number.parseInt(s.slice(2), 8);
+		const n = Number(s);
+		return Number.isNaN(n) ? NaN : n;
+	}
+	return NaN;
+}
+/** Formats a number like .NET's `ToString("G15")`, which GitHub uses to convert numbers to strings. */
+function formatNumber(n) {
+	if (!Number.isFinite(n)) return String(n);
+	if (n === 0) return "0";
+	const trim = (s) => s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+	const [m, x] = n.toExponential(14).split("e");
+	const power = Number(x);
+	if (power > -5 && power < 15) return trim(n.toPrecision(15));
+	return `${trim(m)}E${power < 0 ? "-" : "+"}${String(Math.abs(power)).padStart(2, "0")}`;
+}
+function toStr(v) {
+	if (v === null) return "";
+	if (typeof v === "boolean") return v ? "true" : "false";
+	if (typeof v === "number") return formatNumber(v);
+	if (typeof v === "string") return v;
+	return Array.isArray(v) ? "Array" : "Object";
+}
+function looseEquals(a, b) {
+	const ta = jsonType(a);
+	const tb = jsonType(b);
+	if (ta !== tb) {
+		if (ta === "object" || tb === "object" || ta === "array" || tb === "array") return false;
+		return toNumber(a) === toNumber(b);
+	}
+	if (ta === "string") return a.toUpperCase() === b.toUpperCase();
+	if (ta === "number" || ta === "boolean" || ta === "null") return a === b;
+	return a === b;
+}
+function compare(a, b) {
+	if (typeof a === "string" && typeof b === "string") {
+		const x = a.toUpperCase();
+		const y = b.toUpperCase();
+		return x < y ? -1 : x > y ? 1 : 0;
+	}
+	const x = toNumber(a);
+	const y = toNumber(b);
+	if (Number.isNaN(x) || Number.isNaN(y)) return void 0;
+	return x - y;
+}
+function jsonType(v) {
+	if (v === null) return "null";
+	if (Array.isArray(v)) return "array";
+	return typeof v;
+}
+function literalToJson(lit) {
+	switch (lit.literal.kind) {
+		case Kind.String: return lit.literal.coerceString();
+		case Kind.Number: return lit.literal.number();
+		case Kind.Boolean: return lit.token.type === TokenType$1.TRUE;
+		case Kind.Null: return null;
+		default: return null;
+	}
+}
+/** Evaluates as much of the expression as possible; anything that depends on runtime state yields `known: false`. */
+function evaluate(e, resolve, options = {}) {
+	if (e instanceof Literal) return known$2(literalToJson(e));
+	if (e instanceof Grouping) return evaluate(e.group, resolve, options);
+	if (e instanceof ContextAccess || e instanceof IndexAccess) {
+		const chain = refChain(e, resolve, options);
+		if (chain) return resolve(chain) ?? UNKNOWN;
+		if (e instanceof IndexAccess) {
+			const base = evaluate(e.expr, resolve, options);
+			const idx = e.index instanceof Star ? void 0 : evaluate(e.index, resolve, options);
+			if (!base.known || !idx?.known) return {
+				known: false,
+				taint: mergeTaint(base, ...idx ? [idx] : [])
+			};
+			return known$2(indexInto(base.value, idx.value), mergeTaint(base, idx));
+		}
+		return UNKNOWN;
+	}
+	if (e instanceof Unary) {
+		const v = evaluate(e.expr, resolve, options);
+		return v.known ? known$2(!truthy(v.value)) : UNKNOWN;
+	}
+	if (e instanceof Logical) {
+		const isAnd = e.operator.type === TokenType$1.AND;
+		let last = UNKNOWN;
+		for (const [i, arg] of e.args.entries()) {
+			const v = evaluate(arg, resolve, options);
+			last = v;
+			if (!v.known) return v;
+			if (isAnd ? !truthy(v.value) : truthy(v.value)) return isAnd && i < e.args.length - 1 ? {
+				...v,
+				taint: []
+			} : v;
+		}
+		return last;
+	}
+	if (e instanceof Binary) {
+		const l = evaluate(e.left, resolve, options);
+		const r = evaluate(e.right, resolve, options);
+		const taint = [];
+		if (!l.known || !r.known) return UNKNOWN;
+		switch (e.operator.type) {
+			case TokenType$1.EQUAL_EQUAL: return known$2(looseEquals(l.value, r.value), taint);
+			case TokenType$1.BANG_EQUAL: return known$2(!looseEquals(l.value, r.value), taint);
+			case TokenType$1.GREATER:
+			case TokenType$1.GREATER_EQUAL:
+			case TokenType$1.LESS:
+			case TokenType$1.LESS_EQUAL: {
+				const c = compare(l.value, r.value);
+				if (c === void 0) return known$2(false, taint);
+				const t = e.operator.type;
+				return known$2(t === TokenType$1.GREATER ? c > 0 : t === TokenType$1.GREATER_EQUAL ? c >= 0 : t === TokenType$1.LESS ? c < 0 : c <= 0, taint);
+			}
+			default: return {
+				known: false,
+				taint
+			};
+		}
+	}
+	if (e instanceof FunctionCall) return evalCall(e, resolve, options);
+	return UNKNOWN;
+}
+function refChain(e, resolve, options) {
+	if (e instanceof ContextAccess) return {
+		context: e.name.lexeme.toLowerCase(),
+		path: []
+	};
+	if (e instanceof IndexAccess) {
+		const base = refChain(e.expr, resolve, options);
+		if (!base) return void 0;
+		if (e.index instanceof Star) return void 0;
+		if (e.index instanceof Literal) return {
+			...base,
+			path: [...base.path, toStr(literalToJson(e.index))]
+		};
+		const idx = evaluate(e.index, resolve, options);
+		if (idx.known && (typeof idx.value === "string" || typeof idx.value === "number")) return {
+			...base,
+			path: [...base.path, String(idx.value)]
+		};
+		return;
+	}
+}
+function indexInto(base, idx) {
+	if (Array.isArray(base)) {
+		const n = Math.floor(toNumber(idx));
+		return n >= 0 && n < base.length ? base[n] ?? null : null;
+	}
+	if (base && typeof base === "object") {
+		const key = toStr(idx).toLowerCase();
+		const hit = Object.keys(base).find((k) => k.toLowerCase() === key);
+		return hit === void 0 ? null : base[hit] ?? null;
+	}
+	return null;
+}
+/**
+* The functions whose value depends on the run (the job status and the workspace files), by name in lower case;
+* `always()` is not one, it is always true. Unknown unless `EvaluateOptions.runtime` answers them.
+*/
+const RUNTIME_FUNCTIONS = /* @__PURE__ */ new Set([
+	"success",
+	"failure",
+	"cancelled",
+	"hashfiles"
+]);
+/** What the run answers for a runtime function; without an answer the call stays unknown, with its arguments' taint. */
+function runtimeCall(name, args, taint, options) {
+	return options.runtime?.(name, args) ?? {
+		known: false,
+		taint
+	};
+}
+function evalCall(e, resolve, options) {
+	const name = e.functionName.lexeme.toLowerCase();
+	const args = e.args.map((a) => evaluate(a, resolve, options));
+	const taint = mergeTaint(...args);
+	const allKnown = args.every((a) => a.known);
+	const vals = args.map((a) => a.known ? a.value : null);
+	if (name === "always") return known$2(true, taint);
+	if (RUNTIME_FUNCTIONS.has(name)) return runtimeCall(name, args, taint, options);
+	if (!allKnown) return {
+		known: false,
+		taint
+	};
+	switch (name) {
+		case "format": {
+			const out = toStr(vals[0] ?? null).replace(/\{\{|\}\}|\{(\d+)\}/g, (m, d) => {
+				if (m === "{{") return "{";
+				if (m === "}}") return "}";
+				return toStr(vals[Number(d) + 1] ?? null);
+			});
+			return known$2(out, taint);
+		}
+		case "contains": {
+			const [hay, needle] = [vals[0] ?? null, vals[1] ?? null];
+			if (Array.isArray(hay)) return known$2(hay.some((h) => looseEquals(h, needle)), []);
+			return known$2(toStr(hay).toUpperCase().includes(toStr(needle).toUpperCase()), []);
+		}
+		case "startswith": return known$2(toStr(vals[0] ?? null).toUpperCase().startsWith(toStr(vals[1] ?? null).toUpperCase()), []);
+		case "endswith": return known$2(toStr(vals[0] ?? null).toUpperCase().endsWith(toStr(vals[1] ?? null).toUpperCase()), []);
+		case "join": {
+			const arr = vals[0] ?? null;
+			const sep = vals.length > 1 ? toStr(vals[1] ?? null) : ",";
+			return known$2(Array.isArray(arr) ? arr.map(toStr).join(sep) : toStr(arr), taint);
+		}
+		case "tojson": return known$2(JSON.stringify(vals[0] ?? null, null, 2), taint);
+		case "fromjson": try {
+			return known$2(JSON.parse(toStr(vals[0] ?? null)), taint);
+		} catch {
+			return {
+				known: false,
+				taint
+			};
+		}
+		default: return {
+			known: false,
+			taint
+		};
+	}
+}
+/**
+* True when a condition is falsy whatever the runtime-only parts evaluate to — e.g. `always() && matrix.k` in a
+* combination without `k`. Used to decide that a guarded step or job is skipped; values are never derived from it.
+*/
+function definitelyFalsy(e, resolve, options = {}) {
+	if (e instanceof Grouping) return definitelyFalsy(e.group, resolve, options);
+	if (e instanceof Logical) return e.operator.type === TokenType$1.AND ? e.args.some((a) => definitelyFalsy(a, resolve, options)) : e.args.every((a) => definitelyFalsy(a, resolve, options));
+	if (e instanceof Unary) return definitelyTruthy(e.expr, resolve, options);
+	const v = evaluate(e, resolve, options);
+	return v.known && !truthy(v.value);
+}
+function definitelyTruthy(e, resolve, options = {}) {
+	if (e instanceof Grouping) return definitelyTruthy(e.group, resolve, options);
+	if (e instanceof Logical) return e.operator.type === TokenType$1.AND ? e.args.every((a) => definitelyTruthy(a, resolve, options)) : e.args.some((a) => definitelyTruthy(a, resolve, options));
+	if (e instanceof Unary) return definitelyFalsy(e.expr, resolve, options);
+	const v = evaluate(e, resolve, options);
+	return v.known && truthy(v.value);
+}
+/**
+* Evaluates a whole YAML scalar that may mix literal text and `${{ }}` segments.
+* A scalar that is exactly one segment keeps the expression's type; otherwise the result is a string.
+*/
+function evaluateTemplate(text, resolve, options = {}) {
+	const segments = findTemplateSegments(text);
+	if (segments.length === 0) return known$2(text);
+	const first = segments[0];
+	if (segments.length === 1 && first.start === 0 && first.end === text.length) return first.expr.ast ? evaluate(first.expr.ast, resolve, options) : UNKNOWN;
+	let out = "";
+	let cursor = 0;
+	const parts = [];
+	for (const seg of segments) {
+		out += text.slice(cursor, seg.start);
+		const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve, options) : UNKNOWN;
+		parts.push(v);
+		if (!v.known) return {
+			known: false,
+			taint: mergeTaint(...parts)
+		};
+		out += toStr(v.value);
+		cursor = seg.end;
+	}
+	out += text.slice(cursor);
+	return known$2(out, mergeTaint(...parts));
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/ir.ts
+/** Case-insensitive lookup of an own key, matching how GitHub resolves context property names. */
+function lookup(rec, key) {
+	if (Object.hasOwn(rec, key)) return rec[key];
+	const lower = key.toLowerCase();
+	for (const k of Object.keys(rec)) if (k.toLowerCase() === lower) return rec[k];
+}
+/**
+* The site of the scalar GitHub's parser reports a problem in, by the start of the scalar it gives in the message
+* (`Diagnostic.at`): the parser's range is off for multi-line scalars.
+*/
+function siteAt(sites, at) {
+	return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
+}
+function jsonEqual(a, b) {
+	if (a === b) return true;
+	if (typeof a === "string" && typeof b === "string") return a === b;
+	if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+	if (Array.isArray(a) !== Array.isArray(b)) return false;
+	if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => jsonEqual(x, b[i]));
+	const ka = Object.keys(a);
+	const kb = Object.keys(b);
+	return ka.length === kb.length && ka.every((k) => Object.hasOwn(b, k) && jsonEqual(a[k], b[k]));
+}
+/** Three-valued cell comparison: `undefined` when an unknown value is involved. */
+function cellMatches(cell, value) {
+	if (!cell) return false;
+	if (!cell.known) return void 0;
+	return jsonEqual(cell.value, value);
+}
+/**
+* How many product combinations survive `exclude`, without listing the product: only the dimensions some exclude
+* entry names are enumerated, the others multiply. Falls back to a lower bound (each entry removes at most its share of
+* the product) when even that is too large. Undefined when part of the matrix is an expression.
+*/
+function minJobsAfterExclude(m, productSize) {
+	if (m.excludeDynamic || m.includeDynamic) return void 0;
+	if (m.dims.some((d) => d.values === null || d.unknownIndexes.length > 0)) return void 0;
+	if (m.exclude.some((e) => e.dynamicKeys.length > 0)) return void 0;
+	const size = new Map(m.dims.map((d) => [d.name, Math.max(1, d.values.length)]));
+	const named = m.dims.filter((d) => m.exclude.some((e) => Object.hasOwn(e.values, d.name)));
+	const subSize = named.reduce((n, d) => n * size.get(d.name), 1);
+	const effective = m.exclude.filter((e) => Object.keys(e.values).every((k) => size.has(k)));
+	if (subSize <= 2e4) {
+		let survivors = 0;
+		const walk = (i, values) => {
+			if (i === named.length) {
+				if (!effective.some((e) => Object.entries(e.values).every(([k, v]) => jsonEqual(values[k], v)))) survivors++;
+				return;
+			}
+			const d = named[i];
+			for (const v of d.values) walk(i + 1, {
+				...values,
+				[d.name]: v
+			});
+		};
+		walk(0, {});
+		return survivors * (productSize / subSize);
+	}
+	const removed = effective.reduce((n, e) => n + productSize / Object.keys(e.values).reduce((p, k) => p * size.get(k), 1), 0);
+	return Math.max(0, productSize - removed);
+}
+/**
+* Expands a matrix exactly the way GitHub does:
+* 1. cartesian product of the dimensions,
+* 2. `exclude` removes product combinations whose listed keys all match,
+* 3. each `include` entry is merged into every *original* combination it does not conflict with
+*    (original values are never overwritten; values added by earlier includes may be); if it fits none,
+*    it becomes a new combination.
+*/
+function expandMatrix(m) {
+	if (!m) return {
+		combos: [],
+		keys: [],
+		exact: true,
+		dynamic: false,
+		truncated: false
+	};
+	if (m.dynamic) return {
+		combos: [],
+		keys: [],
+		exact: false,
+		dynamic: true,
+		truncated: false
+	};
+	let exact = !m.includeDynamic && !m.excludeDynamic;
+	const truncated = false;
+	const dimNames = m.dims.map((d) => d.name);
+	const productSize = m.dims.reduce((n, d) => n * (d.values === null ? 1 : Math.max(1, d.values.length)), 1);
+	const truncatedResult = (minJobs) => {
+		const keys = [...dimNames];
+		for (const e of m.include) for (const k of Object.keys(e.values)) if (!keys.includes(k)) keys.push(k);
+		return {
+			combos: [],
+			keys,
+			exact: false,
+			dynamic: false,
+			truncated: true,
+			productSize,
+			...minJobs !== void 0 ? { minJobs } : {}
+		};
+	};
+	const large = m.dims.length > 0 && productSize > 2e4;
+	if (large) {
+		const minJobs = minJobsAfterExclude(m, productSize);
+		if (minJobs === void 0 || minJobs > 2e4) return truncatedResult(minJobs);
+	}
+	const pruneAt = /* @__PURE__ */ new Map();
+	for (const ex of m.exclude) {
+		const idx = Object.keys(ex.values).map((k) => dimNames.indexOf(k));
+		if (ex.dynamicKeys.length || idx.length === 0 || idx.includes(-1)) continue;
+		const at = Math.max(...idx);
+		pruneAt.set(at, [...pruneAt.get(at) ?? [], ex]);
+	}
+	let product = [];
+	if (m.dims.length > 0) {
+		product = [{
+			values: {},
+			origin: "product",
+			includes: []
+		}];
+		for (const [i, dim] of m.dims.entries()) {
+			const cells = dim.values === null ? [{ known: false }] : dim.values.map((v, i) => dim.unknownIndexes.includes(i) ? { known: false } : {
+				known: true,
+				value: v
+			});
+			if (dim.values === null || dim.unknownIndexes.length > 0) exact = false;
+			const prune = pruneAt.get(i) ?? [];
+			const next = [];
+			for (const combo of product) for (const cell of cells) {
+				const values = {
+					...combo.values,
+					[dim.name]: cell
+				};
+				if (prune.some((ex) => Object.entries(ex.values).every(([k, v]) => cellMatches(values[k], v) === true))) continue;
+				next.push({
+					origin: "product",
+					includes: [],
+					values
+				});
+			}
+			if (large && next.length > 2e4) return truncatedResult(minJobsAfterExclude(m, productSize));
+			product = next;
+		}
+	}
+	for (const ex of m.exclude) product = product.filter((combo) => {
+		let all = true;
+		for (const [k, v] of Object.entries(ex.values)) {
+			if (ex.dynamicKeys.includes(k)) {
+				exact = false;
+				all = false;
+				break;
+			}
+			const r = cellMatches(combo.values[k], v);
+			if (r === void 0) exact = false;
+			if (r !== true) {
+				all = false;
+				break;
+			}
+		}
+		return !all;
+	});
+	const originals = product;
+	const created = [];
+	m.include.forEach((entry, idx) => {
+		const entryCells = {};
+		for (const [k, v] of Object.entries(entry.values)) entryCells[k] = entry.dynamicKeys.includes(k) ? { known: false } : {
+			known: true,
+			value: v
+		};
+		let merged = false;
+		for (const combo of originals) {
+			let fits = true;
+			for (const [k, cell] of Object.entries(entryCells)) {
+				if (!dimNames.includes(k)) continue;
+				if (!cell.known) {
+					exact = false;
+					continue;
+				}
+				const r = cellMatches(combo.values[k], cell.value);
+				if (r === void 0) exact = false;
+				if (r === false) {
+					fits = false;
+					break;
+				}
+			}
+			if (!fits) continue;
+			for (const [k, cell] of Object.entries(entryCells)) if (!dimNames.includes(k)) combo.values[k] = cell;
+			combo.includes.push(idx);
+			merged = true;
+		}
+		if (!merged) created.push({
+			values: { ...entryCells },
+			origin: "include",
+			includes: [idx]
+		});
+	});
+	const combos = [...originals, ...created];
+	const keys = [];
+	for (const c of combos) for (const k of Object.keys(c.values)) if (!keys.includes(k)) keys.push(k);
+	return {
+		combos,
+		keys,
+		exact,
+		dynamic: false,
+		truncated,
+		productSize
+	};
+}
+/** Resolver that answers `matrix.*` from a concrete combination, marking missing keys with a taint. */
+function matrixResolver(combo) {
+	return ({ context, path }) => {
+		if (context !== "matrix") return void 0;
+		if (path.length === 0) return UNKNOWN;
+		const key = path[0];
+		const cell = lookup(combo.values, key);
+		if (!cell) return known$2(null, [{
+			kind: "missing-matrix-key",
+			key
+		}]);
+		if (!cell.known) return UNKNOWN;
+		let value = cell.value;
+		for (const seg of path.slice(1)) if (value && typeof value === "object" && !Array.isArray(value)) value = lookup(value, seg) ?? null;
+		else if (Array.isArray(value)) value = value[Math.floor(Number(seg))] ?? null;
+		else value = null;
+		return known$2(value);
+	};
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/checks.ts
+/**
+* Check-run names of jobs, as GitHub reports them (and as branch protection requires them).
+*
+* The rules come from GitHub's actual check runs in a lab repository (fixtures/checknames-lab):
+* - The name is the job's `name`, trimmed at both ends; the job id when there is none or it is blank.
+* - A matrix job gets ` (v1, v2, …)` unless its `name` is dynamic: a template with text around an expression, or an
+*   expression that is not a single literal (`Build ${{ matrix.os }}`, `${{ matrix.os }}`, `Lit ${{ 'X' }}` get no
+*   suffix; `${{ 'Only' }}` does).
+* - The suffix lists the combination's values: the matrix dimensions in declared order for product combinations
+*   (keys an `include` adds to them are left out), every key of the entry for combinations an `include` created.
+*   `null` and `''` are skipped, objects and arrays are flattened, numbers are formatted like .NET's "G15".
+* - A job in a called workflow reports `<caller> / <callee>`, one ` / ` per level; callee names read the caller's
+*   `with:` values (or the input defaults).
+*/
+/** A matrix value as it appears in the suffix: flattened, with `null` and `''` left out. */
+function suffixValues(value) {
+	if (value === null || value === "") return [];
+	if (typeof value === "boolean") return [value ? "true" : "false"];
+	if (typeof value === "number") return [formatNumber(value)];
+	if (typeof value === "string") return [value];
+	if (Array.isArray(value)) return value.flatMap(suffixValues);
+	return Object.values(value).flatMap(suffixValues);
+}
+const toText = (v) => {
+	if (!v.known) return void 0;
+	const value = v.value;
+	if (value === null) return "";
+	if (typeof value === "number") return formatNumber(value);
+	if (typeof value === "string" || typeof value === "boolean") return String(value);
+};
+function nameKind(job) {
+	const raw = job.name ?? "";
+	const segments = findTemplateSegments(raw);
+	if (segments.length === 0) return {
+		kind: "static",
+		text: raw.trim()
+	};
+	const only = segments.length === 1 && raw.trim() === raw.slice(segments[0].start, segments[0].end).trim();
+	const ast = segments[0].expr.ast;
+	if (only && ast instanceof Literal) return {
+		kind: "static",
+		text: (toText(evaluate(ast, () => void 0)) ?? "").trim()
+	};
+	return {
+		kind: "dynamic",
+		template: raw,
+		segments
+	};
+}
+function suffix(combo, exp, job) {
+	const m = job.matrix;
+	const keys = combo.origin === "include" ? Object.keys(m.include[combo.includes[0]]?.values ?? {}) : m.dims.map((d) => d.name);
+	let certain = exp.exact;
+	const parts = [];
+	for (const key of keys) {
+		const cell = lookup(combo.values, key);
+		if (!cell) continue;
+		if (!cell.known) {
+			certain = false;
+			continue;
+		}
+		parts.push(...suffixValues(cell.value));
+	}
+	return {
+		text: parts.length ? ` (${parts.join(", ")})` : "",
+		certain
+	};
+}
+/** The template with `…` for each expression (`Build …`), from the parsed segments rather than a backtracking regex. */
+function templateStem(template, segments) {
+	let out = "";
+	let at = 0;
+	for (const seg of segments) {
+		out += `${template.slice(at, seg.start)}…`;
+		at = seg.end;
+	}
+	return (out + template.slice(at)).trim();
+}
+/** The resolver for a job's `name`: matrix values of the combination and the (caller-supplied) inputs. */
+function nameResolver(combo, inputs) {
+	const matrix = combo ? matrixResolver(combo) : void 0;
+	return (ref) => {
+		if (ref.context === "matrix") return matrix ? matrix(ref) : known$2(null);
+		if (ref.context === "inputs") {
+			if (ref.path.length !== 1) return UNKNOWN;
+			const v = lookup(inputs, ref.path[0]);
+			return v?.known ? known$2(v.value) : UNKNOWN;
+		}
+	};
+}
+/**
+* The check names one job produces when it runs (one per matrix combination), without the caller prefix. A job that
+* calls a reusable workflow returns the caller segments only; see `workflowChecks` for the composed names.
+*/
+function jobSegments(job, inputs = {}) {
+	const kind = nameKind(job);
+	const exp = job.matrix ? expandMatrix(job.matrix) : void 0;
+	const combos = exp && !exp.dynamic && !exp.truncated && exp.combos.length ? exp.combos : [void 0];
+	const matrixUnknown = !!exp && (exp.dynamic || exp.truncated);
+	const stem = kind.kind === "static" ? `${kind.text || job.id}${exp ? " (…)" : ""}` : templateStem(kind.template, kind.segments);
+	return combos.map((combo) => {
+		if (kind.kind === "static") {
+			const base = kind.text || job.id;
+			if (!combo || !exp) return {
+				name: matrixUnknown ? `${base} (…)` : base,
+				stem,
+				certain: !matrixUnknown
+			};
+			const s = suffix(combo, exp, job);
+			return {
+				name: `${base}${s.text}`,
+				stem,
+				certain: s.certain,
+				combo
+			};
+		}
+		const text = toText(evaluateTemplate(kind.template, nameResolver(combo, inputs)))?.trim();
+		const certain = text !== void 0 && !matrixUnknown && (!exp || exp.exact);
+		return {
+			name: text === void 0 ? kind.template.trim() : text || job.id,
+			stem,
+			certain,
+			...combo ? { combo } : {}
+		};
+	});
+}
+/** The single check GitHub reports for a job that is skipped (its `if:` is false, or a job it needs failed). */
+function skippedCheckName(job) {
+	const kind = nameKind(job);
+	return kind.kind === "static" ? kind.text || job.id : kind.template.trim();
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/text.ts
+/**
+* `s` without runs of `ch` at its end (and at its start with `start: true`). A loop rather than `/x+$/`, which
+* backtracks quadratically on long runs that are not at the end (CodeQL js/polynomial-redos).
+*/
+function trimChar(s, ch, { start = false } = {}) {
+	let from = 0;
+	let to = s.length;
+	if (start) while (from < to && s[from] === ch) from++;
+	while (to > from && s[to - 1] === ch) to--;
+	return s.slice(from, to);
+}
+function editDistance$1(a, b) {
+	const x = a.toLowerCase();
+	const y = b.toLowerCase();
+	const dp = Array.from({ length: x.length + 1 }, (_, i) => [i, ...Array(y.length).fill(0)]);
+	for (let j = 1; j <= y.length; j++) dp[0][j] = j;
+	for (let i = 1; i <= x.length; i++) for (let j = 1; j <= y.length; j++) dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+	return dp[x.length][y.length];
+}
+/** Suggests the closest name, treating `-`/`_` as equivalent. */
+function didYouMean(name, candidates) {
+	const norm = (s) => s.toLowerCase().replace(/[-_]/g, "");
+	let best;
+	for (const c of candidates) {
+		const [a, b] = [norm(name), norm(c)];
+		const prefix = Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a));
+		const d = a === b ? 0 : prefix ? 1 : editDistance$1(name, c);
+		if (!best || d < best.d) best = {
+			c,
+			d
+		};
+	}
+	if (!best) return void 0;
+	return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/glob.ts
+/** Minimal glob: `*` matches within a segment, `**` across segments; plain strings match as path prefixes. */
+function matchesPattern(path, pattern) {
+	if (!pattern.includes("*")) return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
+	return new RegExp(`^${pattern.split("**/").map((chunk) => chunk.split("**").map((part) => part.split("*").map(escapeRe).join("[^/]*")).join(".*")).join("(?:[^/]*/)*")}$`).test(path);
+}
+const escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/queries.ts
+/** Every reference in a unit's expressions, with the site it is in. */
+function* refsOf(unit) {
+	for (const site of unit.sites) for (const seg of site.segments) for (const ref of seg.refs) yield {
+		site,
+		ref
+	};
+}
+/** Secrets every workflow can read without declaring them (lowercase): the automatic `GITHUB_TOKEN`. */
+const BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote-ref.ts
+/**
+* The key of a remote `uses:` reference (`owner/repo/path@ref`): GitHub matches the owner and repository in any letter
+* case, and the path and ref as written.
+*
+* It lower-cases the first two `/` segments, so a root action's ref, which sits in the second, is lower-cased too:
+* `Actions/Cache@V4` and `actions/cache@v4` have one key, while `octo/ship/x.yml@V1` and `…@v1` have two.
+*/
+function remoteKey(raw) {
+	const [owner = "", repo = "", ...rest] = raw.trim().split("/");
+	return [
+		owner.toLowerCase(),
+		repo.toLowerCase(),
+		...rest
+	].join("/");
+}
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/graph.ts
+/** A path segment that names no key: the end of the path, a `*` filter or a `?` computed index. */
+const computed = (s) => s === void 0 || s === "*" || s === "?";
+/** Whether a path segment names the property `key` (lowercase): GitHub looks properties up ignoring case. */
+const isKey = (s, key) => s?.toLowerCase() === key;
+/** The reads of each member of a whole object, once per symbol, as reads the reference does not name. */
+function wholeReads(reads) {
+	const first = /* @__PURE__ */ new Map();
+	for (const r of reads) if (!first.has(r.symbol)) first.set(r.symbol, {
+		...r,
+		whole: true
+	});
+	return [...first.values()];
+}
+/** The names of declared inputs, secrets or env variables, or of the keys a job passes, as written. */
+const declaredNames = (decls) => Object.values(decls ?? {}).map((d) => d.name);
+/** The secret every workflow holds, in the spelling GitHub documents it by. */
+const GITHUB_TOKEN = "GITHUB_TOKEN";
+/** The secrets a workflow reads by name, each spelling once, as written. */
+function namedSecrets(wf) {
+	const names = /* @__PURE__ */ new Set();
+	for (const { ref } of refsOf(wf)) if (ref.context === "secrets" && !computed(ref.path[0])) names.add(ref.path[0]);
+	return [...names];
+}
+/** `names`, then each of `more` whose name, ignoring case, is not among them yet. */
+function addNames(names, more) {
+	const seen = new Set(names.map((n) => n.toLowerCase()));
+	const added = [];
+	for (const name of more) {
+		if (seen.has(name.toLowerCase())) continue;
+		seen.add(name.toLowerCase());
+		added.push(name);
+	}
+	return [...names, ...added];
+}
+/** The inputs a unit declares (a workflow's `workflow_call` and `workflow_dispatch` inputs of one name are one). */
+function inputNames(unit) {
+	if (unit.kind === "action") return declaredNames(unit.inputs);
+	return [...declaredNames(unit.call?.inputs), ...dispatchInputNames(unit)];
+}
+/** The inputs a workflow declares under `workflow_dispatch`. */
+function dispatchInputNames(unit) {
+	return unit.kind === "workflow" ? declaredNames(unit.dispatch?.inputs) : [];
+}
+/**
+* The inputs of its own that `github.event.inputs` may hold at a site: a workflow's `workflow_dispatch` inputs, which
+* it holds when the workflow is dispatched. None in an action, whose `github` is its job's, nor at a site GitHub
+* evaluates only when the workflow is called, with the caller's `github` context: a `workflow_call` output's value, or
+* an input's default (a `workflow_dispatch` input's default allows no context).
+*/
+function eventInputsAt(unit, site) {
+	if (unit.kind !== "workflow" || onlyWhenCalled(site)) return {};
+	return unit.dispatch?.inputs ?? {};
+}
+/** Whether GitHub evaluates a workflow's site only when the workflow is called (see `eventInputsAt`). */
+const onlyWhenCalled = (site) => site.field === "input.default" || site.field === "workflow.output";
+/**
+* The dispatch inputs a `github` reference reads without naming them, each as a reference naming it
+* (`github.event.inputs.<name>`). It may read them when each of its first two properties is `event` and `inputs`
+* (ignoring case), stands for any key (a `*` filter, a computed key) or is missing: a whole or computed `github`,
+* `github.event` or `github.event.inputs` reads every dispatch input it may hold at the site (see `eventInputsAt`), and
+* `github[x].inputs.<name>` the one it names. `undefined` for a reference that names its input outright (`resolveRef`
+* reads it) or can read none.
+*/
+function eventMemberRefs(unit, site, ref) {
+	const [event, inputs, name] = ref.path;
+	if (!(computed(event) || isKey(event, "event")) || !(computed(inputs) || isKey(inputs, "inputs"))) return void 0;
+	if (![
+		event,
+		inputs,
+		name
+	].some(computed)) return void 0;
+	return declaredNames(eventInputsAt(unit, site)).filter((n) => computed(name) || isKey(n, name.toLowerCase())).map((n) => ({
+		...ref,
+		path: [
+			"event",
+			"inputs",
+			n,
+			...ref.path.slice(3)
+		]
+	}));
+}
+/** The job a site is in. */
+function jobAt(unit, site) {
+	return unit.kind === "workflow" && site.job ? unit.jobs[site.job] : void 0;
+}
+/** The steps a site's `steps` context names: an action's, or those of the site's job. */
+function stepsAt(unit, site) {
+	return unit.kind === "action" ? unit.steps : jobAt(unit, site)?.steps ?? [];
+}
+/** The job in the symbol of a step output read at a site: the site's job in a workflow, none in an action. */
+const stepJob = (unit, site) => unit.kind === "workflow" ? site.job : void 0;
+/**
+* The outputs among `names` that `<job or step>.<b>.<c>` reads: all of them, one by name, or none
+* (`needs.build.result`).
+*/
+function pickOutputs(names, [, b, c]) {
+	if (computed(b)) return names;
+	if (!isKey(b, "outputs")) return [];
+	if (computed(c)) return names;
+	return names.filter((n) => n.toLowerCase() === c.toLowerCase());
+}
+/** The keys of a job's matrix: its dimensions and the keys its `include` entries add. */
+function matrixKeys(job) {
+	const m = job?.matrix;
+	return m ? [...m.dims.map((d) => d.name), ...m.include.flatMap((inc) => Object.keys(inc.keyLocs))] : [];
+}
+const sym = {
+	input: (unit, name) => `${unit}#inputs.${name}`,
+	secret: (unit, name) => `${unit}#secrets.${name}`,
+	output: (unit, name) => `${unit}#outputs.${name}`,
+	job: (unit, job) => `${unit}#jobs.${job}`,
+	jobOutput: (unit, job, name) => `${unit}#jobs.${job}.outputs.${name}`,
+	stepOutput: (unit, job, step, name) => job === void 0 ? `${unit}#steps.${step}.outputs.${name}` : `${unit}#jobs.${job}.steps.${step}.outputs.${name}`,
+	env: (unit, job, name) => job === void 0 ? `${unit}#env.${name}` : `${unit}#jobs.${job}.env.${name}`,
+	/** A step, by its id (in a job, or in an action, which has no jobs). */
+	step: (unit, job, id) => job === void 0 ? `${unit}#steps.${id}` : `${unit}#jobs.${job}.steps.${id}`,
+	/** A variable of a step's own `env:`, by the step's index: a step needs no id. */
+	stepEnv: (unit, job, step, name) => job === void 0 ? `${unit}#steps[${step}].env.${name}` : `${unit}#jobs.${job}.steps[${step}].env.${name}`,
+	matrix: (unit, job, key) => `${unit}#jobs.${job}.matrix.${key}`,
+	var: (name) => `vars.${name}`,
+	remote: (raw) => `remote:${raw}`
+};
+/** A declared secret of a workflow, by its declared case, or the name as written: secrets need no declaration. */
+function resolveSecret(unit, name) {
+	if (unit.kind !== "workflow") return void 0;
+	const decl = unit.call ? lookup(unit.call.secrets, name) : void 0;
+	return sym.secret(unit.path, decl?.name ?? name);
+}
+/** The `uses:` of every job and step of a project's external units. */
+function externalUsesOf(project) {
+	const out = /* @__PURE__ */ new WeakSet();
+	for (const unit of project.external?.values() ?? []) {
+		const users = unit.kind === "action" ? unit.steps : Object.values(unit.jobs).flatMap((j) => [j, ...j.steps]);
+		for (const { uses } of users) if (uses) out.add(uses);
+	}
+	return out;
+}
+/**
+* The analyzed repository as a queryable graph: who calls whom, which expression reads which symbol,
+* and where each value flows next.
+*/
+var ProjectIndex = class {
+	project;
+	nodes = /* @__PURE__ */ new Map();
+	edges = [];
+	usages = /* @__PURE__ */ new Map();
+	callSites = [];
+	actionUses = [];
+	sitesById = /* @__PURE__ */ new Map();
+	definitions = /* @__PURE__ */ new Map();
+	/** The secrets a whole `secrets` reads in each workflow, by path, once computed (see `secretNames`). */
+	heldSecrets = /* @__PURE__ */ new Map();
+	/** The `uses:` of external units' jobs and steps: they name another repository's files, not this project's. */
+	externalUses;
+	constructor(project) {
+		this.project = project;
+		this.externalUses = externalUsesOf(project);
+		for (const wf of project.workflows.values()) this.indexWorkflow(wf);
+		for (const a of project.actions.values()) this.indexAction(a);
+		for (const unit of this.units()) for (const site of unit.sites) this.indexSite(unit, site);
+		for (const unit of this.units()) this.indexLiterals(unit);
+	}
+	units() {
+		return [...this.project.workflows.values(), ...this.project.actions.values()];
+	}
+	unit(path) {
+		return this.project.workflows.get(path) ?? this.project.actions.get(path);
+	}
+	site(id) {
+		return this.sitesById.get(id);
+	}
+	callersOf(workflowPath) {
+		return this.callSites.filter((c) => c.callee.path === workflowPath);
+	}
+	usersOf(actionPath) {
+		return this.actionUses.filter((u) => u.action.path === actionPath);
+	}
+	/** The reusable workflow a job calls. Workflows without `on.workflow_call` are not callable (see `targetOf`). */
+	calleeOf(job) {
+		const wf = this.targetOf(job);
+		return wf?.call ? wf : void 0;
+	}
+	/**
+	* The local workflow file a job's `uses:` points at, reusable or not. Never for a job of an external unit, whose `./`
+	* names its own repository's file (as `actionOf` never resolves an external unit's step).
+	*/
+	targetOf(job) {
+		if (job.uses?.kind !== "local-workflow" || !job.uses.target || job.uses.selfRef !== void 0) return void 0;
+		if (this.externalUses.has(job.uses)) return void 0;
+		if (!/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(job.uses.target)) return void 0;
+		return this.project.workflows.get(job.uses.target);
+	}
+	/**
+	* The interface a job calls: its local reusable workflow, or the external unit of its remote one (see
+	* `Project.external`). Only checks of what a caller passes and reads use it; `calleeOf` never returns an external unit.
+	*/
+	interfaceOf(job) {
+		if (job.uses?.kind !== "remote-workflow") return this.calleeOf(job);
+		const unit = this.project.external?.get(remoteKey(job.uses.raw));
+		return unit?.kind === "workflow" && unit.call ? unit : void 0;
+	}
+	/** The interface a step uses: its local action, or the external unit of its remote one (see `interfaceOf`). */
+	actionInterfaceOf(step) {
+		if (step.uses?.kind !== "remote-action") return this.actionOf(step);
+		const unit = this.project.external?.get(remoteKey(step.uses.raw));
+		return unit?.kind === "action" ? unit : void 0;
+	}
+	actionOf(step) {
+		if (step.uses?.kind !== "local-action" || !step.uses.target || step.uses.selfRef !== void 0) return void 0;
+		if (this.externalUses.has(step.uses)) return void 0;
+		return this.project.actions.get(step.uses.target);
+	}
+	usagesOf(symbol) {
+		return this.usages.get(symbol) ?? [];
+	}
+	/**
+	* What sets a symbol's value. Expressions (see `sinkOf`): each caller's `with:` for a reusable workflow's input, each
+	* `with:` of a step using an action for the action's input, a job's `outputs:` entry for its output, and so on. Plain
+	* values of env variables and outputs. A caller's or step's plain value or omission of an input is not listed: `trace`
+	* reads those from the calls.
+	*/
+	definitionsOf(symbol) {
+		return this.definitions.get(symbol) ?? [];
+	}
+	outgoing(symbol, kind) {
+		return this.edges.filter((e) => e.from === symbol && (!kind || e.kind === kind));
+	}
+	incoming(symbol, kind) {
+		return this.edges.filter((e) => e.to === symbol && (!kind || e.kind === kind));
+	}
+	/** Serializable snapshot: every node and edge, in a stable order. */
+	toJSON() {
+		return {
+			nodes: [...this.nodes.values()].sort((a, b) => a.id.localeCompare(b.id)),
+			edges: [...this.edges].sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.kind.localeCompare(b.kind))
+		};
+	}
+	node(n) {
+		if (!this.nodes.has(n.id)) this.nodes.set(n.id, n);
+		return n.id;
+	}
+	edge(e) {
+		this.edges.push(e);
+	}
+	indexWorkflow(wf) {
+		const u = wf.path;
+		this.node({
+			id: u,
+			kind: "workflow",
+			label: wf.name ?? u,
+			unit: u
+		});
+		for (const i of Object.values(wf.call?.inputs ?? {})) this.node({
+			id: sym.input(u, i.name),
+			kind: "input",
+			label: `inputs.${i.name}`,
+			unit: u,
+			loc: i.loc
+		});
+		for (const i of Object.values(wf.dispatch?.inputs ?? {})) this.node({
+			id: sym.input(u, i.name),
+			kind: "input",
+			label: `inputs.${i.name}`,
+			unit: u,
+			loc: i.loc
+		});
+		for (const s of Object.values(wf.call?.secrets ?? {})) this.node({
+			id: sym.secret(u, s.name),
+			kind: "secret",
+			label: `secrets.${s.name}`,
+			unit: u,
+			loc: s.loc
+		});
+		for (const o of Object.values(wf.call?.outputs ?? {})) this.node({
+			id: sym.output(u, o.name),
+			kind: "output",
+			label: `outputs.${o.name}`,
+			unit: u,
+			loc: o.loc
+		});
+		for (const e of Object.values(wf.env)) this.node({
+			id: sym.env(u, void 0, e.name),
+			kind: "env",
+			label: `env.${e.name}`,
+			unit: u,
+			loc: e.loc
+		});
+		for (const job of Object.values(wf.jobs)) {
+			const jid = this.node({
+				id: sym.job(u, job.id),
+				kind: "job",
+				label: `jobs.${job.id}`,
+				unit: u,
+				loc: job.loc
+			});
+			for (const n of job.needs) this.edge({
+				from: jid,
+				to: sym.job(u, n.id),
+				kind: "needs",
+				loc: n.loc
+			});
+			for (const o of Object.values(job.outputs)) this.node({
+				id: sym.jobOutput(u, job.id, o.name),
+				kind: "job-output",
+				label: `jobs.${job.id}.outputs.${o.name}`,
+				unit: u,
+				loc: o.loc
+			});
+			for (const e of Object.values(job.env)) this.node({
+				id: sym.env(u, job.id, e.name),
+				kind: "env",
+				label: `env.${e.name}`,
+				unit: u,
+				loc: e.loc
+			});
+			for (const d of job.matrix?.dims ?? []) this.node({
+				id: sym.matrix(u, job.id, d.name),
+				kind: "matrix",
+				label: `matrix.${d.name}`,
+				unit: u,
+				loc: d.loc
+			});
+			for (const inc of job.matrix?.include ?? []) for (const [k, loc] of Object.entries(inc.keyLocs)) this.node({
+				id: sym.matrix(u, job.id, k),
+				kind: "matrix",
+				label: `matrix.${k}`,
+				unit: u,
+				loc
+			});
+			if (job.uses) {
+				const callee = this.calleeOf(job);
+				if (callee) {
+					this.callSites.push({
+						caller: wf,
+						job,
+						callee
+					});
+					this.edge({
+						from: jid,
+						to: callee.path,
+						kind: "calls",
+						loc: job.uses.loc
+					});
+					for (const o of Object.values(callee.call?.outputs ?? {})) {
+						const jo = this.node({
+							id: sym.jobOutput(u, job.id, o.name),
+							kind: "job-output",
+							label: `jobs.${job.id}.outputs.${o.name}`,
+							unit: u,
+							loc: job.loc
+						});
+						this.edge({
+							from: sym.output(callee.path, o.name),
+							to: jo,
+							kind: "flows",
+							loc: o.loc
+						});
+					}
+					if (job.secretsInherit) this.edge({
+						from: jid,
+						to: callee.path,
+						kind: "inherits",
+						...job.secretsLoc ? { loc: job.secretsLoc } : {}
+					});
+				} else if (job.uses.kind === "remote-workflow") {
+					const r = this.node({
+						id: sym.remote(job.uses.raw),
+						kind: "remote",
+						label: job.uses.raw
+					});
+					this.edge({
+						from: jid,
+						to: r,
+						kind: "calls",
+						loc: job.uses.loc
+					});
+				}
+			}
+			for (const step of job.steps) this.indexStep(wf, job, step);
+		}
+	}
+	indexStep(unit, job, step) {
+		const action = this.actionOf(step);
+		if (!action) return;
+		this.actionUses.push({
+			unit,
+			...job ? { job } : {},
+			step,
+			action
+		});
+		if (step.uses) {
+			const from = job ? sym.job(unit.path, job.id) : unit.path;
+			this.edge({
+				from,
+				to: action.path,
+				kind: "uses",
+				loc: step.uses.loc
+			});
+		}
+		if (step.id) for (const o of Object.values(action.outputs)) {
+			const so = this.node({
+				id: sym.stepOutput(unit.path, job?.id, step.id, o.name),
+				kind: "step-output",
+				label: `steps.${step.id}.outputs.${o.name}`,
+				unit: unit.path,
+				loc: step.idLoc ?? step.loc
+			});
+			this.edge({
+				from: sym.output(action.path, o.name),
+				to: so,
+				kind: "flows",
+				loc: o.loc
+			});
+		}
+	}
+	indexAction(a) {
+		const u = a.path;
+		this.node({
+			id: u,
+			kind: "action",
+			label: a.name ?? u,
+			unit: u
+		});
+		for (const i of Object.values(a.inputs)) this.node({
+			id: sym.input(u, i.name),
+			kind: "input",
+			label: `inputs.${i.name}`,
+			unit: u,
+			loc: i.loc
+		});
+		for (const o of Object.values(a.outputs)) this.node({
+			id: sym.output(u, o.name),
+			kind: "output",
+			label: `outputs.${o.name}`,
+			unit: u,
+			loc: o.loc
+		});
+		for (const step of a.steps) this.indexStep(a, void 0, step);
+	}
+	/** Which symbol does the site's value define? (e.g. `with: { foo: ... }` on a reusable call defines the callee's `inputs.foo`). */
+	sinkOf(unit, site) {
+		const key = site.key;
+		if (key === void 0) return void 0;
+		switch (site.field) {
+			case "job.with":
+			case "job.secrets": {
+				const job = unit.kind === "workflow" && site.job ? unit.jobs[site.job] : void 0;
+				const callee = job && this.calleeOf(job);
+				if (!callee) return void 0;
+				const decls = site.field === "job.with" ? callee.call?.inputs : callee.call?.secrets;
+				const name = (decls && lookup(decls, key)?.name) ?? key;
+				return site.field === "job.with" ? sym.input(callee.path, name) : sym.secret(callee.path, name);
+			}
+			case "step.with": {
+				const step = this.stepOf(unit, site);
+				const action = step && this.actionOf(step);
+				if (!action) return void 0;
+				return sym.input(action.path, lookup(action.inputs, key)?.name ?? key);
+			}
+			case "job.output": return site.job ? sym.jobOutput(unit.path, site.job, key) : void 0;
+			case "workflow.output":
+			case "action.output": return sym.output(unit.path, key);
+			case "workflow.env": return sym.env(unit.path, void 0, key);
+			case "job.env": return site.job ? sym.env(unit.path, site.job, key) : void 0;
+			default: return;
+		}
+	}
+	stepOf(unit, site) {
+		if (site.step === void 0) return void 0;
+		if (unit.kind === "action") return unit.steps[site.step];
+		return site.job ? unit.jobs[site.job]?.steps[site.step] : void 0;
+	}
+	/**
+	* Resolves a reference inside `site` to the symbol it reads, or `undefined` for runtime-only contexts. Property names
+	* are compared ignoring case, as GitHub looks them up (`github.Event.Inputs.x`, `needs.build.Outputs.y`).
+	*/
+	resolveRef(unit, site, ref) {
+		if (ref.context === "github") return this.resolveEventInput(unit, site, ref.path);
+		const [a] = ref.path;
+		if (computed(a)) return void 0;
+		switch (ref.context) {
+			case "inputs": return sym.input(unit.path, this.canonicalInput(unit, a));
+			case "secrets": return resolveSecret(unit, a);
+			case "vars": return sym.var(a);
+			case "matrix": return site.job ? sym.matrix(unit.path, site.job, a) : void 0;
+			case "env": return this.resolveEnv(unit, site, a);
+			default: return this.resolveOutput(unit, site, ref);
+		}
+	}
+	/**
+	* `github.event.inputs.<name>`: this workflow's own input only when it is dispatched directly, so only an input it
+	* declares under `workflow_dispatch`. GitHub accepts no other input in a dispatch, and a workflow that is called gets
+	* its caller's event, so a name only `workflow_call` declares, or none does, reads no input: it is the context. So
+	* does any name in an input's default or a `workflow_call` output's value, which GitHub evaluates only when the
+	* workflow is called (see `eventInputsAt`).
+	*/
+	resolveEventInput(unit, site, [a, b, c]) {
+		if (!isKey(a, "event") || !isKey(b, "inputs") || computed(c)) return void 0;
+		const input = lookup(eventInputsAt(unit, site), c);
+		return input && sym.input(unit.path, this.canonicalInput(unit, input.name));
+	}
+	/**
+	* An env variable of the job or the workflow. A step's own `env:` shadows the job's and the workflow's in the rest of
+	* the step (it is not a symbol); its values are evaluated before it applies, so they read the outer env.
+	*/
+	resolveEnv(unit, site, name) {
+		const step = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
+		if (step && lookup(step.env, name)) return void 0;
+		const job = jobAt(unit, site);
+		const own = job && lookup(job.env, name);
+		if (own) return sym.env(unit.path, job.id, own.name);
+		const top = unit.kind === "workflow" ? lookup(unit.env, name) : void 0;
+		return top && sym.env(unit.path, void 0, top.name);
+	}
+	/**
+	* `needs.<job>.outputs.<name>`, `jobs.<job>.outputs.<name>` (in a workflow output only) and
+	* `steps.<id>.outputs.<name>`: the one output they name.
+	*/
+	resolveOutput(unit, site, ref) {
+		const [a, b, c] = ref.path;
+		if (!isKey(b, "outputs") || computed(c)) return void 0;
+		switch (ref.context) {
+			case "steps": return this.resolveStepOutput(unit, site, a, c);
+			case "needs": return this.resolveJobOutput(unit, a, c);
+			case "jobs": return site.field === "workflow.output" ? this.resolveJobOutput(unit, a, c) : void 0;
+			default: return;
+		}
+	}
+	/** The output `name` of the job `id` of a workflow. */
+	resolveJobOutput(unit, id, name) {
+		const job = unit.kind === "workflow" ? lookup(unit.jobs, id) : void 0;
+		return job && sym.jobOutput(unit.path, job.id, this.canonicalJobOutput(job, name));
+	}
+	/** The output `name` of the step `id` of the site's job, or of an action. */
+	resolveStepOutput(unit, site, id, name) {
+		const step = stepsAt(unit, site).find((s) => s.id?.toLowerCase() === id.toLowerCase());
+		if (!step?.id) return void 0;
+		const action = this.actionOf(step);
+		const output = (action && lookup(action.outputs, name)?.name) ?? name;
+		return sym.stepOutput(unit.path, stepJob(unit, site), step.id, output);
+	}
+	/**
+	* Every symbol a reference reads. Besides the single symbol of `resolveRef`, a reference that stops at a whole object
+	* or indexes it with a computed key reads each member it may stand for:
+	* - outputs: `toJSON(needs.build.outputs)`, `needs.build`, `steps.meta.outputs`, `needs.build.outputs[matrix.key]`,
+	*   `toJSON(needs)` (every job the reading job needs) or `toJSON(steps)` (every step that ran before the reading
+	*   step);
+	* - `toJSON(inputs)` or `inputs[inputs.which]`: every input the unit declares;
+	* - in a workflow that can be dispatched, whose `github.event` holds its `workflow_dispatch` inputs when it is
+	*   dispatched: `toJSON(github)`, `github[x]`, `github.*`, `toJSON(github.event)`, `github.event[x]`,
+	*   `github.event.*`, `toJSON(github.event.inputs)` or `github.event.inputs[x]` read every one of them, and
+	*   `github[x].inputs.<name>` the one it names (see `eventMemberRefs`). A workflow that is called gets its caller's
+	*   `github`, and an action its job's, so there they read none of the unit's inputs, nor in an input's default or a
+	*   `workflow_call` output's value, which GitHub evaluates only when the workflow is called;
+	* - `toJSON(matrix)` or `matrix[inputs.key]`: every key of the job's matrix;
+	* - `toJSON(secrets)` or `secrets[inputs.name]`: every secret the workflow holds that the files name (see
+	*   `secretNames`): those it declares under `workflow_call`, reads by name or is passed by name, `GITHUB_TOKEN`, and
+	*   those callers that hand it every secret through `secrets: inherit` name;
+	* - `toJSON(env)` or `env[inputs.name]`: every env variable in scope, a step's own read through their values.
+	*
+	* Variables are set in the repository's settings, not in its files, so a whole `vars` reads nothing. See
+	* `Usage.whole`.
+	*/
+	readsOf(unit, site, ref) {
+		return this.reads(unit, site, ref).map((r) => r.symbol);
+	}
+	reads(unit, site, ref) {
+		const one = this.resolveRef(unit, site, ref);
+		if (one) return [{
+			symbol: one,
+			whole: false
+		}];
+		const members = this.memberRefs(unit, site, ref);
+		if (members) return wholeReads(members.flatMap((m) => this.memberReads(unit, site, m)));
+		if (ref.context === "env") return this.ownEnvReads(unit, site, ref);
+		return this.outputReads(unit, site, ref).map((symbol) => ({
+			symbol,
+			whole: true
+		}));
+	}
+	/** What a reference naming one member of a whole object reads: the member, or what a step's own env value reads. */
+	memberReads(unit, site, member) {
+		const one = this.resolveRef(unit, site, member);
+		return one ? [{
+			symbol: one,
+			whole: true,
+			member
+		}] : this.reads(unit, site, member);
+	}
+	/** A step's own env value is not a symbol: a read of it reads what the value reads (from the outer env). */
+	ownEnvReads(unit, site, ref) {
+		const [a] = ref.path;
+		if (computed(a) || site.field === "step.env") return [];
+		const own = lookup(this.stepOf(unit, site)?.env ?? {}, a)?.site;
+		return own ? own.segments.flatMap((s) => s.refs.flatMap((r) => this.reads(unit, own, r))) : [];
+	}
+	/**
+	* A whole object or computed key of `inputs`, `matrix`, `secrets`, `env` or `github` as one reference per member,
+	* each naming it (`toJSON(inputs)` → `inputs.a`, `inputs.b`, …; see `eventMemberRefs` for `github`), so each
+	* resolves the way the name written out does. `undefined` for any other reference.
+	*/
+	memberRefs(unit, site, ref) {
+		if (ref.context === "github") return eventMemberRefs(unit, site, ref);
+		if (!computed(ref.path[0])) return void 0;
+		return this.memberNames(unit, site, ref.context)?.map((name) => ({
+			...ref,
+			path: [name, ...ref.path.slice(1)]
+		}));
+	}
+	/** The names a whole `inputs`, `matrix`, `secrets` or `env` holds at `site`; `undefined` for other contexts. */
+	memberNames(unit, site, context) {
+		switch (context) {
+			case "inputs": return inputNames(unit);
+			case "matrix": return matrixKeys(jobAt(unit, site));
+			case "secrets": return unit.kind === "workflow" ? this.secretNames(unit) : [];
+			case "env": return this.envNames(unit, site);
+			default: return;
+		}
+	}
+	/**
+	* The secrets a whole `secrets` holds in a workflow that the files name: each spelling of one it names itself (see
+	* `ownSecretNames`), then those it gets through `secrets: inherit` that the callers handing them on name themselves
+	* (see `inheritedSecretNames`), and `GITHUB_TOKEN`, which GitHub gives every workflow. GitHub looks secret names up
+	* ignoring case, so those last two leave out a secret named before them in another case. A secret that neither the
+	* workflow nor those callers name, such as a repository secret no file names or one only another of their callees
+	* reads, has no symbol here.
+	*/
+	secretNames(wf) {
+		const known = this.heldSecrets.get(wf.path);
+		if (known) return known;
+		const names = addNames(this.ownSecretNames(wf), [...this.inheritedSecretNames(wf), GITHUB_TOKEN]);
+		this.heldSecrets.set(wf.path, names);
+		return names;
+	}
+	/**
+	* The secrets a workflow names itself, as written: those it declares under `workflow_call`, reads by name, or is
+	* passed by name under a caller's `secrets:`. GitHub rejects a secret passed to a workflow that does not declare it,
+	* but the files still send its value there (see `sinkOf`). A spelling of a declared secret is that secret (see
+	* `resolveSecret`); any other is a symbol of its own, as for a reference.
+	*/
+	ownSecretNames(wf) {
+		const passed = this.callersOf(wf.path).flatMap((c) => declaredNames(c.job.secrets));
+		return [
+			...declaredNames(wf.call?.secrets),
+			...namedSecrets(wf),
+			...passed
+		];
+	}
+	/**
+	* The secrets a workflow gets through `secrets: inherit` that the callers handing them on name themselves (see
+	* `ownSecretNames`): each workflow that hands it every secret, directly or through others that do. Not
+	* `GITHUB_TOKEN`, which `secrets: inherit` does not pass.
+	*/
+	inheritedSecretNames(wf) {
+		return this.inheritingCallers(wf).flatMap((caller) => this.ownSecretNames(caller)).filter((name) => !BUILTIN_SECRETS.has(name.toLowerCase()));
+	}
+	/** The workflows that hand `wf` every secret through `secrets: inherit`, and those that hand them every secret, … */
+	inheritingCallers(wf) {
+		const found = /* @__PURE__ */ new Map([[wf.path, wf]]);
+		for (const unit of found.values()) for (const c of this.callersOf(unit.path)) if (c.job.secretsInherit && !found.has(c.caller.path)) found.set(c.caller.path, c.caller);
+		found.delete(wf.path);
+		return [...found.values()];
+	}
+	/** The env variables in scope at a site: the step's own, the job's and the workflow's. */
+	envNames(unit, site) {
+		const step = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
+		const workflow = unit.kind === "workflow" ? unit.env : void 0;
+		return [
+			...declaredNames(step?.env),
+			...declaredNames(jobAt(unit, site)?.env),
+			...declaredNames(workflow)
+		];
+	}
+	/**
+	* The job and step outputs a `needs`, `jobs` or `steps` reference reads when it names no single output: every output
+	* of a whole object or computed key, or the one named output of every job or step a computed key may stand for.
+	*/
+	outputReads(unit, site, ref) {
+		switch (ref.context) {
+			case "needs":
+			case "jobs":
+				if (unit.kind !== "workflow") return [];
+				if (ref.context === "jobs" && site.field !== "workflow.output") return [];
+				return this.jobsRead(unit, site, ref).flatMap((job) => pickOutputs(this.jobOutputNames(job), ref.path).map((n) => sym.jobOutput(unit.path, job.id, n)));
+			case "steps": return this.stepOutputReads(unit, site, ref);
+			default: return [];
+		}
+	}
+	/** The jobs a `needs` or `jobs` reference reads: the one it names, or each one a computed key may stand for. */
+	jobsRead(wf, site, ref) {
+		const [a] = ref.path;
+		if (!computed(a)) {
+			const job = lookup(wf.jobs, a);
+			return job ? [job] : [];
+		}
+		if (ref.context === "jobs") return Object.values(wf.jobs);
+		return ((site.job ? wf.jobs[site.job] : void 0)?.needs ?? []).flatMap((n) => lookup(wf.jobs, n.id) ?? []);
+	}
+	/**
+	* The step outputs a `steps` reference reads: of the step it names, or of each step a computed key may stand for
+	* (from a step, only the steps before it), every output or the one it names (see `pickOutputs`).
+	*/
+	stepOutputReads(unit, site, ref) {
+		const [a] = ref.path;
+		const steps = stepsAt(unit, site);
+		const named = computed(a) ? steps.filter((s) => site.step === void 0 || s.index < site.step) : steps.filter((s) => s.id?.toLowerCase() === a.toLowerCase());
+		const job = stepJob(unit, site);
+		return named.flatMap((step) => {
+			const action = this.actionOf(step);
+			if (!step.id || !action) return [];
+			return pickOutputs(Object.keys(action.outputs), ref.path).map((n) => sym.stepOutput(unit.path, job, step.id, n));
+		});
+	}
+	/** Output names of a job: its own `outputs:`, or the callee's workflow outputs for a reusable call. */
+	jobOutputNames(job) {
+		const callee = this.calleeOf(job);
+		return Object.keys(callee ? callee.call?.outputs ?? {} : job.outputs);
+	}
+	canonicalInput(unit, name) {
+		if (unit.kind === "action") return lookup(unit.inputs, name)?.name ?? name;
+		return lookup(unit.call?.inputs ?? {}, name)?.name ?? lookup(unit.dispatch?.inputs ?? {}, name)?.name ?? name;
+	}
+	canonicalJobOutput(job, name) {
+		const own = lookup(job.outputs, name);
+		if (own) return own.name;
+		const callee = this.calleeOf(job);
+		return (callee?.call && lookup(callee.call.outputs, name)?.name) ?? name;
+	}
+	define(symbol, def) {
+		const list = this.definitions.get(symbol);
+		if (list) list.push(def);
+		else this.definitions.set(symbol, [def]);
+	}
+	/** Env variables and outputs written as plain values (an expression is a site, indexed by `indexSite`). */
+	indexLiterals(unit) {
+		const u = unit.path;
+		if (unit.kind === "action") {
+			this.literalOutputs(unit, unit.outputs, (name) => sym.output(u, name));
+			return;
+		}
+		this.literalEnv(unit, void 0, unit.env);
+		this.literalOutputs(unit, unit.call?.outputs ?? {}, (name) => sym.output(u, name));
+		for (const job of Object.values(unit.jobs)) {
+			this.literalEnv(unit, job.id, job.env);
+			this.literalOutputs(unit, job.outputs, (name) => sym.jobOutput(u, job.id, name), job.id);
+		}
+	}
+	literalEnv(unit, job, env) {
+		for (const e of Object.values(env)) if (!e.site) this.define(sym.env(unit.path, job, e.name), {
+			unit,
+			job,
+			value: e.value,
+			loc: e.valueLoc
+		});
+	}
+	literalOutputs(unit, outputs, symbolOf, job) {
+		for (const o of Object.values(outputs)) if (!o.site && o.value !== void 0) this.define(symbolOf(o.name), {
+			unit,
+			job,
+			value: o.value,
+			loc: o.loc
+		});
+	}
+	indexSite(unit, site) {
+		this.sitesById.set(site.id, site);
+		const sink = this.sinkOf(unit, site);
+		if (sink) this.define(sink, {
+			unit,
+			site
+		});
+		for (const seg of site.segments) for (const ref of seg.refs) for (const read of this.reads(unit, site, ref)) this.addUsage(unit, site, ref, read, sink);
+	}
+	addUsage(unit, site, ref, read, sink) {
+		const { symbol } = read;
+		if (!this.nodes.has(symbol)) {
+			const named = read.member ?? ref;
+			this.node({
+				id: symbol,
+				kind: named.context === "vars" ? "var" : "unresolved",
+				label: `${named.context}.${named.path.join(".")}`,
+				unit: unit.path
+			});
+		}
+		const usage = {
+			symbol,
+			site,
+			ref,
+			...sink ? { sink } : {},
+			...read.whole ? { whole: true } : {}
+		};
+		const list = this.usages.get(symbol);
+		if (list) list.push(usage);
+		else this.usages.set(symbol, [usage]);
+		if (sink) this.edge({
+			from: symbol,
+			to: sink,
+			kind: "flows",
+			loc: ref.loc,
+			siteId: site.id
+		});
+	}
+};
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/source.ts
 var SourceFile = class {
 	path;
 	text;
@@ -26060,7 +26084,7 @@ function formatLoc(loc) {
 	return `${loc.file}:${loc.line}:${loc.column}`;
 }
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/logger.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/logger.ts
 const ORDER = {
 	silent: 0,
 	error: 1,
@@ -26125,7 +26149,7 @@ function createLogger(options = {}) {
 }
 const silentLogger = createLogger({ level: "silent" });
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/posix.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/posix.ts
 /**
 * POSIX path arithmetic for repository-relative paths, with Node's `path.posix` semantics for what the parser and the
 * loader need, so the browser entry carries no `node:path`.
@@ -26163,7 +26187,7 @@ function posixBasename(path) {
 	return i === -1 ? trimmed : trimmed.slice(i + 1);
 }
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/parse.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/parse.ts
 function createParseContext(repository) {
 	let id = 0;
 	return {
@@ -33716,7 +33740,7 @@ function parseAction(entryFile, contextOrTrace) {
 	};
 }
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/schema.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/schema.ts
 /** Root definitions @actions/workflow-parser validates against (the strict ones its editor tooling uses). */
 const SCHEMA_ROOT = {
 	workflow: "workflow-root-strict",
@@ -33812,7 +33836,7 @@ function mappingsAt(schema, root, path) {
 	return [...out];
 }
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/validate.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/validate.ts
 /**
 * The parser's errors for an invalid `${{ }}`: those of the expression lexer and parser (@actions/expressions, which
 * the sites' own expression parse uses too), and the template reader's for a `${{` without `}}`.
@@ -34208,7 +34232,7 @@ function mergeFix(key, where, whole) {
 	return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/script-writes.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/script-writes.ts
 const escapes$1 = (path) => path === ".." || path.startsWith("../");
 /** `cmd` or `sudo -E cmd`: words that run the next word as the command. */
 const PREFIXES = /* @__PURE__ */ new Set([
@@ -34506,7 +34530,7 @@ function writesTo(write, path, isRepoDir) {
 	return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/workspace.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/workspace.ts
 /**
 * Before any checkout, assume this repository at the workspace root: most jobs check it out there, possibly through
 * a step flowpact cannot see into, and a `./` action is unusable otherwise.
@@ -34881,7 +34905,7 @@ function workspaceResolver(opts) {
 	};
 }
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/project.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/project.ts
 const WORKFLOWS_DIR = ".github/workflows";
 const ACTIONS_DIR = ".github/actions";
 const toPosix = (p) => p.split("\\").join("/");
@@ -35076,22 +35100,44 @@ function loadProjectWith(opts, host) {
 }
 /**
 * The external units of remote interfaces (see `LoadProjectOptions.remotes`), by `remoteKey` of their reference; none
-* without remotes.
+* without remotes. Each is parsed as its own repository's, so its `./` and same-repository `uses:` name that
+* repository's files, never the caller's; site ids stay unique across the project.
 */
 function externalUnits(remotes = [], ctx) {
 	if (!remotes.length) return {};
 	const out = /* @__PURE__ */ new Map();
 	for (const r of remotes) {
-		const unit = r.kind === "workflow" ? parseWorkflowFile(r.ref, r.text, ctx) : parseActionFile(r.ref, r.ref, r.text, ctx);
+		const origin = originOf(r);
+		const own = {
+			nextSiteId: ctx.nextSiteId,
+			...origin ? { repository: `${origin.owner}/${origin.repo}` } : {}
+		};
+		const unit = r.kind === "workflow" ? parseWorkflowFile(r.ref, r.text, own) : parseActionFile(r.ref, r.ref, r.text, own);
 		out.set(remoteKey(r.ref), {
 			...unit,
-			external: true
+			external: true,
+			...origin ? { origin } : {}
 		});
 	}
 	return { external: out };
 }
+/** `owner/repo[/path]@ref` of a remote reference; undefined when it does not name a repository and a ref. */
+function originOf(r) {
+	const value = r.ref.trim();
+	const at = value.indexOf("@");
+	const [owner = "", repo = "", ...path] = (at < 0 ? value : value.slice(0, at)).split("/");
+	const ref = at < 0 ? "" : value.slice(at + 1);
+	if (!owner || !repo || !ref) return void 0;
+	return {
+		owner,
+		repo,
+		path: path.join("/"),
+		ref,
+		...r.sha ? { sha: r.sha } : {}
+	};
+}
 //#endregion
-//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+cf55cd8373233ba8a821439697c996db4188ecc3/node_modules/@ciatlas/core/src/node-fs.ts
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/node-fs.ts
 /** The project loader on a Node.js host: the working tree on disk, and `owner/repo` from the environment or git. */
 /** How many links one path may go through (the OS's ELOOP limit), and how many linked directories one walk expands. */
 const MAX_LINKS = 40;
