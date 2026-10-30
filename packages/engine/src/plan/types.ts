@@ -1,3 +1,4 @@
+import type { RemoteFailureKind, RemoteKind, RemotePinned } from '../remotes/lock';
 import type { Scenario } from '../scenario';
 
 /**
@@ -246,7 +247,29 @@ export interface WorkflowPlan {
   outputs: Record<string, Value<string>>;
   /** The leg that calls this workflow, for a called instance. */
   caller?: NodeId;
+  /** A called remote workflow: the ref it is shown by (`path` too) and the commit it was read at. */
+  remote?: { ref: string; sha: string };
   depth: number;
+}
+
+/**
+ * A remote workflow or action the plan uses. `simulated`: read and planned from its file; `invalid`: read, but its file
+ * does not parse, so it is planned as not read; `failed`: the host could not read it (`failure` says why); `limit`: past
+ * a host's cap; `not-fetched`: the host did not try. Every workflow the plan calls is listed; an action only when the
+ * host read it or tried to.
+ */
+export interface RemoteUse {
+  /** The `uses:` as written; a `./` or `$/` inside a remote as `owner/repo/path@<the ref its parent is shown at>`. */
+  ref: string;
+  kind: RemoteKind;
+  state: 'simulated' | 'invalid' | 'failed' | 'limit' | 'not-fetched';
+  /** The legs that call it, or the steps that use it (planned under `detail: 'legs'` too, though not listed there). */
+  at: NodeId[];
+  sha?: string;
+  pinned?: RemotePinned;
+  /** The host that served it, when not the run's. */
+  host?: string;
+  failure?: RemoteFailureKind;
 }
 
 /**
@@ -333,5 +356,7 @@ export interface RunPlan {
   unknowns: Unknown[];
   mocks: AppliedMock[];
   models: { id: string; version: string }[];
+  /** Sorted by ref; absent when the plan uses no remote workflow and no remote action a host read. */
+  remotes?: RemoteUse[];
   diagnostics: Diagnostic[];
 }

@@ -260,6 +260,14 @@ function boundaryText(ctx: AssertContext, u: Unexpanded): string {
       return `'${u.path}' skips`;
     case 'not-loaded':
       return `the workflow '${u.path}' calls is not in the project`;
+    case 'not-fetched':
+      return `the remote workflow '${u.path}' calls (${u.remote!.ref}) is not fetched`;
+    case 'fetch-failed':
+      return `the remote workflow '${u.path}' calls (${u.remote!.ref}) could not be read (${u.remote!.failure})`;
+    case 'limit':
+      return `the remote workflow '${u.path}' calls (${u.remote!.ref}) is past the limit on remote files read`;
+    case 'invalid':
+      return `the remote workflow '${u.path}' calls (${u.remote!.ref}) does not parse`;
     default:
       return 'the plan has no steps (detail: legs)';
   }

@@ -10,7 +10,7 @@ import {
   sym,
   type WorkflowDecl,
 } from '@ciatlas/core';
-import type { LoadedProject } from './planner';
+import type { LoadedProject } from './remotes/state';
 
 /**
  * Where a job's or a step's id is written, for a rename. A job's id is its key, an entry of each `needs:` naming it,

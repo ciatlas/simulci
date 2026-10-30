@@ -15,7 +15,7 @@ export type RemoteKind = 'workflow' | 'action';
 /** How remotes are read: not at all, at the lockfile's commits only (the default), or also resolving unpinned refs. */
 export type RemotesMode = 'off' | 'lock' | 'fetch';
 
-/** Why a remote could not be read. The engine's copy of core's `RemoteFailureKind`, until simulci moves to core v2.6. */
+/** Why a remote could not be read: core's `RemoteFailureKind`, as a list the lockfile's schema reads (a test keeps them alike). */
 export const REMOTE_FAILURE_KINDS = [
   'unreachable',
   'timeout',

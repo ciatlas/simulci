@@ -1,15 +1,18 @@
+import type { RemoteFailureKind as CoreRemoteFailureKind } from '@ciatlas/core';
 import {
   type LockUseInput,
   lockIssues,
   type PinContext,
   parseRemotesLock,
   pinFor,
+  REMOTE_FAILURE_KINDS,
+  type RemoteFailureKind,
   type RemoteKind,
   type RemoteRefInput,
   type RemotesLock,
   serializeRemotesLock,
 } from '@simulci/engine';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
@@ -392,5 +395,12 @@ describe('lockIssues', () => {
         message: `${key} pins ${SHA_C}, but its entry records ${SHA_D}`,
       },
     ]);
+  });
+});
+
+describe('the failure kinds', () => {
+  it('are core’s', () => {
+    expectTypeOf<RemoteFailureKind>().toEqualTypeOf<CoreRemoteFailureKind>();
+    expect(new Set(REMOTE_FAILURE_KINDS).size).toBe(REMOTE_FAILURE_KINDS.length);
   });
 });
