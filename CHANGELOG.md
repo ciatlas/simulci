@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.5.0](https://github.com/ciatlas/simulci/compare/v0.4.0...v0.5.0) (2026-10-30)
+
+
+### Features
+
+* **cli:** remotes in plan and test, and simulci remotes ([#111](https://github.com/ciatlas/simulci/issues/111)) ([b354994](https://github.com/ciatlas/simulci/commit/b3549941d53553c827a3764e054aba7b8cbae61f))
+* **docs:** the editorial landing ([#100](https://github.com/ciatlas/simulci/issues/100)) ([42759b4](https://github.com/ciatlas/simulci/commit/42759b430a06bf8be24a675af8d8ad0013fa7830))
+* **engine:** check mocks against remote action interfaces ([#105](https://github.com/ciatlas/simulci/issues/105)) ([194e64e](https://github.com/ciatlas/simulci/commit/194e64ee291df3429536d58c25a1d164f2b368b8))
+* **engine:** name reusable workflow calls in uses mocks ([#97](https://github.com/ciatlas/simulci/issues/97)) ([a91795e](https://github.com/ciatlas/simulci/commit/a91795e4e3e68f4b5bde2f8b7144401971978278))
+* **engine:** simulate remote reusable workflows ([6364a0f](https://github.com/ciatlas/simulci/commit/6364a0f41a31adcf8dd1053471b8d88de9ea25fe))
+* **engine:** the remotes lockfile ([#98](https://github.com/ciatlas/simulci/issues/98)) ([9faedac](https://github.com/ciatlas/simulci/commit/9faedacc1d0da130bf1bcc00ff0937c3c6788622))
+* **node:** fetch, pin and cache remote sources ([#107](https://github.com/ciatlas/simulci/issues/107)) ([0cd81fd](https://github.com/ciatlas/simulci/commit/0cd81fd93b4cebe6376e8ec0f37e95e24eb174a4))
+* **web:** a GitHub source that survives a reload ([17c1f64](https://github.com/ciatlas/simulci/commit/17c1f647fd7f78552e2c71063551ba4a52a4ae02))
+* **web:** a way back to a closed panel ([#99](https://github.com/ciatlas/simulci/issues/99)) ([a2939fb](https://github.com/ciatlas/simulci/commit/a2939fba313a6c8682893ed8ad38280d8d25a7a5))
+* **web:** fetch remote workflows and actions for the plan ([#109](https://github.com/ciatlas/simulci/issues/109)) ([1472abf](https://github.com/ciatlas/simulci/commit/1472abf42a4a53c75fd4f969aeeeb53c29af4027))
+* **web:** learn the host's mode from /config.js ([#87](https://github.com/ciatlas/simulci/issues/87)) ([a21df54](https://github.com/ciatlas/simulci/commit/a21df54a5010b44f12315643f66e669821081013))
+* **web:** open a public GitHub repository ([17c1f64](https://github.com/ciatlas/simulci/commit/17c1f647fd7f78552e2c71063551ba4a52a4ae02))
+* **web:** run route tests in a Tests tab ([#92](https://github.com/ciatlas/simulci/issues/92)) ([8be745f](https://github.com/ciatlas/simulci/commit/8be745f2e2d303cd87567e9632b9b403ef3e5f89))
+
+
+### Bug Fixes
+
+* **document:** keep the comments of an emptied collection that are not its item's ([#96](https://github.com/ciatlas/simulci/issues/96)) ([d41bed5](https://github.com/ciatlas/simulci/commit/d41bed5aa4724d7f61338f3f257f891ef11dc805))
+* **engine:** a fail-fast-cancelled leg's steps finish or not as its race says ([#93](https://github.com/ciatlas/simulci/issues/93)) ([c2251ea](https://github.com/ciatlas/simulci/commit/c2251ea9cbe00bc983a1b25c89cab6e2fa34e900))
+* **engine:** read an unloaded reusable workflow's outputs as unknown ([#90](https://github.com/ciatlas/simulci/issues/90)) ([b124a66](https://github.com/ciatlas/simulci/commit/b124a66146418e8238527cf1c499533ba3139537))
+* **web:** no CSP error when typing over a selection ([#88](https://github.com/ciatlas/simulci/issues/88)) ([2b2f166](https://github.com/ciatlas/simulci/commit/2b2f166e2ca71ad68c33cadcf779b6737d56d045))
+
 ## [0.4.0](https://github.com/ciatlas/simulci/compare/v0.3.0...v0.4.0) (2026-10-29)
 
 
