@@ -100,7 +100,7 @@ export interface ClientOptions {
 }
 
 /** The page's own `fetch`, called unbound (a page's `window.fetch` throws when called as a method of another object). */
-const pageFetch: FetchLike = (url, init) => globalThis.fetch(url, init);
+export const pageFetch: FetchLike = (url, init) => globalThis.fetch(url, init);
 
 export function createRepoClient({ apiUrl, fetch = pageFetch, signal, kept }: ClientOptions): RepoClient {
   let requests = 0;

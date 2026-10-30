@@ -24,8 +24,10 @@ export function EmptyState() {
         </h2>
         <p className="mt-1 text-muted">
           Give simulci a repository's workflow files; it tells you which jobs and steps run for an event, and
-          why. Your files never leave this page
-          {github && '; a public GitHub repository is read from api.github.com'}.
+          why. Your files stay in this page
+          {github
+            ? '. Opening a GitHub repository, or fetching the workflows and actions your files call, reads api.github.com, and nothing else.'
+            : '.'}
         </p>
       </div>
       {reopen && (

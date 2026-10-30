@@ -15,7 +15,7 @@ import {
   type Source,
 } from '../state/store';
 import { type Dropped, filesFromDrop } from './drop';
-import { filterFiles, isProjectFile, snapshotFiles } from './filter';
+import { filterFiles, isProjectFile, readOnlyFiles } from './filter';
 import { canPickFolder, canReadFolder, pickFolder, readFolder, requestFolder } from './folder';
 import { leftOut, overLimit, type Skipped, type Walked } from './limits';
 import { checkPaste, type PasteCheck } from './paste';
@@ -205,7 +205,7 @@ export function createSources({
 
   /** Why files were refused goes to the store's error, unless the caller says it (`refuse`). */
   const accept = (
-    { files, meta, skipped = [], base, readonly = snapshotFiles(files) }: Brought,
+    { files, meta, skipped = [], base, readonly = readOnlyFiles(files) }: Brought,
     source: Source,
     where: string,
     refuse: (message: string) => void = fail,
@@ -576,6 +576,8 @@ export function createSources({
       if (!(await mayReplace(`Opening ${repoName(source)}`))) return { ok: false, requests };
       let refused: string | undefined;
       const where = `${repoName(source)} at ${shortSha(source.sha)}`;
+      // Opening a repository was the network action, and the dialog said what it reads: its remotes come too (§ 5.3).
+      actions.consentRemotes();
       if (!accept(walked, source, where, (m) => (refused = m)))
         return { ok: false, message: refused, requests };
       return { ok: true, requests, ...(read.rate === undefined ? {} : { rate: read.rate }) };

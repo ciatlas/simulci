@@ -1,13 +1,15 @@
+import { loadGitHub } from '../github/load';
 import { isProjectFile, isTestFile } from '../input/filter';
 import { debounce, scheduler, type Timers } from '../lib/debounce';
 import { hashFiles } from '../lib/hash';
 import { markEdit } from '../lib/marks';
 import { defaultBranchOf, defaultScenario, scenarioFor } from '../scenario/defaults';
-import type { SessionState, SessionStore, TestRun } from '../state/store';
+import { remotePool, type SessionState, type SessionStore, type TestRun } from '../state/store';
 import { type CaseFormat, type CaseOutcome, requestCase } from '../testcase/case';
 import type { EngineClient, SimulateResult, TestResult } from '../worker/client';
 import type { LoadedResponse, Outline, RefsResponse } from '../worker/protocol';
 import { heldSentence, newlyBroken } from './hold';
+import { createRemoteReads, type ReadRemotes } from './remotes';
 
 /**
  * The store's one bridge to the engine: new files are loaded and simulated at once; a changed scenario, assume
@@ -23,7 +25,9 @@ import { heldSentence, newlyBroken } from './hold';
  * the files version it was simulated from, so a plan of older texts never passes for one of the texts on screen.
  * The engine reads busy while any request of the session is unanswered, and failed once the client gives up on it.
  * After each plan settles, the route tests run once per project and "As CI" setting (synthesis § 5.1), in the
- * background: busy does not count them, and a plan never waits for them.
+ * background: busy does not count them, and a plan never waits for them. Each load carries the remotes read so far
+ * and answers what the project still needs of them; once the author lets the page read them, they are read
+ * (`engine/remotes.ts`) and the same texts load again with them, level by level (M4 synthesis § 5.3).
  */
 
 export interface SessionOptions {
@@ -37,10 +41,17 @@ export interface SessionOptions {
    * the worker longer to load and simulate waits that long instead, so the worker is never more than one load behind.
    */
   typingMs?: number;
+  /** Reads the remotes a load needs; by default from GitHub, through the `github-*` chunk. */
+  readRemotes?: ReadRemotes;
 }
 
-/** Why a load goes out: a new source, an edit of its texts, or the same texts again after a stale reply. */
-type Cause = 'source' | 'edit' | 'reload';
+/**
+ * Why a load goes out: a new source, an edit of its texts, the same texts again after a stale reply, or with the
+ * remotes read since (M4 synthesis § 5.3).
+ */
+type Cause = 'source' | 'edit' | 'reload' | 'remotes';
+
+const fromGitHub: ReadRemotes = (needs, signal) => loadGitHub().then((m) => m.readRemotes(needs, { signal }));
 
 /**
  * What a load sends: the project's files, which the engine loads, and the route tests apart, which the worker checks
@@ -59,6 +70,15 @@ function loadBody(
   const tests = pick(isTestFile);
   const files = pick(isProjectFile);
   return Object.keys(tests).length ? { files, tests, ...extra } : { files, ...extra };
+}
+
+/** The loads that put the project out of sight until they answer: an edit's, or the remotes', leave it on screen. */
+const SHOWS_LOADING: ReadonlySet<Cause> = new Set(['source', 'reload']);
+
+/** The newest texts, and every remote read: a restarted worker replays the last load, and loses none of them. */
+function loadRequest({ files, remotes }: SessionState): Parameters<EngineClient['load']>[0] {
+  const pool = remotePool(remotes);
+  return { ...loadBody(files.byPath, files.readonly), ...(pool ? { remotes: pool } : {}) };
 }
 
 /**
@@ -91,6 +111,10 @@ const textsMoved = (s: SessionState, prev: SessionState): boolean =>
 /** The texts changed by keys typed in the pane, which load after a pause; anything else loads at once. */
 const typedInPane = (s: SessionState, prev: SessionState): boolean =>
   s.files.version !== prev.files.version && s.edit.lastOrigin === 'pane';
+
+/** Remotes were read (or found unreadable) since: the same texts load again with them, for the next level. */
+const remotesRead = (s: SessionState, prev: SessionState): boolean =>
+  s.remotes.byKey !== prev.remotes.byKey || s.remotes.failed !== prev.remotes.failed;
 
 const inputsChanged = (s: SessionState, prev: SessionState): boolean =>
   s.scenario !== prev.scenario || s.assume !== prev.assume || s.detail !== prev.detail;
@@ -166,6 +190,7 @@ export function createSession({
   timers,
   debounceMs = 100,
   typingMs = 150,
+  readRemotes = fromGitHub,
 }: SessionOptions): Session {
   const actions = store.getState();
   let request = 0;
@@ -216,11 +241,11 @@ export function createSession({
    * until the new one replaces it: busy says it.
    */
   const load = async (cause: Cause): Promise<void> => {
-    const { version, epoch, byPath, readonly } = store.getState().files;
-    if (cause !== 'edit') actions.projectLoading();
+    const { version, epoch } = store.getState().files;
+    if (SHOWS_LOADING.has(cause)) actions.projectLoading();
     busy(1);
     try {
-      const r = await client.load(loadBody(byPath, readonly));
+      const r = await client.load(loadRequest(store.getState()));
       if (store.getState().files.version !== version) return;
       if (r.type === 'loaded') {
         if (cause === 'edit') markEdit('edit:loaded', version);
@@ -254,6 +279,7 @@ export function createSession({
       return;
     }
     actions.projectReady(r.project, r.outline, version);
+    actions.setRemotesNeeded(r.remotesNeeded ?? []);
     shown = r.outline;
     loaded = epoch;
     // New files under the page's own scenario get the defaults for them, and a selection made in other files goes.
@@ -354,6 +380,9 @@ export function createSession({
   const simulate = debounce(() => void run(), debounceMs, timers);
   // An edit that removed every project file loads too: the worker must not keep simulating the files that went.
   const edits = scheduler(() => void load('edit'), timers);
+  // Remotes read since the last load: the same texts again, at once; reads that land together load once.
+  const withRemotes = scheduler(() => void load('remotes'), timers);
+  const stopReads = createRemoteReads({ store, read: readRemotes, ...(timers ? { timers } : {}) });
 
   /** What the worker spent simulating the plan of `version`, once it is on screen. */
   const planMs = (version: number): number => {
@@ -365,6 +394,7 @@ export function createSession({
     if (s.files.epoch !== prev.files.epoch) {
       // A new source: what was waiting belongs to the files that were there.
       edits.cancel();
+      withRemotes.cancel();
       simulate.cancel();
       if (hasProjectFiles(s)) void load('source');
       return;
@@ -375,6 +405,9 @@ export function createSession({
     }
     if (!shownProject(s)) return;
     if (inputsChanged(s, prev) || untriggeredMoved(s, prev)) simulate.call();
+  });
+  const unwatchRemotes = store.subscribe((s, prev) => {
+    if (remotesRead(s, prev) && hasProjectFiles(s)) withRemotes.schedule(0);
   });
   // "As CI" runs the tests of the project shown again, as the switch now says.
   const unwatchCi = store.subscribe((s, prev) => {
@@ -420,8 +453,11 @@ export function createSession({
     dispose: () => {
       unsubscribe();
       unwatchCi();
+      unwatchRemotes();
+      stopReads();
       simulate.cancel();
       edits.cancel();
+      withRemotes.cancel();
     },
   };
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { type FakeGitHub, fakeGitHub, OWNER, REPO, WORKFLOWS } from './github-api';
+import { type FakeGitHub, fakeGitHub, isElsewhere, OWNER, REPO, remotesRead, WORKFLOWS } from './github-api';
 
 /**
  * A public GitHub repository (M4 synthesis § 5.5, § 5.7, § 5.12), in a real browser under the deployment's CSP, with
@@ -52,6 +52,8 @@ async function openFromEmptyState(page: Page, github: FakeGitHub): Promise<void>
   await dialog(page).getByRole('button', { name: 'Open' }).click();
   await expect(dialog(page)).toHaveCount(0);
   await expect(nav(page)).toContainText(`${NAME} @ main (${short(github)}) · ${FILES} files`);
+  // Opening it lets the page read the actions its workflows call too (M4 synthesis § 5.3): after these, nothing more.
+  await remotesRead(page, github);
 }
 
 /** Edit mode on, the pane on ci.yml, `# mine` typed at its top. */
@@ -71,8 +73,9 @@ test('opens a public repository from the empty state, at its default branch, for
 }) => {
   const github = await fakeGitHub(page);
   await openFromEmptyState(page, github);
-  // The dialog's GET /repos is the only one: Open reads the commit, two trees and each file it keeps.
-  expect(github.requests).toEqual([
+  // The dialog's GET /repos is the only one: Open reads the commit, two trees and each file it keeps, then the actions
+  // the workflows call, from their own repositories.
+  expect(github.requests.filter((r) => !isElsewhere(r))).toEqual([
     `/repos/${NAME}`,
     `/repos/${NAME}/commits/main`,
     `/repos/${NAME}/git/trees/${github.commit()}`,
@@ -154,7 +157,7 @@ test('Fetch again costs one request when main has not moved, and takes in a move
   await expect(said(page, `${NAME}: now at ${short(github)}`)).toBeVisible();
   await expect(nav(page)).toContainText(`${NAME} @ main (${short(github)})`);
   // The commit, the two trees, and the one file that changed: the rest come from the cache.
-  expect(github.requests.length - before).toBe(4);
+  expect(github.requests.slice(before).filter((r) => !isElsewhere(r)).length).toBe(4);
   await expect(nav(page)).toContainText('1 unsaved');
   await page.getByRole('tab', { name: 'release.yml' }).click();
   await expect(editor(page)).toContainText('# moved on GitHub');
@@ -198,8 +201,8 @@ test('a link to a repository offers it and asks GitHub nothing before the click'
   await offer.getByRole('button', { name: `Open ${NAME}` }).click();
   await expect(nav(page)).toContainText(`${NAME} @ main (${short(github)}) · ${FILES} files`);
   await expect(offer).toHaveCount(0);
-  // Without the dialog, Open asks for the repository itself too.
-  expect(github.requests.length).toBe(4 + FILES);
+  // Without the dialog, Open asks for the repository itself too; then the actions its workflows call.
+  expect(github.requests.filter((r) => !isElsewhere(r)).length).toBe(4 + FILES);
   await expect(page).toHaveURL(/[?&]event=push(&|$)/);
 });
 

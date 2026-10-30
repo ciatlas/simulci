@@ -1,4 +1,4 @@
-import { filterFiles, isReadFile, mayHoldProjectFiles, snapshotFiles } from './filter';
+import { filterFiles, isReadFile, mayHoldProjectFiles, readOnlyFiles } from './filter';
 import { LIMITS, readWithin, type Walked } from './limits';
 
 /**
@@ -63,7 +63,7 @@ export async function readFolder(root: FileSystemDirectoryHandle): Promise<Walke
   const walked: Walked = { files: {}, meta: {}, skipped: [] };
   await walk(root, '', 0, walked);
   return {
-    files: { ...filterFiles(walked.files), ...snapshotFiles(walked.files) },
+    files: { ...filterFiles(walked.files), ...readOnlyFiles(walked.files) },
     meta: walked.meta,
     skipped: walked.skipped,
   };

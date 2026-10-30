@@ -6,3 +6,4 @@ export { fetchAgain, readRepository } from './read';
 export type { ReadOptions, RepoRead } from './read';
 export type { RepoTarget } from './repo';
 export { OpenRepo } from './OpenRepo';
+export { readRemotes } from './remotes';

@@ -1,13 +1,22 @@
 /* oxlint-disable no-restricted-imports -- the worker is where the engine runs */
+import { ACTIONS_LOCK_FILE, remoteKey } from '@ciatlas/core';
 import {
   AssumeListSchema,
   caseFromPlan,
   fileFromPlan,
   GivenSchema,
   type LoadedProject,
+  type LoadOptions,
   loadFiles,
   mergeScenario,
   parseScenario,
+  type NeededRemote,
+  REMOTES_LOCK_FILE,
+  type RemoteFailureInput,
+  type RemoteInputs,
+  type RemoteSourceInput,
+  type RemotesMode,
+  remotesNeeded,
   renderMermaid,
   renderText,
   ScenarioError,
@@ -26,6 +35,8 @@ import type {
   LoadRequest,
   Outline,
   RefsRequest,
+  RemoteNeed,
+  RemotePool,
   SimulateRequest,
   TestRequest,
 } from './protocol';
@@ -37,13 +48,17 @@ import { runRouteTests, withTests } from './tests';
  * gave, for the next load (worker/cache.ts).
  */
 export interface WorkerState {
-  /** With the route tests and the snapshots of its load, which the `test` request runs. */
+  /**
+   * With the route tests and the snapshots of its load, which the `test` request runs, on the project as `simulci test`
+   * loads it (`tested`: the plan's project when the load read no remote).
+   */
   project?: {
     version: number;
     loaded: LoadedProject;
     outline: Outline;
     tests: Record<string, string>;
     readonly: Record<string, string>;
+    tested: () => LoadedProject;
   };
   nextVersion: number;
   cache: FileCache;
@@ -88,7 +103,7 @@ export function handle(
 function load(state: WorkerState, request: LoadRequest): { state: WorkerState; response: EngineResponse } {
   const started = performance.now();
   try {
-    const loaded = loadFiles(request.files, request.repository);
+    const { loaded, needed } = withRemotes(request, request.remotes ? 'fetch' : 'off');
     const cache = carry(state.cache, request.files);
     prefill(loaded, cache);
     // The route tests are only checked: the project, the plan and the cache never hold them.
@@ -102,6 +117,7 @@ function load(state: WorkerState, request: LoadRequest): { state: WorkerState; r
           outline,
           tests: request.tests ?? {},
           readonly: request.readonly ?? {},
+          tested: request.remotes ? once(() => withRemotes(request, 'lock').loaded) : () => loaded,
         },
         nextVersion: version + 1,
         cache,
@@ -112,12 +128,93 @@ function load(state: WorkerState, request: LoadRequest): { state: WorkerState; r
         project: version,
         outline,
         ms: performance.now() - started,
+        ...(needed.length ? { remotesNeeded: needed } : {}),
       },
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return { state, response: { id: request.id, type: 'error', kind: 'load', message } };
   }
+}
+
+/** How deep remotes are followed (the engine's `remotesNeeded` stops there too), and how many are read at most. */
+const MAX_DEPTH = 10;
+const MAX_UNITS = 200;
+
+/**
+ * The project of a load with the remotes the page read (M4 synthesis § 5.3), as `simulci test` reads them in `mode`:
+ * level by level, each ref the project needs is taken from the pool when it holds that ref at the commit its pin
+ * names (an unpinned ref: as resolved live), so the worker pins exactly as the CLI does, whatever the pool holds besides
+ * (another source's pins, a ref an edit since dropped). Past 200 remotes the rest are past the cap. What the project
+ * still needs comes back, for the page to read; without a pool nothing is read and the load is as it always was. The
+ * lock files ride in `readonly`; the engine reads them among the files, and the Outline lists only the project's.
+ */
+function withRemotes(
+  request: LoadRequest,
+  mode: RemotesMode,
+): { loaded: LoadedProject; needed: RemoteNeed[] } {
+  const files = { ...request.files, ...locksOf(request.readonly) };
+  const opts: LoadOptions = request.repository === undefined ? {} : { repository: request.repository };
+  const pool = request.remotes;
+  const answer = (loaded: LoadedProject, needed: NeededRemote[]) => ({
+    loaded: { ...loaded, files: request.files },
+    needed: needed.map((n) => withDigest(loaded, n)),
+  });
+  if (!pool) {
+    const loaded = loadFiles(files, opts);
+    return answer(loaded, remotesNeeded(loaded, 'fetch'));
+  }
+  const taken: Required<RemoteInputs> = { sources: [], failed: [], limited: [] };
+  for (let level = 0; ; level++) {
+    const loaded = loadFiles(files, { ...opts, remotes: taken, mode });
+    const needed = remotesNeeded(loaded, mode);
+    const found = level <= MAX_DEPTH ? needed.flatMap((n) => inPool(pool, n)) : [];
+    if (!found.length) return answer(loaded, needed);
+    for (const f of found) take(taken, f);
+  }
+}
+
+/** A remote into what a load reads: a file, while fewer than 200 are, else past the cap; or why it was not read. */
+function take(taken: Required<RemoteInputs>, found: RemoteSourceInput | RemoteFailureInput): void {
+  if (!('text' in found)) taken.failed.push(found);
+  else if (taken.sources.length < MAX_UNITS) taken.sources.push(found);
+  else taken.limited.push(found.ref);
+}
+
+/** The lock files among the read-only files: the engine reads them from the project's files. */
+const locksOf = (readonly: Record<string, string> = {}): Record<string, string> =>
+  Object.fromEntries(
+    [REMOTES_LOCK_FILE, ACTIONS_LOCK_FILE].flatMap((p) =>
+      readonly[p] === undefined ? [] : [[p, readonly[p]]],
+    ),
+  );
+
+/** What the pool holds of a need: its file read at the need's commit (or resolved live), or why it could not be. */
+function inPool(pool: RemotePool, need: RemoteNeed): (RemoteSourceInput | RemoteFailureInput)[] {
+  const key = remoteKey(need.ref);
+  const sha = need.pin?.sha;
+  const source = pool.sources.findLast(
+    (s) => remoteKey(s.ref) === key && (sha === undefined ? s.pinned === 'resolved' : s.sha === sha),
+  );
+  if (source) return [{ ...source, ref: need.ref, pinned: need.pin?.pinned ?? 'resolved' }];
+  const failure = pool.failed.findLast((f) => remoteKey(f.ref) === key && f.sha === sha);
+  if (!failure) return [];
+  const { sha: _, ...rest } = failure;
+  return [{ ...rest, ref: need.ref }];
+}
+
+/** A need with the digest its lockfile entry records, when that entry is for the commit to read. */
+function withDigest(loaded: LoadedProject, need: RemoteNeed): RemoteNeed {
+  const lock = loaded.remotes.lock?.remotes ?? {};
+  const key = Object.keys(lock).find((k) => remoteKey(k) === remoteKey(need.ref));
+  const entry = key === undefined ? undefined : lock[key];
+  return entry?.digest && need.pin?.sha === entry.sha ? { ...need, digest: entry.digest } : need;
+}
+
+/** `make`'s value, made the first time it is asked for. */
+function once<T>(make: () => T): () => T {
+  let made: { value: T } | undefined;
+  return () => (made ??= { value: make() }).value;
 }
 
 /** The scenario and the mocks checked before the engine sees them, so a mistake comes back with its path. */
@@ -185,7 +282,8 @@ function plan(project: NonNullable<WorkerState['project']>, request: SimulateReq
 
 function test(project: NonNullable<WorkerState['project']>, request: TestRequest): EngineResponse {
   const started = performance.now();
-  return { ...runRouteTests(project, request, project.version), ms: performance.now() - started };
+  const tested = { ...project, loaded: project.tested() };
+  return { ...runRouteTests(tested, request, project.version), ms: performance.now() - started };
 }
 
 function refs(project: NonNullable<WorkerState['project']>, request: RefsRequest): EngineResponse {

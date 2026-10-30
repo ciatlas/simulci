@@ -4,9 +4,12 @@ import type {
   GeneratedCase,
   Json,
   Loc,
+  NeededRemote,
   NodeId,
   Reference,
   ReferenceTarget,
+  RemoteFailureInput,
+  RemoteSourceInput,
   RunPlan,
   ScenarioInput,
   UnknownId,
@@ -33,11 +36,34 @@ export interface LoadRequest {
   tests?: Record<string, string>;
   /**
    * Read-only files by path, never loaded into the project either: the route tests' snapshots (`*.snap.json`), which a
-   * `test` request checks the plans against.
+   * `test` request checks the plans against, and the lock files (`remotes.lock.yml`, `actions.lock`), which pin the
+   * remotes.
    */
   readonly?: Record<string, string>;
   repository?: string;
+  /**
+   * Every remote file the page read so far, each at its commit (M4 synthesis § 5.3), sent with every load so a
+   * restarted worker's replay keeps them: the worker takes those the project's pins ask for, as `simulci test` would
+   * read them. Present once the author let the page fetch (a GitHub source, or the chip's click); without it nothing
+   * is read and the remotes stay not fetched, as before.
+   */
+  remotes?: RemotePool;
 }
+
+/** What the page read of remotes: content-addressed by ref and commit, so it holds across loads and sources. */
+export interface RemotePool {
+  sources: RemoteSourceInput[];
+  failed: RemotePoolFailure[];
+}
+
+/** A remote the page could not read: at the commit it asked for, or, without `sha`, resolving its ref failed. */
+export type RemotePoolFailure = RemoteFailureInput & { sha?: string };
+
+/**
+ * A remote the project needs and the pool lacks, as the engine's `remotesNeeded` names it in `fetch` mode: its pin
+ * (none: resolve the ref live) and, when the lockfile records that commit, the digest the file must have.
+ */
+export type RemoteNeed = NeededRemote & { digest?: string };
 
 export interface SimulateRequest {
   id: number;
@@ -124,6 +150,8 @@ export interface LoadedResponse {
   project: number;
   outline: Outline;
   ms: number;
+  /** The remotes to read next, sorted by ref; absent when none. */
+  remotesNeeded?: RemoteNeed[];
 }
 
 export interface PlanResponse {
@@ -359,7 +387,11 @@ export function isEngineRequest(data: unknown): data is EngineRequest {
   const d = data as Record<string, unknown>;
   if (typeof d.id !== 'number' || typeof d.type !== 'string' || !TYPES.has(d.type)) return false;
   if (d.type === 'load')
-    return isObject(d.files) && [d.tests, d.readonly].every((m) => m === undefined || isObject(m));
+    return (
+      isObject(d.files) &&
+      [d.tests, d.readonly].every((m) => m === undefined || isObject(m)) &&
+      (d.remotes === undefined || isPool(d.remotes))
+    );
   if (d.type === 'refs') return typeof d.project === 'number' && isTarget(d.target);
   if (d.type === 'test')
     return (
@@ -374,6 +406,9 @@ export function isEngineRequest(data: unknown): data is EngineRequest {
     Array.isArray(d.assume)
   );
 }
+
+const isPool = (p: unknown): boolean =>
+  isObject(p) && ['sources', 'failed'].every((k) => Array.isArray((p as Record<string, unknown>)[k]));
 
 /** A job (`workflow`, `job`) or a step (and `step`) to find the references of, all strings. */
 function isTarget(target: unknown): target is ReferenceTarget {

@@ -6,6 +6,7 @@ import { summarize } from '../plan/summary';
 import type { Change } from '../state/store';
 import { ChangeDetails } from './ChangeDetails';
 import { useSession } from './providers';
+import { RemotesChip } from './RemotesChip';
 import { SaveLine } from './SaveButton';
 
 /**
@@ -73,6 +74,7 @@ export function StatusBar() {
           </Suspense>
         )}
       </div>
+      <RemotesChip />
       <SaveLine />
     </footer>
   );
