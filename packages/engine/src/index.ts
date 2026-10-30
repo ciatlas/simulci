@@ -8,6 +8,7 @@ export * from './plan/index';
 export * from './planner';
 export * from './refs';
 export * from './remotes/lock';
+export * from './remotes/state';
 export * from './render/index';
 export * from './scenario';
 export * from './schemas';
