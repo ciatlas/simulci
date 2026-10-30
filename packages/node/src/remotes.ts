@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   ACTIONS_LOCK_FILE,
@@ -62,8 +62,6 @@ export interface RemotesHost {
   fetch?: FetchLike;
   /** Content-addressed; by default a new in-memory cache per call. Pass one to share it across calls. */
   cache?: RemoteSourceCache;
-  /** The checkout's `owner/repo`, as `loadFiles` takes it, so its own full refs read the same way. */
-  repository?: string;
   signal?: AbortSignal;
   /** Retries and unreadable lockfiles, as lines; never a token. */
   log?: (line: string) => void;
@@ -106,7 +104,7 @@ export async function loadRemotes(
 ): Promise<RemotesLoad> {
   if (host.mode === 'off') return { remotes: { sources: [] }, lockErrors: [], issues: [] };
   const read = readRemotesLockAt(root);
-  const lockErrors = read.error === undefined ? [] : [read.error];
+  const lockErrors = read.error === undefined ? [] : [printable(read.error)];
   for (const error of lockErrors) host.log?.(`not used: ${error}`);
   const run = await closureOf(root, files, host, { mode: host.mode, lock: read.lock, lockErrors });
   return {
@@ -146,17 +144,13 @@ export async function updateRemotesLock(
   host: Omit<RemotesHost, 'mode'>,
 ): Promise<LockUpdate> {
   const old = readRemotesLockAt(root);
-  if (old.error !== undefined) host.log?.(`replaced: ${old.error}`);
+  if (old.error !== undefined) host.log?.(`replaced: ${printable(old.error)}`);
   const run = await closureOf(root, files, { ...host, mode: 'fetch' }, { mode: 'fetch', lockErrors: [] });
   const inputs = inputsOf(run, host);
   const lock = lockOf(run, old.lock, inputs);
   const text = serializeRemotesLock(lock);
-  const path = join(root, REMOTES_LOCK_FILE);
-  const written = readOr(path) !== text;
-  if (written) {
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, text);
-  }
+  const written = readOr(join(root, REMOTES_LOCK_FILE)) !== text;
+  if (written) writeLockfile(root, text);
   return {
     lock,
     text,
@@ -171,14 +165,47 @@ export async function updateRemotesLock(
   };
 }
 
+/**
+ * Writes the lockfile without following a link: a checkout may commit `.github`, `.github/simulci` or the lockfile as a
+ * symbolic link to a file outside it, which a plain write would overwrite. The text goes to a new file beside it, then
+ * replaces the lockfile's own directory entry.
+ */
+function writeLockfile(root: string, text: string): void {
+  const path = join(root, REMOTES_LOCK_FILE);
+  const parts = REMOTES_LOCK_FILE.split('/');
+  for (let i = 1; i <= parts.length; i++) {
+    const at = join(root, ...parts.slice(0, i));
+    if (lstatOrUndefined(at)?.isSymbolicLink())
+      throw new Error(`${parts.slice(0, i).join('/')} is a symbolic link: not writing ${REMOTES_LOCK_FILE}`);
+  }
+  mkdirSync(dirname(path), { recursive: true });
+  const temp = `${path}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temp, text, { flag: 'wx' });
+    renameSync(temp, path);
+  } finally {
+    rmSync(temp, { force: true });
+  }
+}
+
+function lstatOrUndefined(path: string) {
+  try {
+    return lstatSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Access
 // ---------------------------------------------------------------------------
 
 /** A GitHub API and its token, and where the token came from (never the token itself, in any message). */
 export interface GitHubAccess extends GitHubApi {
-  tokenFrom?: 'option' | 'GH_TOKEN' | 'GITHUB_TOKEN' | 'gh';
+  tokenFrom?: 'option' | TokenVariable | 'gh';
 }
+
+type TokenVariable = 'GH_TOKEN' | 'GITHUB_TOKEN' | 'GH_ENTERPRISE_TOKEN' | 'GITHUB_ENTERPRISE_TOKEN';
 
 /** The GitHub CLI's token for a host, or undefined; never printed. */
 function ghAuthToken(host: string): string | undefined {
@@ -187,8 +214,24 @@ function ghAuthToken(host: string): string | undefined {
 }
 
 /**
- * The API at `apiUrl` and its token: `given`, else `GH_TOKEN`, else `GITHUB_TOKEN`, else the GitHub CLI's for the
- * API's host (`gh auth token --hostname`), else none (public repositories only).
+ * The variables whose token may go to `apiUrl`, as the GitHub CLI reads them: `GH_TOKEN` and `GITHUB_TOKEN` are
+ * github.com's (and GHE.com's); a GitHub Enterprise Server's are `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`,
+ * and `GITHUB_TOKEN` too when `apiUrl` is the runner's own `GITHUB_API_URL`. So a github.com token never goes to
+ * another host because a URL option named one.
+ */
+function tokenVariables(env: NodeJS.ProcessEnv, apiUrl: string): TokenVariable[] {
+  const host = apiHost(apiUrl);
+  if (host === 'github.com' || host.endsWith('.ghe.com')) return ['GH_TOKEN', 'GITHUB_TOKEN'];
+  const runner = env.GITHUB_API_URL !== undefined && sameUrl(env.GITHUB_API_URL, apiUrl);
+  return ['GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', ...(runner ? (['GITHUB_TOKEN'] as const) : [])];
+}
+
+const sameUrl = (a: string, b: string) => a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+
+/**
+ * The API at `apiUrl` and its token: `given`, else the first set of the variables for its host (`GH_TOKEN`, then
+ * `GITHUB_TOKEN`, for github.com; see `tokenVariables`), else the GitHub CLI's for the API's host (`gh auth token
+ * --hostname`), else none (public repositories only).
  */
 export function githubAccess(
   env: NodeJS.ProcessEnv,
@@ -197,7 +240,7 @@ export function githubAccess(
   gh: (host: string) => string | undefined = ghAuthToken,
 ): GitHubAccess {
   if (given) return { apiUrl, token: given, tokenFrom: 'option' };
-  for (const name of ['GH_TOKEN', 'GITHUB_TOKEN'] as const) {
+  for (const name of tokenVariables(env, apiUrl)) {
     const token = env[name];
     if (token) return { apiUrl, token, tokenFrom: name };
   }
@@ -240,7 +283,9 @@ async function closureOf(
   pinning: Pinning,
 ): Promise<Run> {
   const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => compare(a, b)));
-  const { index } = loadFiles(sorted, host.repository);
+  // Without the repository: GitHub runs a full ref to the checkout's own repository (`me/app/x.yml@main`) at that ref,
+  // not the working copy (lab R10), and core reads it as a remote only when it does not know the repository.
+  const { index } = loadFiles(sorted);
   const actionsLock = readActionsLockOf(root, files, pinning.lockErrors, host.log);
   const run: Run = {
     project: index.project,
@@ -357,14 +402,20 @@ function readActionsLockOf(
   errors: string[],
   log: RemotesHost['log'],
 ): ActionsLock | undefined {
-  const text = Object.hasOwn(files, ACTIONS_LOCK_FILE)
-    ? files[ACTIONS_LOCK_FILE]
-    : readOr(join(root, ACTIONS_LOCK_FILE));
-  if (text === undefined) return undefined;
+  let text = files[ACTIONS_LOCK_FILE];
+  try {
+    text ??= readFileSync(join(root, ACTIONS_LOCK_FILE), 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    return unused(`${ACTIONS_LOCK_FILE}: ${(e as Error).message}`, errors, log);
+  }
   const read = readActionsLock(text);
-  if (read.lock) return read.lock;
-  errors.push(`${ACTIONS_LOCK_FILE}: ${read.error}`);
-  log?.(`not used: ${ACTIONS_LOCK_FILE}: ${read.error}`);
+  return read.lock ?? unused(`${ACTIONS_LOCK_FILE}: ${read.error}`, errors, log);
+}
+
+function unused(error: string, errors: string[], log: RemotesHost['log']): undefined {
+  errors.push(printable(error));
+  log?.(`not used: ${printable(error)}`);
   return undefined;
 }
 
@@ -465,11 +516,33 @@ function lockOf(run: Run, old: RemotesLock | undefined, inputs: RemoteInputs): R
   const unreadable: NonNullable<RemotesLock['unreadable']> = {};
   for (const f of inputs.failed ?? []) {
     const key = keyFor(old, f.ref);
+    if (remotes[key]) continue;
     const kept = entryOf(old, f.ref);
-    if (!kept) unreadable[key] = f.failure;
-    else if (!remotes[key]) remotes[key] = kept;
+    if (kept) keepWithCalls(old!, remotes, key, kept);
+    else unreadable[key] = f.failure;
   }
   return { version: 1, remotes, ...(Object.keys(unreadable).length ? { unreadable } : {}) };
+}
+
+/**
+ * An old entry kept because its ref could not be read, and the old entries it reaches through `calls` that this update
+ * did not read either: nothing below a ref that failed was read, so a passing failure must not drop them.
+ */
+function keepWithCalls(
+  old: RemotesLock,
+  remotes: Record<string, RemotesLockEntry>,
+  key: string,
+  kept: RemotesLockEntry,
+): void {
+  remotes[key] = kept;
+  const queue = [...(kept.calls ?? [])];
+  for (let ref = queue.shift(); ref !== undefined; ref = queue.shift()) {
+    const below = entryOf(old, ref);
+    const at = keyFor(old, ref);
+    if (!below || remotes[at]) continue;
+    remotes[at] = below;
+    queue.push(...(below.calls ?? []));
+  }
 }
 
 /** The old lockfile's spelling of a ref's key, so an update that moves nothing keeps every key. */
@@ -522,5 +595,21 @@ const tokensOf = (host: Pick<RemotesHost, 'api' | 'fallback'>): string[] =>
   [host.api.token, host.fallback?.token].filter((t): t is string => !!t);
 
 /** Text without any of the run's tokens. */
+/** Text without any of the run's tokens (the longest first, so one inside another leaves nothing), on one line. */
 const redact = (text: string, tokens: string[]): string =>
-  tokens.reduce((out, token) => out.split(token).join('***'), text);
+  printable(
+    [...tokens].sort((a, b) => b.length - a.length).reduce((out, t) => out.split(t).join('***'), text),
+  );
+
+/**
+ * Control characters escaped: refs, lockfile keys and server text reach messages and log lines, where a newline could
+ * start a workflow command (`::error::`) in the Action, and an escape sequence could rewrite a terminal.
+ */
+function printable(text: string): string {
+  let out = '';
+  for (const c of text) {
+    const code = c.charCodeAt(0);
+    out += code < 0x20 || (code >= 0x7f && code < 0xa0) ? `\\u${code.toString(16).padStart(4, '0')}` : c;
+  }
+  return out;
+}

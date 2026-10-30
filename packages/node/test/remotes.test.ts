@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { type FetchLike, type GitHubApi, memoryRemoteCache } from '@ciatlas/core';
@@ -173,6 +173,19 @@ describe('loadRemotes: where each commit comes from (§ 2.5)', () => {
     expect(gh.calls.some((c) => c.url.includes('/commits/'))).toBe(false);
   });
 
+  it('a full ref to the checkout’s own repository is a remote, read at its ref (lab R10)', async () => {
+    const self = `octo/ship/.github/workflows/build.yml@${SHA_A}`;
+    const files = { '.github/workflows/ci.yml': `on: push\njobs:\n  c:\n    uses: ${self}\n` };
+    const load = await loadRemotes(
+      checkout(),
+      { ...files, '.github/workflows/build.yml': 'not this one' },
+      host('lock', fakeGitHub(REPOS()).fetch),
+    );
+    expect(load.remotes.sources.map((s) => [s.ref, s.pinned, s.text])).toEqual([
+      [self, 'sha-ref', BUILD_YML],
+    ]);
+  });
+
   it('row 4: lock reads the lockfile commits and resolves nothing', async () => {
     const gh = fakeGitHub(REPOS());
     const root = checkout({ [REMOTES_LOCK_FILE]: FULL_LOCK() });
@@ -279,6 +292,12 @@ describe('loadRemotes: where each commit comes from (§ 2.5)', () => {
       host('lock', gh.fetch),
     );
     expect(broken.lockErrors).toEqual([expect.stringMatching(/^\.github\/workflows\/actions\.lock: /)]);
+    const dir = checkout();
+    mkdirSync(join(dir, '.github/workflows/actions.lock'), { recursive: true });
+    const unreadable = await loadRemotes(dir, FILES, host('lock', gh.fetch));
+    expect(unreadable.lockErrors).toEqual([
+      expect.stringMatching(/^\.github\/workflows\/actions\.lock: EISDIR/),
+    ]);
   });
 
   it('a lockfile that cannot be read is named, and the checkout reads as if it had none', async () => {
@@ -427,7 +446,9 @@ describe('loadRemotes: the token (failure mode 7)', () => {
   it('goes only to the API, and into no message or log line', async () => {
     const gh = fakeGitHub(REPOS());
     const lines: string[] = [];
+    const every: Call[] = [];
     const leaky: FetchLike = async (url, init) => {
+      every.push({ url, headers: init.headers });
       if (url.includes('/octo/act/')) throw new Error(`refused ${init.headers.authorization}`);
       if (url.includes('/commits/')) return new Response('', { status: 503, statusText: `down ${TOKEN}` });
       return gh.fetch(url, init);
@@ -443,7 +464,22 @@ describe('loadRemotes: the token (failure mode 7)', () => {
       [ACT, 'unreachable'],
       [DEPLOY, 'server'],
     ]);
-    expect(authorizations(gh.calls).every(([origin]) => origin === 'https://api.github.com')).toBe(true);
+    expect(unique(authorizations(every))).toEqual([['https://api.github.com', `Bearer ${TOKEN}`]]);
+  });
+
+  it('a lockfile key cannot start a line of its own in a message or the log', async () => {
+    const lines: string[] = [];
+    const key = JSON.stringify('a/b@v1\n::error file=x::pwned\u001b[2J');
+    const root = checkout({ [REMOTES_LOCK_FILE]: `version: 1\nremotes:\n  ${key}: { sha: x }\n` });
+    const load = await loadRemotes(
+      root,
+      FILES,
+      host('lock', fakeGitHub(REPOS()).fetch, { log: (l) => lines.push(l) }),
+    );
+    for (const text of [...load.lockErrors, ...lines]) {
+      expect(text).toContain('a/b@v1\\u000a::error');
+      expect(text.includes('\n') || text.includes('\u001b')).toBe(false);
+    }
   });
 });
 
@@ -523,12 +559,17 @@ describe('updateRemotesLock', () => {
     expect(gh2.calls.some((c) => c.url.includes('/commits/'))).toBe(false);
   });
 
-  it('moves a ref that moved, keeps an entry it cannot read, and lists one it never could', async () => {
+  it('moves a ref that moved, keeps an entry it cannot read with what it calls, and lists one it never could', async () => {
+    const buildAtB = `octo/ship/.github/workflows/build.yml@${SHA_B}`;
     const root = checkout({
       [REMOTES_LOCK_FILE]: lockText({
         'Octo/Act@v1': entry(SHA_D, 'action', 'action.yml', `${ACTION_YML}# v2\n`),
         'gone/away@v1': entry(SHA_D, 'action', 'action.yml', ACTION_YML),
-        [DEPLOY]: entry(SHA_B, 'workflow', '.github/workflows/deploy.yml', DEPLOY_YML),
+        [DEPLOY]: {
+          ...entry(SHA_B, 'workflow', '.github/workflows/deploy.yml', DEPLOY_YML),
+          calls: [buildAtB],
+        },
+        [buildAtB]: entry(SHA_B, 'workflow', '.github/workflows/build.yml', BUILD_YML),
       }),
     });
     const repos = REPOS();
@@ -538,8 +579,36 @@ describe('updateRemotesLock', () => {
     expect(update.changed).toEqual([{ ref: 'Octo/Act@v1', from: SHA_D, to: SHA_C }]);
     expect(update.removed).toEqual(['gone/away@v1']);
     expect(update.lock.remotes[DEPLOY]?.sha).toBe(SHA_B);
+    // Nothing under the unreadable deploy.yml was read, so what it calls keeps its entry too.
+    expect(update.lock.remotes[buildAtB]?.sha).toBe(SHA_B);
     expect(update.lock.unreadable).toEqual({ 'nobody/there@v1': 'not-found' });
     expect(update.failed.map((f) => f.ref)).toEqual(['nobody/there@v1', DEPLOY]);
+  });
+
+  it('lists a ref as unreadable only when no commit of it was read', async () => {
+    // ci.yml's actions.lock pins octo/act to B, which octo/act lacks; deploy.yml's octo/act@v1 resolves to C.
+    const root = checkout({
+      '.github/workflows/actions.lock': actionsLock({ '.github/workflows/ci.yml': [ACT] }, { [ACT]: SHA_B }),
+    });
+    const update = await updateRemotesLock(root, FILES, { api: API, fetch: fakeGitHub(REPOS()).fetch });
+    expect(update.failed.map((f) => [f.ref, f.failure])).toEqual([[ACT, 'not-found']]);
+    expect(update.lock.remotes[ACT]?.sha).toBe(SHA_C);
+    expect(update.lock.unreadable).toBeUndefined();
+  });
+});
+
+describe('updateRemotesLock: links', () => {
+  it('never writes through a symbolic link', async () => {
+    for (const link of ['.github', '.github/simulci', REMOTES_LOCK_FILE]) {
+      const root = checkout();
+      const outside = checkout({ victim: 'keep me\n' });
+      mkdirSync(dirname(join(root, link)), { recursive: true });
+      symlinkSync(link === REMOTES_LOCK_FILE ? join(outside, 'victim') : outside, join(root, link));
+      await expect(
+        updateRemotesLock(root, FILES, { api: API, fetch: fakeGitHub(REPOS()).fetch }),
+      ).rejects.toThrow(`${link} is a symbolic link: not writing ${REMOTES_LOCK_FILE}`);
+      expect(readFileSync(join(outside, 'victim'), 'utf8')).toBe('keep me\n');
+    }
   });
 });
 
@@ -557,28 +626,61 @@ describe('readRemotesLockAt', () => {
 });
 
 describe('githubAccess', () => {
-  const gh = (token?: string) => (h: string) => (h === 'ghes.example' ? token : undefined);
-  it('takes the option, then GH_TOKEN, then GITHUB_TOKEN, then the GitHub CLI for the API’s host', () => {
-    const env = { GH_TOKEN: 'gh', GITHUB_TOKEN: 'actions' };
-    const ghes = 'https://ghes.example/api/v3';
-    expect(githubAccess(env, ghes, 'given', gh('cli'))).toEqual({
-      apiUrl: ghes,
+  const gh = (token?: string) => (h: string) =>
+    h === 'ghes.example' || h === 'github.com' ? token : undefined;
+  const env = {
+    GH_TOKEN: 'gh',
+    GITHUB_TOKEN: 'actions',
+    GH_ENTERPRISE_TOKEN: 'ghe',
+    GITHUB_ENTERPRISE_TOKEN: 'ge',
+  };
+  const com = 'https://api.github.com';
+  const ghes = 'https://ghes.example/api/v3';
+
+  it('on github.com takes the option, then GH_TOKEN, then GITHUB_TOKEN, then the GitHub CLI', () => {
+    expect(githubAccess(env, com, 'given', gh('cli'))).toEqual({
+      apiUrl: com,
       token: 'given',
       tokenFrom: 'option',
     });
-    expect(githubAccess(env, ghes, undefined, gh('cli'))).toMatchObject({
+    expect(githubAccess(env, com, undefined, gh('cli'))).toEqual({
+      apiUrl: com,
       token: 'gh',
       tokenFrom: 'GH_TOKEN',
     });
-    expect(githubAccess({ GITHUB_TOKEN: 'actions' }, ghes, undefined, gh('cli'))).toMatchObject({
+    expect(githubAccess({ GITHUB_TOKEN: 'actions' }, com, undefined, gh('cli'))).toMatchObject({
       tokenFrom: 'GITHUB_TOKEN',
     });
-    expect(githubAccess({}, ghes, undefined, gh('cli'))).toEqual({
+    expect(githubAccess({ GH_ENTERPRISE_TOKEN: 'ghe' }, com, undefined, gh('cli'))).toMatchObject({
+      tokenFrom: 'gh',
+    });
+    expect(githubAccess({}, com, undefined, gh())).toEqual({ apiUrl: com });
+    expect(githubAccess({ GH_TOKEN: 'gh' }, 'https://api.acme.ghe.com', undefined, gh())).toMatchObject({
+      tokenFrom: 'GH_TOKEN',
+    });
+  });
+
+  it('never sends a github.com token to another host: a GHES takes its own variables, or the runner’s pair', () => {
+    expect(githubAccess(env, ghes, undefined, gh('cli'))).toMatchObject({
+      token: 'ghe',
+      tokenFrom: 'GH_ENTERPRISE_TOKEN',
+    });
+    expect(githubAccess({ GITHUB_ENTERPRISE_TOKEN: 'ge' }, ghes, undefined, gh())).toMatchObject({
+      tokenFrom: 'GITHUB_ENTERPRISE_TOKEN',
+    });
+    expect(githubAccess({ GH_TOKEN: 'gh', GITHUB_TOKEN: 'actions' }, ghes, undefined, gh('cli'))).toEqual({
       apiUrl: ghes,
       token: 'cli',
       tokenFrom: 'gh',
     });
-    expect(githubAccess({}, ghes, undefined, gh())).toEqual({ apiUrl: ghes });
+    expect(githubAccess({ GH_TOKEN: 'gh', GITHUB_TOKEN: 'actions' }, ghes, undefined, gh())).toEqual({
+      apiUrl: ghes,
+    });
+    const runner = { GITHUB_TOKEN: 'actions', GITHUB_API_URL: `${ghes}/` };
+    expect(githubAccess(runner, ghes, undefined, gh())).toMatchObject({
+      token: 'actions',
+      tokenFrom: 'GITHUB_TOKEN',
+    });
   });
 
   it('falls back to github.com only from another host, with GITHUB_COM_TOKEN or none', () => {
