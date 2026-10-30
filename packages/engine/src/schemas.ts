@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RemotesLockSchema } from './remotes/lock';
 import { ScenarioInputSchema } from './scenario';
 import { TestFileSchema } from './test/schema';
 import type { SCHEMA_VERSIONS } from './version';
@@ -19,6 +20,13 @@ export function jsonSchemas(): Partial<Record<keyof typeof SCHEMA_VERSIONS, Reco
       description:
         'One workflow, scenario defaults, and cases: a scenario each, and what runs, skips, and why.',
       ...z.toJSONSchema(TestFileSchema, { io: 'input', unrepresentable: 'any' }),
+    },
+    remotesLock: {
+      $id: schemaUrl('remotesLock'),
+      title: 'simulci remotes lockfile',
+      description:
+        'The commit each remote workflow and action a repository uses resolved to, and a digest of the file read there.',
+      ...z.toJSONSchema(RemotesLockSchema, { io: 'input' }),
     },
   };
 }
