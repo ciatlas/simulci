@@ -8,7 +8,8 @@ import type { Page, Route } from '@playwright/test';
  * `e2e/fixtures/github/`, with the workflow files of `e2e/fixtures/flowpact/` in its `.github` tree, served through
  * `page.route`. The CSP is checked before the route, so these answers reach the page only because `connect-src`
  * allows the API. Every GET is counted, the rate limit goes down with each, and a test can move the branch to a new
- * commit with changed files, or spend the limit.
+ * commit with changed files, make a branch or a tag at the commit `main` is at, or spend the limit. A ref resolves as
+ * git resolves one: a full SHA, `refs/heads/…` and `refs/tags/…`, then a bare name, a tag before a branch.
  */
 
 const here = import.meta.dirname;
@@ -38,6 +39,14 @@ export const WORKFLOWS: Record<string, string> = Object.fromEntries(
 const shaOf = (type: string, bytes: Buffer): string =>
   createHash('sha1').update(`${type} ${bytes.length}\0`).update(bytes).digest('hex');
 
+interface Answer {
+  status: number;
+  body: string | Buffer;
+  type: string;
+}
+
+const NOT_FOUND: Answer = { status: 404, body: '{"message":"Not Found"}', type: 'application/json' };
+
 export interface FakeGitHub {
   /** Every GET, as `<path><search>`. */
   requests: string[];
@@ -45,6 +54,9 @@ export interface FakeGitHub {
   commit(): string;
   /** Moves `main` to a new commit where these files hold these texts. */
   push(files: Record<string, string>): void;
+  /** A branch or a tag named so, at the commit `main` is at now. */
+  branch(name: string): void;
+  tag(name: string): void;
   /** Spends the hour's requests: every request now answers 403. */
   spend(): void;
 }
@@ -67,6 +79,16 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
   let commits = 0;
   let commit = '';
   const trees = new Map<string, Entry[]>();
+  const commitShas = new Set<string>();
+  const branches = new Map<string, string>();
+  const tags = new Map<string, string>();
+  const heads = (): Map<string, string> => new Map([['main', commit], ...branches]);
+  const resolve = (ref: string): string | undefined => {
+    if (/^[0-9a-f]{40}$/.test(ref)) return commitShas.has(ref) ? ref : undefined;
+    const qualified = /^refs\/(heads|tags)\/(.+)$/.exec(ref);
+    if (qualified) return (qualified[1] === 'heads' ? heads() : tags).get(qualified[2]!);
+    return tags.get(ref) ?? heads().get(ref);
+  };
   const build = (): void => {
     const others = recorded.tree.filter((e) => !e.path.startsWith('workflows/'));
     const workflows = Object.entries(files).map(([path, text]) => ({
@@ -79,6 +101,7 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     const github: Entry[] = [...others, ...workflows];
     const githubSha = shaOf('tree', Buffer.from(JSON.stringify(github)));
     commit = shaOf('commit', Buffer.from(`${++commits} ${githubSha}`));
+    commitShas.add(commit);
     trees.set(githubSha, github);
     trees.set(
       commit,
@@ -97,10 +120,27 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     'x-ratelimit-used': String(60 - remaining),
   });
 
-  const answer = (path: string, accept: string): { status: number; body: string | Buffer; type: string } => {
+  /** The repository, a ref's commit, the lists of branches and tags. */
+  const refAnswer = (path: string, accept: string): Answer | undefined => {
     if (path === '') return { status: 200, body: fixture('repo.json'), type: 'application/json' };
-    if (path === '/commits/main' && accept === 'application/vnd.github.sha')
-      return { status: 200, body: commit, type: 'application/vnd.github.sha' };
+    const at = /^\/commits\/([^?]+)$/.exec(path);
+    if (at && accept === 'application/vnd.github.sha') {
+      const sha = resolve(decodeURIComponent(at[1]!));
+      return sha
+        ? { status: 200, body: sha, type: 'application/vnd.github.sha' }
+        : { status: 422, body: '{"message":"No commit found for SHA"}', type: 'application/json' };
+    }
+    const list = /^\/(branches|tags)\?per_page=100&page=(\d+)$/.exec(path);
+    if (list) {
+      const named = list[2] === '1' ? [...(list[1] === 'branches' ? heads() : tags)] : [];
+      const body = named.map(([name, sha]) => ({ name, commit: { sha, url: `${API}/commits/${sha}` } }));
+      return { status: 200, body: JSON.stringify(body), type: 'application/json' };
+    }
+    return undefined;
+  };
+
+  /** A tree or a blob, by SHA. */
+  const objectAnswer = (path: string, accept: string): Answer | undefined => {
     const tree = /^\/git\/trees\/(\w+)(\?recursive=1)?$/.exec(path);
     if (tree && trees.has(tree[1]!))
       return {
@@ -116,8 +156,11 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     const blob = /^\/git\/blobs\/(\w+)$/.exec(path);
     if (blob && blobs.has(blob[1]!) && accept === 'application/vnd.github.raw+json')
       return { status: 200, body: blobs.get(blob[1]!)!, type: 'text/plain; charset=utf-8' };
-    return { status: 404, body: '{"message":"Not Found"}', type: 'application/json' };
+    return undefined;
   };
+
+  const answer = (path: string, accept: string): Answer =>
+    refAnswer(path, accept) ?? objectAnswer(path, accept) ?? NOT_FOUND;
 
   const handle = async (route: Route): Promise<void> => {
     const request = route.request();
@@ -145,7 +188,7 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     const accept = request.headers().accept ?? '';
     const { status, body, type } = url.pathname.startsWith(`/repos/${OWNER}/${REPO}`)
       ? answer(path, accept)
-      : { status: 404, body: '{"message":"Not Found"}', type: 'application/json' };
+      : NOT_FOUND;
     await route.fulfill({ status, headers: limits(), contentType: type, body });
   };
   await page.route('https://api.github.com/**', handle);
@@ -156,6 +199,12 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     push: (changed) => {
       files = { ...files, ...changed };
       build();
+    },
+    branch: (name) => {
+      branches.set(name, commit);
+    },
+    tag: (name) => {
+      tags.set(name, commit);
     },
     spend: () => {
       remaining = 0;

@@ -3,13 +3,16 @@ import { useModal } from '../app/modal';
 import type { GitHubOpened } from '../input/sources';
 import { type RepoTarget, repoName } from '../lib/repo-words';
 import { describeRepository, type ReadOptions } from './read';
+import { atRefOf } from './refs';
+import { RefPicker, useRefField } from './RefPicker';
 import type { RepoInfo } from './repo';
-import { parseRepoInput } from './target';
+import { type Parsed, parseRepoInput } from './target';
 
 /**
  * Open a GitHub repository (M4 synthesis § 5.5): a name or a github.com link, what GitHub says of the repository once
- * the name is whole (one request, half a second after the last key), then Open, which reads its files with their
- * count as it goes and a Cancel that stops it. The page's sources open what was read (`input/sources.ts`), asking
+ * the name is whole (one request, half a second after the last key), the branch, tag or commit to read (`RefPicker`,
+ * the default branch until another is typed or picked), then Open, which reads its files with their count as it goes
+ * and a Cancel that stops it. The page's sources open what was read (`input/sources.ts`), asking
  * first when edits would be lost; this view, in the `github-*` chunk, gets them as a prop, so the chunk shares no
  * store or provider module with the page.
  */
@@ -29,13 +32,19 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
   const dialog = useModal(onClose);
   const [text, setText] = useState(initial);
   const parsed = parseRepoInput(text);
+  const target = parsed.ok ? parsed.target : undefined;
   // The modal puts the focus on its first field, this one, as it opens.
-  const described = useDescribed(
-    parsed.ok ? parsed.target.owner : undefined,
-    parsed.ok ? parsed.target.repo : undefined,
-  );
+  const described = useDescribed(target?.owner, target?.repo);
+  const info = target && described?.for === key(target) ? described.info : undefined;
+  const ref = useRefField(text, parsed, info?.defaultBranch);
   const [reading, setReading] = useState<{ done: number; total: number; stop: AbortController }>();
   const [failure, setFailure] = useState<string>();
+
+  /** Reading stopped: why, if it says. */
+  const settle = (message?: string): void => {
+    setReading(undefined);
+    if (message) setFailure(message);
+  };
 
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
@@ -43,15 +52,16 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
     const stop = new AbortController();
     setFailure(undefined);
     setReading({ done: 0, total: 0, stop });
-    const known = described?.for === key(parsed.target) ? described.info : undefined;
-    const opened = await open(parsed.target, {
+    const chosen = await ref.resolve(stop.signal);
+    if (stop.signal.aborted) return;
+    if (!chosen.ok) return settle(chosen.message);
+    const opened = await open(atRefOf(parsed.target, chosen.ref), {
       signal: stop.signal,
       onProgress: (done, total) => setReading((r) => (r?.stop === stop ? { ...r, done, total } : r)),
-      ...(known ? { known } : {}),
+      ...(info ? { known: info } : {}),
     });
-    setReading(undefined);
+    settle(opened.ok ? undefined : opened.message);
     if (opened.ok) dialog.current?.close();
-    else if (opened.message) setFailure(opened.message);
   };
 
   const cancel = (): void => {
@@ -87,6 +97,15 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
         <p id="github-about" className="min-h-5 text-muted text-sm">
           {aboutLine(parsed, described)}
         </p>
+        <RefPicker
+          value={ref.text}
+          defaultBranch={info?.defaultBranch}
+          refs={ref.refs}
+          picked={ref.picked}
+          onOpen={() => void ref.load()}
+          onChange={ref.onChange}
+          disabled={!parsed.ok || reading !== undefined}
+        />
         <p id="github-reads" className="text-sm">
           simulci reads its workflow files, and the workflows and actions they call, from api.github.com.
         </p>
@@ -121,7 +140,7 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
 const key = (t: RepoTarget): string => `${t.owner}/${t.repo}`.toLowerCase();
 
 /** The line under the field: why the text does not open, or what GitHub said of the repository. */
-function aboutLine(parsed: ReturnType<typeof parseRepoInput>, described: Described | undefined): string {
+function aboutLine(parsed: Parsed, described: Described | undefined): string {
   if (!parsed.ok) return parsed.message ?? '';
   if (described?.for !== key(parsed.target)) return '';
   return described.line;
