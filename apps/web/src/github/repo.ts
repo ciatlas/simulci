@@ -63,7 +63,8 @@ interface Wanted {
   size: number;
 }
 
-const repoPath = (owner: string, repo: string): string =>
+/** `/repos/{owner}/{repo}`, each name encoded. */
+export const repoPath = (owner: string, repo: string): string =>
   `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
 
 /** The repository, or an error that says it is not one simulci can read. */
@@ -84,10 +85,15 @@ export async function commitOf(client: RepoClient, info: RepoInfo, ref: string):
   const path = `${repoPath(info.owner, info.repo)}/commits/${encodeURIComponent(ref)}`;
   const bytes = await client.api.bytes(path, 'application/vnd.github.sha');
   const sha = bytes && new TextDecoder().decode(bytes).trim();
-  if (!sha || !/^[0-9a-f]{40}$/i.test(sha))
-    throw new Error(`${info.owner}/${info.repo} has no branch, tag or commit named ${ref}`);
+  if (!sha || !/^[0-9a-f]{40}$/i.test(sha)) throw new Error(noRef(info, ref));
   return sha.toLowerCase();
 }
+
+/** Why a ref read nothing: a full SHA is no commit of the repository, a name no branch, tag or commit of it. */
+const noRef = ({ owner, repo }: RepoInfo, ref: string): string =>
+  /^[0-9a-f]{40}$/i.test(ref)
+    ? `${owner}/${repo} has no commit ${ref}.`
+    : `${owner}/${repo} has no branch, tag or commit named “${ref}”.`;
 
 /** The files the page reads at a commit, by path (snapshots among them), what reading found, and what it left out. */
 export async function readAt(ctx: ReadContext, info: RepoInfo, sha: string): Promise<Walked> {

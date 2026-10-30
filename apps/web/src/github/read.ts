@@ -11,6 +11,7 @@ import {
   type RepoClient,
   type Revalidation,
 } from './client';
+import { listRefs, refChoice, type RefLists } from './refs';
 import { commitOf, readAt, repoInfo, type RepoInfo, type RepoTarget } from './repo';
 
 /**
@@ -85,8 +86,11 @@ export async function readRepository(target: RepoTarget, options: ReadOptions = 
   return reading(
     client,
     async () => {
+      // A link's ref comes here without the picker: it is checked the same way, before a request.
+      const choice = refChoice(target.ref ?? '');
+      if (!choice.ok) throw new Error(choice.message);
       const info = isKnown(options.known, target) ? options.known : await repoInfo(client, target);
-      const ref = target.ref ?? info.defaultBranch;
+      const ref = choice.ref ?? info.defaultBranch;
       const sha = await commitOf(client, info, ref);
       const walked = await readAt({ client, cache: c, host, ...pick(options) }, info, sha);
       return { source: sourceOf(info, host, ref, sha), walked, requests: client.requests(), ...rate(client) };
@@ -104,6 +108,25 @@ export async function describeRepository(
   return reading(
     client,
     async () => ({ info: await repoInfo(client, target), ...rate(client) }),
+    options.signal,
+  );
+}
+
+/**
+ * The repository's branches and tags, for the ref picker once its list opens (M4 synthesis § 5.6): two requests for
+ * up to 100 of each, at most `MAX_PAGES` each.
+ */
+export async function listRefsOf(target: RepoTarget, options: ReadOptions = {}): Promise<RefLists> {
+  const { client } = contextOf(options);
+  return reading(
+    client,
+    async () => {
+      const [branches, tags] = await Promise.all([
+        listRefs(client, target, 'branch'),
+        listRefs(client, target, 'tag'),
+      ]);
+      return { branches, tags };
+    },
     options.signal,
   );
 }
