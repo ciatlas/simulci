@@ -7,7 +7,7 @@ import type { FetchLike } from '@ciatlas/core';
 import { REMOTES_LOCK_FILE } from '@simulci/engine';
 import { renderUsage } from 'citty';
 import { describe, expect, it } from 'vitest';
-import { FlagError, printable } from '../src/args';
+import { FlagError, printable, withoutCommands } from '../src/args';
 import { planArgs, planCommand, planOutput } from '../src/plan';
 import { type RemotesCommandIo, runRemotesCheck, runRemotesUpdate } from '../src/remotes';
 import { runTestCommand, testArgs, testCommand } from '../src/test';
@@ -218,7 +218,7 @@ remotes:
     expect(await runRemotesUpdate({ dir: checkout({}) }, empty)).toBe(2);
     expect(text(empty.err)).toMatch(/^no workflows under /);
     await expect(runRemotesUpdate({ dir: project(), apiUrl: 'ftp://x' }, io())).rejects.toThrow(
-      new FlagError("--api-url takes an http or https URL, not 'ftp://x'"),
+      new FlagError("--api-url takes an https URL (http only on localhost), not 'ftp://x'"),
     );
   });
 });
@@ -359,10 +359,10 @@ describe('simulci plan with remotes', () => {
     );
     const dir = project();
     await expect(plan(dir, ['--api-url', 'not a url'])).rejects.toThrow(
-      new FlagError("--api-url takes an http or https URL, not 'not a url'"),
+      new FlagError("--api-url takes an https URL (http only on localhost), not 'not a url'"),
     );
     await expect(plan(dir, [], io({ GITHUB_API_URL: 'file:///x' }))).rejects.toThrow(
-      new FlagError("GITHUB_API_URL takes an http or https URL, not 'file:///x'"),
+      new FlagError("GITHUB_API_URL takes an https URL (http only on localhost), not 'file:///x'"),
     );
     await expect(plan(dir, ['--repository', 'nope'])).rejects.toThrow(
       new FlagError("--repository takes owner/name, not 'nope'"),
@@ -427,7 +427,7 @@ describe('simulci test with remotes', () => {
     expect(missing.out).toBe('');
     expect(missing.err).toContain(`remotes: ${DEPLOY}: `);
     expect(missing.err).toContain(
-      '1 remote could not be read, so the tests would not run as pinned. github.com was read with the token from GH_TOKEN: set GH_TOKEN to a token that can read them, or test without remotes (--remotes off).\n',
+      '1 remote could not be read, so the tests would not run as pinned. Set GH_TOKEN to a token that can read them (github.com was read with the token from GH_TOKEN), or test without remotes (--remotes off).\n',
     );
     const tampered = await run(
       dir,
@@ -451,7 +451,9 @@ describe('simulci test with remotes', () => {
     const broken = await run(dir, []);
     expect(broken.code).toBe(2);
     expect(broken.err).toContain(`remotes: not used: ${REMOTES_LOCK_FILE}: `);
-    expect(broken.err).toContain('a lockfile could not be used, so the tests would not run as pinned.');
+    expect(broken.err).toContain(
+      `${REMOTES_LOCK_FILE} could not be used, so the tests would not run as pinned. Fix the lockfile, or test without remotes (--remotes off).\n`,
+    );
   });
 
   it('refuses fetch under --ci or CI=true before reading anything, and allows it locally', async () => {
@@ -518,6 +520,164 @@ describe('simulci remotes', () => {
       '',
       "--remotes takes off, lock or fetch, not 'live'\n",
     ]);
+  });
+});
+
+describe('the review findings', () => {
+  it('lets no remote name start a workflow command in a runner log', async () => {
+    const evil = DEPLOY_YML.replace('- run: ./ship', '- { name: "ship\\n::stop-commands::x", run: ./ship }');
+    const served = { ...SERVED, [`octo/ship/.github/workflows/deploy.yml@${A}`]: evil };
+    const out = await plan(project(), ['--remotes', 'fetch'], io(undefined, fakeGitHub(served)));
+    expect(out.text).toMatch(/^\s*::stop-commands::x/m);
+    expect(withoutCommands(out.text)).not.toMatch(/^\s*::/m);
+    expect(withoutCommands(out.text)).toMatch(/^\s*\\u003a:stop-commands::x/m);
+  });
+
+  it("keeps a runner's GITHUB_TOKEN for its own API, and refuses a plain http API but on localhost", async () => {
+    const dir = await locked();
+    const ghes = io({ GITHUB_API_URL: 'https://ghes.corp/api/v3', GITHUB_TOKEN: TOKEN });
+    await plan(dir, ['--api-url', 'https://api.github.com'], ghes);
+    expect(ghes.calls.length).toBeGreaterThan(0);
+    expect(ghes.calls.every((c) => c.authorization === undefined)).toBe(true);
+    const runner = io({ GITHUB_API_URL: 'https://api.github.com/', GITHUB_TOKEN: TOKEN });
+    await plan(dir, [], runner);
+    expect(runner.calls.every((c) => c.authorization === `Bearer ${TOKEN}`)).toBe(true);
+    await expect(plan(dir, ['--api-url', 'http://api.github.com'])).rejects.toThrow(FlagError);
+    expect((await plan(dir, ['--api-url', 'http://localhost:8080'])).code).toBe(0);
+  });
+
+  it('asks gh for a token only when something is to be read', async () => {
+    const asked: string[] = [];
+    const counting = (dir: string, flags: string[]) => {
+      const x = io({});
+      x.gh = (host) => (asked.push(host), undefined);
+      return plan(dir, flags, x);
+    };
+    await counting(project(), []);
+    expect(asked).toEqual([]);
+    const dir = await locked();
+    await counting(dir, ['--offline']);
+    expect(asked).toEqual([]);
+    await counting(dir, []);
+    expect(asked).toEqual(['github.com']);
+  });
+
+  it('passes check after update when an action actions.lock pins is also used in a remote at another commit', async () => {
+    const BUILD = `octo/ship/.github/workflows/build.yml@${A}`;
+    const deploy = `on: workflow_call\njobs:\n  inner:\n    uses: ./.github/workflows/build.yml\n`;
+    const build = `on: workflow_call\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: ${ACT}\n`;
+    const served = {
+      ...SERVED,
+      [`octo/ship/.github/workflows/deploy.yml@${A}`]: deploy,
+      [`octo/ship/.github/workflows/build.yml@${A}`]: build,
+      [`octo/act/action.yml@${B}`]: ACTION_YML,
+    };
+    const actionsLock = [
+      "version: 'v0.0.3'",
+      'workflows:',
+      "  '.github/workflows/ci.yml':",
+      `    - '${ACT}'`,
+      'dependencies:',
+      `  '${ACT}':`,
+      "    ref: 'v1'",
+      `    commit: 'sha1-${B}'`,
+      '',
+    ].join('\n');
+    const dir = project({ '.github/workflows/actions.lock': actionsLock });
+    expect(await runRemotesUpdate({ dir }, io(undefined, fakeGitHub(served)))).toBe(0);
+    expect(lockOf(dir)).toContain(`  ${BUILD}:\n`);
+    const check = io(undefined, fakeGitHub(served));
+    expect(await runRemotesCheck({ dir }, check), text([...check.out, ...check.err])).toBe(0);
+    expect(text(check.out)).toContain('up to date');
+  });
+
+  it('fails check (1, not 2) on a full-SHA remote the lockfile records as unreadable', async () => {
+    const PRIVATE = `corp/private@${A}`;
+    const dir = project({
+      '.github/workflows/x.yml': `on: push\njobs:\n  a:\n    runs-on: x\n    steps: [uses: ${PRIVATE}]\n`,
+    });
+    const first = io();
+    expect(await runRemotesUpdate({ dir }, first)).toBe(1);
+    expect(text(first.out)).toMatch(/^\.github\/simulci\/remotes\.lock\.yml: 2 added/);
+    expect(lockOf(dir)).toContain(`unreadable:\n  ${PRIVATE}: not-found\n`);
+    // check can tell: the lockfile is not complete (1, not 2); test cannot plan it as pinned (2).
+    const check = io();
+    expect(await runRemotesCheck({ dir }, check)).toBe(1);
+    expect(text(check.out)).toContain(
+      `${REMOTES_LOCK_FILE}:16: ${PRIVATE} could not be read at the last update (not-found)\n`,
+    );
+    const tested = io();
+    expect(await runTestCommand(testArgs(['--dir', dir]), tested)).toBe(2);
+    expect(text(tested.err)).toContain('1 remote could not be read, so the tests would not run as pinned.');
+  });
+
+  it('exits 2 in test, and 1 in check, on a lockfile entry the last update could not read', async () => {
+    const dir = project();
+    const { 'octo/ship@v1': _, ...noTag } = SERVED;
+    expect(await runRemotesUpdate({ dir }, io(undefined, fakeGitHub(noTag)))).toBe(1);
+    expect(lockOf(dir)).toContain(`unreadable:\n  ${DEPLOY}: not-found\n`);
+    const tested = io();
+    expect(await runTestCommand(testArgs(['--dir', dir, '--ci']), tested)).toBe(2);
+    expect(text(tested.err)).toContain(
+      `remotes: ${DEPLOY}: ${REMOTES_LOCK_FILE} records it as unreadable (not-found)\n`,
+    );
+    expect(text(tested.err)).toContain(
+      '1 remote could not be read at the last update, so the tests would not run as pinned. Run `simulci remotes update` with a token',
+    );
+    expect(await runRemotesCheck({ dir }, io())).toBe(1);
+  });
+
+  it("plans a test's repository as the case says, whatever GITHUB_REPOSITORY or origin say", async () => {
+    const dir = await locked();
+    const env = { GH_TOKEN: TOKEN, GITHUB_REPOSITORY: 'a/b/c' };
+    expect(await runTestCommand(testArgs(['--dir', dir, '--ci']), io(env))).toBe(0);
+    await expect(runTestCommand(testArgs(['--dir', dir, '--repository', 'nope']), io())).rejects.toThrow(
+      FlagError,
+    );
+  });
+
+  it('lets an actions.lock it cannot read stop no checkout that uses no remote action', async () => {
+    const plain = checkout({
+      '.github/workflows/ci.yml': 'on: push\njobs:\n  a: { runs-on: x, steps: [run: x] }\n',
+      '.github/simulci/tests/ci.test.yml':
+        'workflow: ci.yml\ncases:\n  - { name: a, when: { event: push }, then: { run: [a] } }\n',
+      '.github/workflows/actions.lock': "version: 'v9.0.0'\nworkflows: {}\n",
+    });
+    expect(await runTestCommand(testArgs(['--dir', plain, '--ci']), io())).toBe(0);
+    const used = await locked({ '.github/workflows/actions.lock': "version: 'v9.0.0'\nworkflows: {}\n" });
+    const tested = io();
+    expect(await runTestCommand(testArgs(['--dir', used, '--ci']), tested)).toBe(2);
+    expect(text(tested.err)).toContain(
+      '.github/workflows/actions.lock could not be used, so the tests would not run as pinned. Fix the lockfile',
+    );
+  });
+
+  it('says when update only changed what is unreadable', async () => {
+    const dir = project();
+    const nothing = io(undefined, fakeGitHub({}));
+    expect(await runRemotesUpdate({ dir }, nothing)).toBe(1);
+    expect(text(nothing.out)).toBe(`${REMOTES_LOCK_FILE}: written (only the unreadable remotes changed)\n`);
+  });
+
+  it('fails check on an actions.lock it cannot use', async () => {
+    const dir = await locked({ '.github/workflows/actions.lock': 'version: [\n' });
+    const broken = io();
+    expect(await runRemotesCheck({ dir }, broken)).toBe(1);
+    expect(text(broken.out)).toMatch(/^\.github\/workflows\/actions\.lock: /m);
+  });
+
+  it('passes check on a chain of remote workflows past the depth cap, which update cannot lock', async () => {
+    const chain: Record<string, string> = {};
+    const call = (n: number) => `octo/chain/.github/workflows/w${n}.yml@${A}`;
+    for (let n = 0; n <= 11; n++)
+      chain[`octo/chain/.github/workflows/w${n}.yml@${A}`] =
+        `on: workflow_call\njobs:\n  next:\n    uses: ${call(n + 1)}\n`;
+    const dir = checkout({ '.github/workflows/ci.yml': `on: push\njobs:\n  go:\n    uses: ${call(0)}\n` });
+    const up = io(undefined, fakeGitHub(chain));
+    expect(await runRemotesUpdate({ dir }, up)).toBe(0);
+    expect(text(up.out)).toContain('past a limit, not locked: ');
+    const check = io(undefined, fakeGitHub(chain));
+    expect(await runRemotesCheck({ dir }, check)).toBe(0);
   });
 });
 

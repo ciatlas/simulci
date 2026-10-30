@@ -166,6 +166,13 @@ export function printable(text: string, secrets: readonly string[] = []): string
   return out;
 }
 
+/**
+ * Text a runner's log reads as text: a line that would start with `::` (a workflow command, which GitHub reads on stdout
+ * and stderr after any indentation) has its first colon escaped. A remote workflow's job or step name may hold a newline
+ * followed by `::stop-commands::` or `::error::`. Annotations are written apart, as the commands they are.
+ */
+export const withoutCommands = (text: string): string => text.replace(/^(\s*)::/gm, '$1\\u003a:');
+
 function errorText(e: unknown, stack: boolean): string {
   if (!(e instanceof Error)) return String(e);
   return stack && e.stack !== undefined ? e.stack : e.message;

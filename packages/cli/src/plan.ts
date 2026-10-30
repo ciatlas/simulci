@@ -13,7 +13,7 @@ import {
 } from '@simulci/engine';
 import { type ArgsDef, defineCommand } from 'citty';
 import { AssumeError, readWorkflowFiles } from '@simulci/node';
-import { assumeOf, exitCodeOf, oneOf, processIo, readArgs, spoken, values } from './args';
+import { assumeOf, exitCodeOf, oneOf, processIo, readArgs, spoken, values, withoutCommands } from './args';
 import {
   failureLines,
   readRemotes,
@@ -149,7 +149,7 @@ export const planCommand = defineCommand({
     const io = processIo();
     process.exitCode = await exitCodeOf(async () => {
       const out = await planOutput(planArgs(rawArgs), io);
-      (out.code ? io.stderr : io.stdout)(out.text);
+      (out.code ? io.stderr : io.stdout)(withoutCommands(out.text));
       return out.code;
     }, io);
   },

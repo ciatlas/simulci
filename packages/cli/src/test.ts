@@ -23,15 +23,15 @@ import {
   TestsError,
 } from '@simulci/node';
 import { type ArgsDef, defineCommand } from 'citty';
-import { assumeOf, exitCodeOf, oneOf, processIo, readArgs, spoken, values } from './args';
+import { assumeOf, exitCodeOf, oneOf, processIo, readArgs, spoken, values, withoutCommands } from './args';
 import {
-  failureLines,
   readRemotes,
   REMOTE_ARGS,
   type RemoteArgs,
   type RemotesIo,
   remotesMode,
   unpinnable,
+  unpinnedLines,
 } from './remotes';
 
 /** `simulci test`: the route tests under `.github/simulci/tests`, or the files named. */
@@ -124,10 +124,11 @@ async function prepare(a: TestArgs, io: TestIo): Promise<Prepared | number> {
     io.stderr(`${e.message}\n`);
     return 2;
   }
-  const remotes = await readRemotes(root, workflows, a, io);
+  // The repository only as given: a fork's GITHUB_REPOSITORY or origin must not change a verdict (`when.repository`).
+  const remotes = await readRemotes(root, workflows, a, io, false);
   const unpinned = unpinnable(remotes);
   if (unpinned !== undefined) {
-    for (const line of failureLines(remotes.read?.remotes.failed ?? [])) io.stderr(line);
+    for (const line of unpinnedLines(remotes)) io.stderr(line);
     io.stderr(unpinned);
     return 2;
   }
@@ -135,7 +136,7 @@ async function prepare(a: TestArgs, io: TestIo): Promise<Prepared | number> {
 }
 
 function report(result: RunResult, a: TestArgs, io: TestIo): void {
-  io.stdout(renderTextReport(result));
+  io.stdout(withoutCommands(renderTextReport(result)));
   if (a.annotations ?? io.env.GITHUB_ACTIONS === 'true')
     for (const line of renderAnnotations(result)) io.stdout(`${line}\n`);
   if (a.junit !== undefined) {
@@ -175,6 +176,10 @@ const TEST_ARGS = {
   },
   'assume-file': { type: 'string', description: 'A YAML list of mocks for every case' },
   ...REMOTE_ARGS,
+  repository: {
+    type: 'string',
+    description: "The checkout's owner/name (default: none, so each case's when.repository decides)",
+  },
 } satisfies ArgsDef;
 
 export const testCommand = defineCommand({

@@ -18,17 +18,19 @@ Resolves every remote the checkout reaches, workflows called from remote workflo
 writes the lockfile: per remote, its commit, the file read and a sha256 digest of it. It prints what was added,
 changed and removed. Running it again with nothing moved writes the same bytes.
 
-A remote it cannot read keeps its old entry; one that never had an entry goes under `unreadable`. It then exits `1`.
+A remote it cannot read keeps its old entry; one that never had an entry goes under `unreadable`, which `check` and
+`test` refuse until an update can read it. It then exits `1`. Remotes nested past GitHub's ten levels are not locked.
 
 ## check
 
-Exits `0` when the lockfile is current, `1` when it is not, and `2` when it cannot tell. It checks that:
+Exits `0` when the lockfile is current, `1` when it is not, and `2` when it cannot tell (a pinned file could not be
+read). It checks that:
 
-- every remote the checkout reaches has an entry, and no entry is unused;
-- no entry disagrees with `.github/workflows/actions.lock` or a full-SHA ref;
+- every remote the checkout reaches has an entry it could read, and no entry is unused;
+- no entry disagrees with `.github/workflows/actions.lock` or a full-SHA ref, and `actions.lock` can be used;
 - each pinned file still has its digest (with `--offline`, only the lockfile is checked).
 
-Each problem is printed with the lockfile's line. A checkout with no remotes needs no lockfile.
+Each problem is printed with the lockfile's line where it has one. A checkout with no remotes needs no lockfile.
 
 ## Flags
 

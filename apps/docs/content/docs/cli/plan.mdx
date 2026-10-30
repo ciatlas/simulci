@@ -79,13 +79,15 @@ as GitHub runs it. See [simulci remotes](/docs/cli/remotes) for the lockfile tha
 | -------------- | ----------------------------------------------------------------------------------------------------- |
 | `--remotes`    | `lock` (default) reads only pinned commits; `fetch` also resolves tags and branches now; `off` reads none |
 | `--offline`    | reads only the cache, never the network; default when `SIMULCI_OFFLINE=1`                            |
-| `--api-url`    | the GitHub API; default `GITHUB_API_URL`, else `https://api.github.com`                              |
-| `--repository` | the checkout's `owner/name`; default `GITHUB_REPOSITORY`, else the `origin` remote                   |
+| `--api-url`    | the GitHub API, `https` (`http` only on localhost); default `GITHUB_API_URL`, else `https://api.github.com` |
+| `--repository` | the checkout's `owner/name`; default `GITHUB_REPOSITORY`, else a github.com `origin` remote          |
 | `--github-com` | on GitHub Enterprise Server, reads what it lacks from github.com, with `GITHUB_COM_TOKEN` if set      |
 
 A commit is pinned by a full-SHA ref, by `.github/workflows/actions.lock` (actions only), or by
-`.github/simulci/remotes.lock.yml`. The token is `GH_TOKEN`, else `GITHUB_TOKEN`, else `gh auth token`; on GitHub
-Enterprise Server, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`. It goes only to the API, and is never printed.
+`.github/simulci/remotes.lock.yml`. The token is `GH_TOKEN`, else `GITHUB_TOKEN`, else `gh auth token`
+when something is to be read; on GitHub Enterprise Server, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`. A
+runner's `GITHUB_TOKEN` goes only to its own `GITHUB_API_URL`. The token goes only to the API, and is never printed.
+The cache lives in memory for now, so `--offline` reads nothing a run has not read itself.
 A remote that cannot be read stays an open call, with GitHub's answer on stderr. The text output lists every remote
 under the plan, with the commit it was read at and what pinned it.
 
