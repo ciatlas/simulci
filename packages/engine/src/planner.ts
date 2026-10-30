@@ -7,14 +7,15 @@ import {
   type InputDecl,
   type JobDecl,
   jobSegments,
-  loadProject,
   lookup,
   type MatrixExpansion,
-  memoryFileSystem,
-  ProjectIndex,
+  type ProjectIndex,
   parseExpression,
+  type RemoteRef,
   type StepDecl,
   skippedCheckName,
+  type UnitDecl,
+  type UsesRef,
   type WorkflowDecl,
 } from '@ciatlas/core';
 import { z } from 'zod';
@@ -55,6 +56,7 @@ import type {
   NodeId,
   Pin,
   Reason,
+  RemoteUse,
   Result,
   RunPlan,
   StepPlan,
@@ -66,6 +68,16 @@ import type {
   WorkflowPlan,
 } from './plan/types';
 import { candidates, combine, known, unknown } from './plan/values';
+import { pinFor as remotePin, type RemoteInputs } from './remotes/lock';
+import {
+  type LoadedProject,
+  loadFiles,
+  lookupRemote,
+  namedByOrigin,
+  pinContextOf,
+  type RemoteLookup,
+  remoteRefOf,
+} from './remotes/state';
 import { parseScenario, type Scenario, type ScenarioInput } from './scenario';
 import { foldWrites } from './script-outputs';
 import {
@@ -102,7 +114,9 @@ export interface SimulateOptions {
   detail?: 'legs' | 'steps';
   /** `owner/name`, for `uses:` references to this repository. */
   repository?: string;
-  /** How deep reusable workflows may nest (GitHub: ten levels). */
+  /** The remote files a host read, when `files` is given (see `loadFiles`). */
+  remotes?: RemoteInputs;
+  /** How many reusable workflows may nest under a workflow before GitHub refuses to start it (lab R7: ten). */
   maxDepth?: number;
   /** Mocks for this run (the `case` layer): what opaque steps and jobs produce. */
   assume?: AssumeEntry[];
@@ -122,28 +136,15 @@ export class MocksError extends Error {
   override name = 'MocksError';
 }
 
-/** A project loaded once, to simulate many scenarios against (the app, the test runner, the lab). */
-export interface LoadedProject {
-  index: ProjectIndex;
-  files: Record<string, string>;
-  /** Run settings per workflow path, read on first use. */
-  settings: Map<string, WorkflowSettings>;
-}
-
-/** Loads the workflows and local actions of a repository snapshot (files by repository-relative path). */
-export function loadFiles(files: Record<string, string>, repository?: string): LoadedProject {
-  const project = loadProject({
-    root: '.',
-    fs: memoryFileSystem(files),
-    ...(repository === undefined ? {} : { repository }),
-    validateSchema: false,
-  });
-  return { index: new ProjectIndex(project), files, settings: new Map() };
-}
-
 export function simulate(opts: SimulateOptions): RunPlan {
   const scenario = parseScenario(opts.scenario);
-  const loaded = opts.project ?? loadFiles(opts.files ?? {}, opts.repository ?? scenario.repository);
+  const repository = opts.repository ?? scenario.repository;
+  const loaded =
+    opts.project ??
+    loadFiles(opts.files ?? {}, {
+      ...(repository === undefined ? {} : { repository }),
+      ...(opts.remotes ? { remotes: opts.remotes } : {}),
+    });
   const layers: MockLayers = { ...opts.mocks };
   if (opts.assume) layers.case = [...(layers.case ?? []), ...opts.assume];
   for (const layer of ['given', 'case', 'cli'] as const) {
@@ -171,6 +172,28 @@ interface WorkflowContext {
   inputs?: Record<string, Value<Json>>;
   secrets?: string[];
   checkPrefix: string;
+  /** A called remote workflow: the ref the plan shows it by, the ref name its `./` are shown at, and its commit. */
+  remote?: { display: string; refName: string; sha: string };
+}
+
+/** The unit whose `uses:` a job or step names, and for a remote one the ref name its `./` and `$/` are shown at. */
+interface Scope {
+  unit: UnitDecl;
+  refName?: string;
+}
+
+/** A remote a job or step names: its ref, how the plan shows it (`./` inside a remote at its parent's ref name), its state. */
+interface RemoteTarget extends RemoteLookup {
+  ref: RemoteRef;
+  display: string;
+}
+
+/** A remote the plan uses: where, and the first `uses:` that names it (a local one before a remote one, for its pin). */
+interface RemoteUseSite {
+  target: RemoteTarget;
+  at: (LegPlan | NodeId)[];
+  unit: UnitDecl;
+  uses: UsesRef;
 }
 
 /** What a workflow's jobs are planned with: its settings, node id, scenario, trigger decision, inputs and name. */
@@ -185,6 +208,8 @@ interface WorkflowSetup {
 
 interface JobContext {
   wf: WorkflowDecl;
+  /** The workflow's path in locations: a remote one's ref as shown, so mocks and pins never see a commit. */
+  wfPath: string;
   wfNode: NodeId;
   wfName: string;
   triggered: Decision;
@@ -196,6 +221,7 @@ interface JobContext {
   depth: number;
   checkPrefix: string;
   chain: LocationLink[];
+  scope: Scope;
 }
 
 interface LegContext extends JobContext {
@@ -253,6 +279,8 @@ class Planner {
   private readonly units = new Map<NodeId, UnitSite>();
   /** The legs that call a workflow the plan does not load (by object: a dynamic matrix renames its leg). */
   private readonly openCalls = new WeakSet<LegPlan>();
+  /** The remote workflows and actions the plan uses, by the ref it shows. */
+  private readonly remoteUses = new Map<string, RemoteUseSite>();
   private readonly index: ProjectIndex;
 
   constructor(
@@ -271,6 +299,7 @@ class Planner {
   run(): RunPlan {
     const workflows = [...this.index.project.workflows.values()].sort((a, b) => a.path.localeCompare(b.path));
     const plans = workflows.map((wf) => this.planWorkflow(wf, { depth: 0, checkPrefix: '' }));
+    const remotes = this.finishRemotes();
     const plan: RunPlan = {
       $schema: schemaUrl('runPlan'),
       schemaVersion: 1,
@@ -285,6 +314,7 @@ class Planner {
       models: [...this.models]
         .map(([id, version]) => ({ id, version }))
         .sort((a, b) => a.id.localeCompare(b.id)),
+      ...(remotes.length ? { remotes } : {}),
       diagnostics: this.finishDiagnostics(),
     };
     assumePins(plan, this.units);
@@ -344,6 +374,7 @@ class Planner {
     const planned = new Map<string, JobPlan>();
     const jobCtx: Omit<JobContext, 'settings'> = {
       wf,
+      wfPath: ctx.remote?.display ?? wf.path,
       wfNode: id,
       wfName,
       triggered,
@@ -354,6 +385,7 @@ class Planner {
       depth: ctx.depth,
       checkPrefix: ctx.checkPrefix,
       chain: ctx.chain ?? [],
+      scope: { unit: wf, ...(ctx.remote ? { refName: ctx.remote.refName } : {}) },
     };
     for (const jobId of topoOrder(wf)) {
       const settingsOfJob = settings.jobs[jobId] ?? { id: jobId, if: 'success()', steps: [] };
@@ -365,10 +397,10 @@ class Planner {
   /** The workflow's settings, node id, scenario (a callee sees the secrets it is given), trigger decision and inputs. */
   private setupWorkflow(wf: WorkflowDecl, ctx: WorkflowContext): WorkflowSetup {
     const settings = this.settingsOf(wf);
-    const id = ctx.caller === undefined ? wf.path : callNodeId(ctx.caller, wf.path);
+    const id = ctx.caller === undefined ? wf.path : callNodeId(ctx.caller, ctx.remote?.display ?? wf.path);
     this.settingsDiagnostics(settings, wf.path, id);
     const scenario = ctx.secrets === undefined ? this.scenario : { ...this.scenario, secrets: ctx.secrets };
-    const triggered = ctx.triggered ?? this.triggerDecision(settings, id);
+    const triggered = ctx.triggered ?? this.refusal(wf, id, this.triggerDecision(settings, id));
     const inputs = ctx.inputs ?? dispatchInputs(wf, scenario);
     return { settings, id, scenario, triggered, inputs, wfName: wf.name ?? wf.path };
   }
@@ -394,6 +426,61 @@ class Planner {
     const m = matchTrigger(settings.events, this.scenario);
     for (const u of m.unknowns) this.register(u, m.decision.verdict === 'maybe' ? node : undefined);
     return m.decision;
+  }
+
+  /**
+   * GitHub refuses to start a run whose reusable workflows nest more than `maxDepth` deep or that names more than 50 of
+   * them, whatever its `if:`s say (lab R7): the workflow does not start, no job fails.
+   */
+  private refusal(wf: WorkflowDecl, id: NodeId, triggered: Decision): Decision {
+    if (triggered.verdict === 'no') return triggered;
+    const keys = new Set<string>();
+    const depth = this.callDepth(wf, new Map(), new Set(), keys);
+    let limit: string;
+    let why: string;
+    if (depth > this.maxDepth) {
+      limit = 'nesting';
+      why = Number.isFinite(depth)
+        ? `its reusable workflows nest ${depth} deep, more than ${this.maxDepth}`
+        : 'its reusable workflows call each other in a cycle';
+    } else if (keys.size > MAX_CALLED_WORKFLOWS) {
+      limit = 'workflows';
+      why = `it names ${keys.size} reusable workflows, more than ${MAX_CALLED_WORKFLOWS}`;
+    } else return triggered;
+    this.diagnostics.push({
+      severity: 'warning',
+      code: 'refused',
+      message: `GitHub does not start ${wf.path}: ${why}`,
+      node: id,
+    });
+    return { verdict: 'no', chain: [...triggered.chain, { kind: 'limit', limit }] };
+  }
+
+  /**
+   * How deep the calls under a workflow nest (1 for a call to a workflow that calls none), whatever their `if:`s, and
+   * the key of every workflow called (a remote not read counts, with nothing under it). A cycle is infinitely deep.
+   */
+  private callDepth(
+    wf: WorkflowDecl,
+    done: Map<WorkflowDecl, number>,
+    open: Set<WorkflowDecl>,
+    keys: Set<string>,
+  ): number {
+    const memo = done.get(wf);
+    if (memo !== undefined) return memo;
+    if (open.has(wf)) return Number.POSITIVE_INFINITY;
+    open.add(wf);
+    let deepest = 0;
+    for (const job of Object.values(wf.jobs)) {
+      const { callee, remote } = this.resolveCallee(job, { unit: wf });
+      const key = remote?.key ?? callee?.path;
+      if (key === undefined) continue;
+      keys.add(key);
+      deepest = Math.max(deepest, 1 + (callee ? this.callDepth(callee, done, open, keys) : 0));
+    }
+    open.delete(wf);
+    done.set(wf, deepest);
+    return deepest;
   }
 
   /** The outputs a reusable workflow declares, read from its jobs. */
@@ -443,7 +530,7 @@ class Planner {
     };
     plan.legs = this.legsOf(job, exp, segments, legCtx);
     for (const leg of plan.legs) {
-      const location: Location = { workflow: ctx.wf.path, chain: [...ctx.chain, legLinkOf(job, leg)] };
+      const location: Location = { workflow: ctx.wfPath, chain: [...ctx.chain, legLinkOf(job, leg)] };
       this.units.set(leg.id, { location, kind: 'job' });
       this.applyLegFacts(job, leg, jobNode, location);
     }
@@ -549,16 +636,9 @@ class Planner {
     );
     const ifReason = this.ifReason(writtenIf(job), ctx.settings.if, aggregate, cond, job.ifSite?.loc);
     const parent: Reason = { kind: 'parent', node: ctx.wfNode, verdict: ctx.triggered.verdict };
-    const runs = this.nestingLimit(job, ctx, decide(ctx.triggered, cond.value, [parent, ifReason]));
+    const runs = decide(ctx.triggered, cond.value, [parent, ifReason]);
     if (runs.verdict === 'maybe') this.noteValue(cond.value, jobNode);
     return { runs, cond };
-  }
-
-  /** A call past the nesting limit does not run, whatever its `if:` says: the job stops, not only its legs. */
-  private nestingLimit(job: JobDecl, ctx: JobContext, runs: Decision): Decision {
-    if (runs.verdict === 'no' || !job.uses || ctx.depth + 1 < this.maxDepth) return runs;
-    if (!this.index.calleeOf(job)) return runs;
-    return { verdict: 'no', chain: [...runs.chain, { kind: 'limit', limit: 'nesting' }] };
   }
 
   private matrixPlan(job: JobDecl, exp: MatrixExpansion, ctx: JobContext, jobNode: NodeId): MatrixPlan {
@@ -657,13 +737,22 @@ class Planner {
     if (combo) leg.origin = combo.origin;
     if (job.runsOn) leg.runsOn = this.runsOn(job, ctx.wf, state, legId);
     if (job.environment) leg.environment = this.environment(job, ctx.wf, state, legId);
-    const location: Location = { workflow: ctx.wf.path, chain: [...ctx.chain, legLinkOf(job, leg)] };
+    const location: Location = { workflow: ctx.wfPath, chain: [...ctx.chain, legLinkOf(job, leg)] };
     if (job.uses) {
       this.planCall(leg, state, seg, ctx, location);
       return leg;
     }
     leg.check = { name: `${ctx.checkPrefix}${seg.name}`, certain: seg.certain };
-    const steps = this.planSteps(job.steps, ctx.settings.steps, legId, runs, state, undefined, location);
+    const steps = this.planSteps(
+      job.steps,
+      ctx.settings.steps,
+      legId,
+      runs,
+      state,
+      undefined,
+      location,
+      ctx.scope,
+    );
     if (this.detail === 'steps') leg.steps = steps.plans;
     leg.result = legResult(steps.conclusions);
     leg.outputs = this.outputsOf(job.outputs, { ...state, steps: steps.steps });
@@ -721,9 +810,10 @@ class Planner {
     location: Location,
   ): void {
     const { job } = ctx;
-    const callee = this.index.calleeOf(job);
+    const { callee, remote } = this.resolveCallee(job, ctx.scope);
+    if (remote) this.useRemote(remote, leg, ctx.scope, job.uses!);
     if (!callee) {
-      this.unsupportedCall(leg, job);
+      this.unsupportedCall(leg, job, remote);
       return;
     }
     const inputs = callInputs(job, callee, state);
@@ -737,8 +827,11 @@ class Planner {
         chain: [{ kind: 'parent', node: leg.id, verdict: leg.runs.verdict }],
       },
       inputs,
-      secrets: job.secretsInherit ? ctx.scenario.secrets : Object.keys(job.secrets),
+      secrets: job.secretsInherit ? this.inherited(ctx, remote) : Object.keys(job.secrets),
       checkPrefix: `${ctx.checkPrefix}${seg.name} / `,
+      ...(remote?.source
+        ? { remote: { display: remote.display, refName: refNameOf(remote.display), sha: remote.source.sha } }
+        : {}),
     });
     const legResults = leg.call.jobs.map((j) => j.result);
     leg.result = jobResult({ skipped: false, continueOnError: known(false), legResults });
@@ -746,23 +839,80 @@ class Planner {
     leg.outputs = { ...leg.call.outputs };
   }
 
-  private unsupportedCall(leg: LegPlan, job: JobDecl): void {
-    const why =
-      job.uses?.kind === 'remote-workflow'
-        ? 'a remote reusable workflow is not loaded'
-        : 'the called workflow was not found or cannot be called';
-    this.diagnostics.push({
-      severity: 'warning',
-      code: 'unsupported',
-      message: `${job.uses?.raw}: ${why}`,
-      node: leg.id,
-    });
+  /**
+   * The workflow a job calls: in this repository's units a local one through the index, else the remote unit its ref
+   * names (`./` and `$/` inside a remote name that remote's files at its commit; lab R2), with the remote's state.
+   */
+  private resolveCallee(job: JobDecl, scope: Scope): { callee?: WorkflowDecl; remote?: RemoteTarget } {
+    if (!job.uses) return {};
+    const remote = this.remoteTarget(scope, job.uses);
+    if (!remote) return scope.unit.external ? {} : { callee: this.index.calleeOf(job) };
+    const unit = remote.state === 'simulated' ? remote.unit : undefined;
+    return unit?.kind === 'workflow' && unit.call ? { callee: unit, remote } : { remote };
+  }
+
+  private remoteTarget(scope: Scope, uses: UsesRef): RemoteTarget | undefined {
+    const ref = remoteRefOf(scope.unit, uses);
+    if (!ref) return undefined;
+    const display = namedByOrigin(scope.unit, uses) ? atRefName(ref, scope.refName) : ref.raw;
+    return { ...lookupRemote(this.loaded, ref), ref, display };
+  }
+
+  /** The secrets `secrets: inherit` passes: all of them, but only `GITHUB_TOKEN` to another owner's workflow (lab R6). */
+  private inherited(ctx: JobContext, remote: RemoteTarget | undefined): string[] {
+    const owner =
+      ctx.scope.unit.origin?.owner ??
+      (this.index.project.repository ?? this.scenario.repository)?.split('/')[0];
+    const across = remote && owner !== undefined && remote.ref.owner.toLowerCase() !== owner.toLowerCase();
+    return across ? [] : ctx.scenario.secrets;
+  }
+
+  private useRemote(target: RemoteTarget, at: LegPlan | NodeId, scope: Scope, uses: UsesRef): void {
+    const site = this.remoteUses.get(target.display);
+    if (!site) this.remoteUses.set(target.display, { target, at: [at], unit: scope.unit, uses });
+    else {
+      site.at.push(at);
+      if (site.unit.external && !scope.unit.external) Object.assign(site, { unit: scope.unit, uses });
+    }
+  }
+
+  /**
+   * The remotes the plan lists (every workflow it calls, and the actions a host read or tried to), sorted by ref; and
+   * the lockfile's word on each remote it uses, said at the first node that uses it.
+   */
+  private finishRemotes(): RemoteUse[] {
+    const out: RemoteUse[] = [];
+    for (const site of this.remoteUses.values()) {
+      const at = [...new Set(site.at.map((a) => (typeof a === 'string' ? a : a.id)))].sort(byCodeUnit);
+      const { issue } = remotePin(
+        site.target.ref,
+        pinContextOf(this.loaded, site.unit, site.uses, site.target.ref),
+      );
+      if (issue) this.diagnostics.push({ ...issue, node: at[0]! });
+      if (site.target.ref.kind === 'workflow' || site.target.state !== 'not-fetched')
+        out.push(remoteUseOf(site.target, at));
+    }
+    return out.sort((a, b) => byCodeUnit(a.ref, b.ref));
+  }
+
+  private unsupportedCall(leg: LegPlan, job: JobDecl, remote: RemoteTarget | undefined): void {
+    this.callDiagnostics(leg.id, job, remote);
     leg.result =
       leg.runs.verdict === 'no'
         ? known('skipped')
         : unknown([`${leg.id}.call`], ['success', 'failure', 'skipped']);
     // Noted in `applyLegFacts`, unless a mock sets the outcome.
     if (leg.runs.verdict !== 'no') this.openCalls.add(leg);
+  }
+
+  /** Why a call is not planned: not fetched (`unsupported`), not read, past a cap, a parse error, or not callable. */
+  private callDiagnostics(node: NodeId, job: JobDecl, remote: RemoteTarget | undefined): void {
+    const shown = remote?.display ?? job.uses?.raw ?? '';
+    if (remote?.state !== 'invalid') {
+      this.diagnostics.push({ severity: 'warning', ...callProblem(shown, job, remote), node });
+      return;
+    }
+    for (const e of remote.unit!.parseErrors) this.diagnoseOnce(parseDiagnostic(shown, e, node));
   }
 
   /** An output a leg does not list: empty, unless the leg calls a workflow the plan does not load. */
@@ -798,6 +948,7 @@ class Planner {
     state: ContextState,
     inputs: Record<string, Value<Json>> | undefined,
     parent: Location,
+    scope: Scope,
   ): StepsResult {
     const taken = new Set<string>();
     const stepsState: Record<string, StepState> = {};
@@ -827,6 +978,7 @@ class Planner {
         stepState,
         status,
         location,
+        scope,
       );
       Object.assign(written, envWrites);
       out.plans.push(plan);
@@ -853,6 +1005,7 @@ class Planner {
     state: ContextState,
     status: Value<JobStatus>,
     location: Location,
+    scope: Scope,
   ): { plan: StepPlan; open: boolean; envWrites: Record<string, Value<string>> } {
     this.units.set(sid, { location, kind: 'step' });
     const evaluated = st?.if ?? impliedIf(step);
@@ -869,7 +1022,7 @@ class Planner {
     if (runs.verdict === 'maybe') this.noteValue(cond.value, sid);
     const continueOnError = this.setting(st?.continueOnError, false, `${sid}.continue-on-error`);
     const withValues = this.bindings(step.with, state);
-    const target = this.stepTarget(step, sid, withValues);
+    const target = this.stepTarget(step, sid, withValues, scope);
     const { outcome, outputs, open, composite, envWrites } = this.stepOutcome(
       step,
       target,
@@ -886,17 +1039,31 @@ class Planner {
     return { plan, open, envWrites };
   }
 
-  /** A `uses:` step's local action, or the shipped model of a remote one with what it sees (scenario, `with:`, `@ref`). */
-  private stepTarget(step: StepDecl, sid: NodeId, withValues: Record<string, Value<string>>): StepTarget {
+  /**
+   * A `uses:` step's local action, or the shipped model of a remote one with what it sees (scenario, `with:`, `@ref`).
+   * Inside a remote unit the index resolves nothing: its `./` is the job's workspace (lab R3), its `$/` the remote.
+   */
+  private stepTarget(
+    step: StepDecl,
+    sid: NodeId,
+    withValues: Record<string, Value<string>>,
+    scope: Scope,
+  ): StepTarget {
     if (!step.uses) return {};
-    const action = this.index.actionOf(step);
+    const remote = this.remoteTarget(scope, step.uses);
+    if (remote) this.useRemote(remote, sid, scope, step.uses);
+    const action = remote || scope.unit.external ? undefined : this.index.actionOf(step);
     if (action) return { action };
-    const model = modelFor(step.uses.raw, this.shipped);
+    return this.modelTarget(remote?.display ?? step.uses.raw, sid, withValues);
+  }
+
+  private modelTarget(uses: string, sid: NodeId, withValues: Record<string, Value<string>>): StepTarget {
+    const model = modelFor(uses, this.shipped);
     if (!model) return {};
     this.models.set(model.id, model.version);
     const ctx: ModelContext = { scenario: this.scenario, with: withValues, node: sid };
-    const at = step.uses.raw.indexOf('@');
-    if (at !== -1) ctx.ref = step.uses.raw.slice(at + 1);
+    const at = uses.indexOf('@');
+    if (at !== -1) ctx.ref = uses.slice(at + 1);
     return { model: { model, ctx } };
   }
 
@@ -1060,6 +1227,7 @@ class Planner {
       { ...state, steps: {}, status: known('success') },
       inputs,
       location,
+      { unit: action },
     );
     const steps = Object.fromEntries(
       inner.plans
@@ -1184,7 +1352,7 @@ function workflowShell(
 ): WorkflowPlan {
   const plan: WorkflowPlan = {
     id,
-    path: wf.path,
+    path: ctx.remote?.display ?? wf.path,
     on: Object.keys(settings.events),
     triggered,
     conclusion: known('skipped'),
@@ -1195,15 +1363,21 @@ function workflowShell(
   };
   if (wf.name !== undefined) plan.name = wf.name;
   if (ctx.caller !== undefined) plan.caller = ctx.caller;
-  if (settings.concurrency) {
-    plan.concurrency = {};
-    if (settings.concurrency.group !== undefined) plan.concurrency.group = settings.concurrency.group;
-    const cip = settings.concurrency.cancelInProgress;
-    if (cip !== undefined)
-      plan.concurrency.cancelInProgress =
-        typeof cip === 'boolean' ? known(cip) : unknown([`${id}.concurrency`]);
-  }
+  if (ctx.remote) plan.remote = { ref: ctx.remote.display, sha: ctx.remote.sha };
+  if (settings.concurrency) plan.concurrency = concurrencyOf(settings.concurrency, id);
   return plan;
+}
+
+function concurrencyOf(
+  c: NonNullable<WorkflowSettings['concurrency']>,
+  id: NodeId,
+): NonNullable<WorkflowPlan['concurrency']> {
+  const out: NonNullable<WorkflowPlan['concurrency']> = {};
+  if (c.group !== undefined) out.group = c.group;
+  const cip = c.cancelInProgress;
+  if (cip !== undefined)
+    out.cancelInProgress = typeof cip === 'boolean' ? known(cip) : unknown([`${id}.concurrency`]);
+  return out;
 }
 
 function jobShell(
@@ -1273,6 +1447,58 @@ function stepShell(
   if (step.run !== undefined) plan.run = true;
   plan.loc = locOf(step.loc);
   return plan;
+}
+
+/** GitHub's limit on the reusable workflows one run names (lab R7). */
+const MAX_CALLED_WORKFLOWS = 50;
+
+/** By code unit, not locale, so every host orders alike. */
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** A remote named through its unit's own repository, shown at the ref name the unit is shown at (GitHub records it so, lab R2). */
+const atRefName = (ref: RemoteRef, refName: string | undefined): string =>
+  `${ref.owner}/${ref.repo}${ref.path ? `/${ref.path}` : ''}@${refName ?? ref.ref}`;
+
+const refNameOf = (display: string): string => display.slice(display.lastIndexOf('@') + 1);
+
+function remoteUseOf(target: RemoteTarget, at: NodeId[]): RemoteUse {
+  const use: RemoteUse = { ref: target.display, kind: target.ref.kind, state: target.state, at };
+  if (target.source) {
+    use.sha = target.source.sha;
+    use.pinned = target.source.pinned;
+    if (target.source.host !== undefined) use.host = target.source.host;
+  }
+  if (target.failure) use.failure = target.failure.failure;
+  return use;
+}
+
+/** The diagnostic of a call that is not planned and whose file is not the problem. */
+function callProblem(
+  shown: string,
+  job: JobDecl,
+  remote: RemoteTarget | undefined,
+): { code: string; message: string } {
+  if (remote?.state === 'failed') {
+    const { failure, message } = remote.failure!;
+    return { code: 'remote-fetch-failed', message: `${shown}: not read (${failure}): ${message}` };
+  }
+  if (remote?.state === 'limit')
+    return {
+      code: 'remote-limit',
+      message: `${shown}: not read, past the limit on how many remote files a run reads`,
+    };
+  const notLoaded = remote ? remote.state === 'not-fetched' : job.uses?.kind === 'remote-workflow';
+  const why = notLoaded
+    ? 'a remote reusable workflow is not loaded'
+    : 'the called workflow was not found or cannot be called';
+  return { code: 'unsupported', message: `${shown}: ${why}` };
+}
+
+/** A remote's parse error (an alias bomb is one), at its place in the remote's text. */
+function parseDiagnostic(shown: string, e: { message: string; loc?: Loc }, node: NodeId): Diagnostic {
+  const d: Diagnostic = { severity: 'warning', code: 'parse', message: `${shown}: ${e.message}`, node };
+  if (e.loc) d.loc = locOf(e.loc);
+  return d;
 }
 
 /** A plan position from a core one: file, line and column. */

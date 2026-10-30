@@ -1,15 +1,22 @@
-import type { Json, NodeId, RunPlan } from './types';
+import type { Json, NodeId, RemoteUse, RunPlan } from './types';
 
 /**
  * The canonical form of a plan, for snapshots and fingerprints: no engine version, `$schema`, positions, reads or
  * pin flags; jobs sorted by id and object keys sorted, so two plans of the same behaviour serialize alike. The
- * snapshot profile also folds matrix legs that are identical apart from their key into `sameAs` entries.
+ * snapshot profile also folds matrix legs that are identical apart from their key into `sameAs` entries, and leaves
+ * out where a remote was read (its commit, pin and host), so a lockfile bump that changes no behaviour changes no
+ * snapshot.
  */
 
 export type CanonicalProfile = 'snapshot' | 'hash';
 
 const DROP_AT_ROOT = new Set(['engine', '$schema']);
 const DROP_EVERYWHERE = new Set(['loc', 'reads']);
+/** In the snapshot profile: of each `remotes[]` entry, and of a called remote workflow's `remote`. */
+const SNAPSHOT_DROPS = new Map([
+  ['remotes', new Set(['sha', 'pinned', 'host'])],
+  ['remote', new Set(['sha'])],
+]);
 
 export function canonicalize(plan: RunPlan, profile: CanonicalProfile): Json {
   const root = plan as unknown as Record<string, Json>;
@@ -26,11 +33,17 @@ function walk(value: Json, key: string, profile: CanonicalProfile): Json {
   if (value === null || typeof value !== 'object') return value;
   const out: Record<string, Json> = {};
   for (const k of Object.keys(value).sort()) {
-    if (DROP_EVERYWHERE.has(k) || (key === 'pin' && k === 'flag')) continue;
+    if (dropped(key, k, profile)) continue;
     out[k] = walk(value[k] as Json, k, profile);
   }
   return out;
 }
+
+/** Whether the canonical form leaves out field `k` of an object under `key`. */
+const dropped = (key: string, k: string, profile: CanonicalProfile): boolean =>
+  DROP_EVERYWHERE.has(k) ||
+  (key === 'pin' && k === 'flag') ||
+  (profile === 'snapshot' && SNAPSHOT_DROPS.get(key)?.has(k) === true);
 
 function walkArray(value: Json[], key: string, profile: CanonicalProfile): Json[] {
   let items = value.map((v) => walk(v, key, profile));
@@ -76,11 +89,18 @@ function foldLegs(legs: Record<string, Json>[]): Json[] {
 export function restrictPlan(plan: RunPlan, workflow: NodeId): RunPlan {
   const under = (id: string | undefined): boolean =>
     id !== undefined && (id === workflow || id.startsWith(`${workflow}#`) || id.startsWith(`${workflow}>`));
+  const { remotes, ...rest } = plan;
+  const kept: RemoteUse[] = [];
+  for (const r of remotes ?? []) {
+    const at = r.at.filter(under);
+    if (at.length) kept.push({ ...r, at });
+  }
   return {
-    ...plan,
+    ...rest,
     workflows: plan.workflows.filter((w) => w.id === workflow),
     unknowns: plan.unknowns.filter((u) => under(u.id) || under(u.producer) || u.affects.some(under)),
     mocks: plan.mocks.filter((m) => under(m.at)),
+    ...(kept.length ? { remotes: kept } : {}),
     diagnostics: plan.diagnostics.filter((d) => under(d.node) || d.node === undefined),
   };
 }
