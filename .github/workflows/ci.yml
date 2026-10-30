@@ -162,6 +162,8 @@ jobs:
         uses: $/
         with:
           junit: simulci-junit.xml
+          # D0 turns remotes on (with the CLI step) once this repository commits a remotes.lock.yml.
+          remotes: off
       - id: plan
         name: The plan of a pull request
         uses: $/

@@ -27,7 +27,8 @@ function parseFilters(ctx: ModelContext): Record<string, Filter> | undefined {
   if (text === undefined || !text.includes(':')) return undefined;
   let doc: unknown;
   try {
-    doc = parse(text);
+    // Errors only: yaml prints a warning to stderr, quoting the line, and this text may be another repository's.
+    doc = parse(text, { logLevel: 'error' });
   } catch {
     return undefined;
   }
