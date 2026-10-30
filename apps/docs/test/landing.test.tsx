@@ -7,8 +7,9 @@ import HomePage from '../app/(home)/page';
 
 /**
  * The landing against what it claims: the accuracy figure is the one accuracy.json holds, and no number of it is
- * typed into the page; the remote caveat stays until the lab covers remotes (L3); its links go to pages the site
- * has; the command it shows is one `simulci plan` reads; and the Action's ref is the release the repository is at.
+ * typed into the page; the remote caveat stays while the lab's remote cases have a wrong prediction; its links go to
+ * pages the site has; the command it shows is one `simulci plan` reads; and the Action's ref is the release the
+ * repository is at.
  */
 
 const root = new URL('../../../', import.meta.url);
@@ -56,8 +57,10 @@ describe('the accuracy figure', () => {
     expect(sources.join()).not.toContain(measured.capture.slice(0, 7));
   });
 
-  it('says remote reusable workflows are not lab-verified, until L3 adds the remote runs', () => {
-    expect(html).toContain('>Remote reusable workflows: not yet lab-verified.<');
+  it('says remote reusable workflows are not lab-verified while the remote cases have a wrong prediction', () => {
+    expect(html.includes('>Remote reusable workflows: not yet lab-verified.<')).toBe(
+      measured.remote.wrong > 0,
+    );
   });
 });
 
