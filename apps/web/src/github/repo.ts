@@ -1,6 +1,7 @@
 import { isProjectFile, isReadFile } from '../input/filter';
 import { LIMITS, type Skipped, type Walked } from '../input/limits';
 import { decodeExact } from '../input/read';
+import type { RepoTarget } from '../lib/repo-words';
 import { type GitHubCache, objectKey } from './cache';
 import type { RepoClient } from './client';
 
@@ -12,12 +13,7 @@ import type { RepoClient } from './client';
  * with the trees and files cached, 2. What was read from a repository seen public is kept in the cache.
  */
 
-/** A repository and the ref to read; no ref reads its default branch. */
-export interface RepoTarget {
-  owner: string;
-  repo: string;
-  ref?: string;
-}
+export type { RepoTarget } from '../lib/repo-words';
 
 /** What `GET /repos/{owner}/{repo}` says of a repository, its names as GitHub spells them. */
 export interface RepoInfo {

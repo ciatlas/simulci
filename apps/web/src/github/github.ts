@@ -19,12 +19,15 @@ import { commitOf, readAt, repoInfo, type RepoInfo, type RepoTarget } from './re
  * a worker, and only to the host's anonymous API (`/config.js`'s `apiUrl`, github.com's by default).
  */
 
-export type { RepoTarget } from './repo';
+export type { RepoInfo, RepoTarget } from './repo';
+export { OpenRepo } from './OpenRepo';
 
 export interface ReadOptions {
   signal?: AbortSignal;
   /** Files read so far of the files to read. */
   onProgress?: (done: number, total: number) => void;
+  /** What the dialog already read of the repository: its `GET /repos` is not asked again. */
+  known?: RepoInfo;
 }
 
 /** A repository read: the source it is, its files as a walk gives them, and what it cost. */
@@ -85,12 +88,25 @@ export async function readRepository(target: RepoTarget, options: ReadOptions = 
   return reading(
     client,
     async () => {
-      const info = await repoInfo(client, target);
+      const info = isKnown(options.known, target) ? options.known : await repoInfo(client, target);
       const ref = target.ref ?? info.defaultBranch;
       const sha = await commitOf(client, info, ref);
       const walked = await readAt({ client, cache: c, host, ...pick(options) }, info, sha);
       return { source: sourceOf(info, host, ref, sha), walked, requests: client.requests(), ...rate(client) };
     },
+    options.signal,
+  );
+}
+
+/** What the repository says of itself, for the dialog before Open: one request. */
+export async function describeRepository(
+  target: RepoTarget,
+  options: ReadOptions = {},
+): Promise<{ info: RepoInfo; rate?: string }> {
+  const { client } = contextOf(options);
+  return reading(
+    client,
+    async () => ({ info: await repoInfo(client, target), ...rate(client) }),
     options.signal,
   );
 }
@@ -127,6 +143,11 @@ export async function fetchAgain(
     options.signal,
   );
 }
+
+const isKnown = (known: RepoInfo | undefined, t: RepoTarget): known is RepoInfo =>
+  known !== undefined &&
+  known.owner.toLowerCase() === t.owner.toLowerCase() &&
+  known.repo.toLowerCase() === t.repo.toLowerCase();
 
 const pick = (options: ReadOptions) => (options.onProgress ? { onProgress: options.onProgress } : {});
 

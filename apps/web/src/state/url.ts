@@ -1,8 +1,11 @@
 import type { AssumeEntry, ScenarioInput } from '@simulci/engine';
+import { parseTargetText, type RepoTarget, targetText } from '../lib/repo-words';
+import type { Source } from './store';
 
 /**
  * What the URL carries: the scenario's own keys, `a` (the assume entries), `wf` (the focused workflow), `sel` (the
- * selected unit path), `d` (`legs`), `view` (`text`), `hide` (`1`) and `edit` (`1`, edit mode). Files never. The picker checks shapes only,
+ * selected unit path), `d` (`legs`), `view` (`text`), `hide` (`1`), `edit` (`1`, edit mode) and `gh` (`octo/ship@main`: a
+ * public GitHub repository, M4 synthesis § 5.5). Files never. The picker checks shapes only,
  * deep enough that the form can show whatever it keeps; the worker validates and answers `invalid` on the field.
  */
 
@@ -74,6 +77,7 @@ export interface UrlState {
   view?: 'text';
   hide?: true;
   edit?: true;
+  gh?: RepoTarget;
 }
 
 /** Beyond this many characters of JSON the assume entries stay in the store and leave the URL. */
@@ -133,6 +137,8 @@ export function readSearch(raw: Record<string, unknown>): UrlState {
   if (raw.view === 'text') state.view = 'text';
   if (isOne(raw.hide)) state.hide = true;
   if (isOne(raw.edit)) state.edit = true;
+  const gh = typeof raw.gh === 'string' ? parseTargetText(raw.gh) : undefined;
+  if (gh) state.gh = gh;
   return state;
 }
 
@@ -154,6 +160,7 @@ export function writeSearch(state: UrlState): Record<string, unknown> {
   if (state.view === 'text') out.view = 'text';
   if (state.hide) out.hide = 1;
   if (state.edit) out.edit = 1;
+  if (state.gh) out.gh = targetText(state.gh);
   return out;
 }
 
@@ -174,6 +181,19 @@ export interface UrlSource {
   detail: 'legs' | 'steps';
   ui: { view: 'graph' | 'text'; hideUntriggered: boolean };
   edit: { on: boolean };
+  source: Source;
+  githubOffer?: RepoTarget;
+}
+
+/**
+ * The repository the URL names: the source, when it is one GitHub said is public (a private one never reaches a URL,
+ * where a shared link or the history would carry it), else the one a link offered and the author has not answered.
+ */
+function ghOf(s: Pick<UrlSource, 'source' | 'githubOffer'>): RepoTarget | undefined {
+  const { source } = s;
+  if (source.kind === 'github')
+    return source.private ? undefined : { owner: source.owner, repo: source.repo, ref: source.ref };
+  return s.githubOffer;
 }
 
 export function urlStateOf(s: UrlSource): UrlState {
@@ -184,6 +204,8 @@ export function urlStateOf(s: UrlSource): UrlState {
   if (s.ui.view === 'text') state.view = 'text';
   if (s.ui.hideUntriggered) state.hide = true;
   if (s.edit.on) state.edit = true;
+  const gh = ghOf(s);
+  if (gh) state.gh = gh;
   return state;
 }
 
@@ -196,6 +218,8 @@ export function urlSliceChanged(s: UrlSource, prev: UrlSource): boolean {
     s.detail !== prev.detail ||
     s.ui.view !== prev.ui.view ||
     s.ui.hideUntriggered !== prev.ui.hideUntriggered ||
-    s.edit.on !== prev.edit.on
+    s.edit.on !== prev.edit.on ||
+    s.source !== prev.source ||
+    s.githubOffer !== prev.githubOffer
   );
 }

@@ -1,4 +1,5 @@
-import { type ChangeEvent, useRef, useState } from 'react';
+import { type ChangeEvent, Suspense, useRef, useState } from 'react';
+import { OpenRepoDialog, offersGitHub } from '../github/load';
 import { SAMPLES } from '../input/samples';
 import { repoAt } from '../lib/repo-words';
 import { dirtyPaths, type Source } from '../state/store';
@@ -16,6 +17,7 @@ export function SourceMenu() {
   const fileCount = useSession((s) => Object.keys(s.files.byPath).length);
   const unsaved = useSession((s) => dirtyPaths(s.files).length);
   const [pasting, setPasting] = useState(false);
+  const [opening, setOpening] = useState(false);
   return (
     <nav aria-label="Source" className="flex flex-wrap items-center gap-2">
       <SourceStatus source={source} fileCount={fileCount} />
@@ -35,6 +37,11 @@ export function SourceMenu() {
       <button type="button" className={button} onClick={() => setPasting(true)}>
         Paste YAML
       </button>
+      {offersGitHub() && (
+        <button type="button" className={button} onClick={() => setOpening(true)}>
+          Open GitHub repository…
+        </button>
+      )}
       <SamplePicker onPick={(name) => sources.useSample(name)} />
       {source.kind === 'folder' && source.handle && (
         <button type="button" className={button} onClick={() => void sources.reload()}>
@@ -62,6 +69,11 @@ export function SourceMenu() {
         </button>
       )}
       {pasting && <PasteDialog onClose={() => setPasting(false)} />}
+      {opening && (
+        <Suspense fallback={null}>
+          <OpenRepoDialog open={sources.openGitHub} onClose={() => setOpening(false)} />
+        </Suspense>
+      )}
     </nav>
   );
 }

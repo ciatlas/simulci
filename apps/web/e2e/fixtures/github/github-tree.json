@@ -1,0 +1,170 @@
+{
+  "sha": "7b2e68800faf96e27cb8489ef0ba1ab4f2b2bad9",
+  "truncated": false,
+  "tree": [
+    {
+      "path": "CODEOWNERS",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6339193621da3785bf37b0d204d7cefed37f2874",
+      "size": 112
+    },
+    {
+      "path": "ISSUE_TEMPLATE",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "8909b68358328d07773e80694337bc2c580484bb"
+    },
+    {
+      "path": "ISSUE_TEMPLATE/bug_report.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "92504a591b8d56e096086decc43109f9b0850dab",
+      "size": 1082
+    },
+    {
+      "path": "ISSUE_TEMPLATE/config.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "45a08bfab04bcdf63a5a1cc57c9b7d999433b7fa",
+      "size": 377
+    },
+    {
+      "path": "actionlint.yaml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "cec93bff2442335b65012a651de7c7fad48025ff",
+      "size": 418
+    },
+    {
+      "path": "environments.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "58737535b041fefa7cf342d36e2858466a879666",
+      "size": 172
+    },
+    {
+      "path": "flowpact",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "1eac442894b314c013bb0dd21020be2db31decfa"
+    },
+    {
+      "path": "flowpact/flowpact.config.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6825fa8b393e50f064df5876429e4bae7b291d39",
+      "size": 101
+    },
+    {
+      "path": "repository.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "0cb1e8e0329cdd284a578293ab38da3b674487be",
+      "size": 273
+    },
+    {
+      "path": "rulesets",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "7115d8b0d01c820de61410908654dc2d74f387ae"
+    },
+    {
+      "path": "rulesets/main-reviews.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "98c04913bb938bbb0e8e340e808d865420455cd7",
+      "size": 789
+    },
+    {
+      "path": "rulesets/main.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5cca17c24617ec25e80c143d87d64739322084ad",
+      "size": 1019
+    },
+    {
+      "path": "rulesets/release-tags.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b8566777553b6b680b8b365d649b76b18e0ce7b5",
+      "size": 432
+    },
+    {
+      "path": "security.json",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2908190259d26ef74bd04c34d5916d8fbc0df26c",
+      "size": 347
+    },
+    {
+      "path": "workflows",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "f2c5084b80d69eb4f48f0bf0a202a2bd7ee43459"
+    },
+    {
+      "path": "workflows/_artifact-upload.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "46be9f1c138287b98a7333d735177e42114528b3",
+      "size": 2591
+    },
+    {
+      "path": "workflows/ci.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b78dde0c71cc67736d84e1aab81c7c4a67c1eb83",
+      "size": 11646
+    },
+    {
+      "path": "workflows/dependency-bundle.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "6b138dd2a8e4b45b9074e20c757e84ba5d004fe3",
+      "size": 4331
+    },
+    {
+      "path": "workflows/docs.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "50528be3cae647a9bbe0313ae8351a4857d121d5",
+      "size": 1658
+    },
+    {
+      "path": "workflows/pr-title.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2757005afb6b0699eba3f2f56487eb98be0bd8ad",
+      "size": 1360
+    },
+    {
+      "path": "workflows/release.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ce98917f5e98a2e1a36113942ee0de29185790de",
+      "size": 45860
+    },
+    {
+      "path": "workflows/repo-settings.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "f6bdfeda8b57749377c40318ecd48d611372b399",
+      "size": 2280
+    },
+    {
+      "path": "workflows/scorecard.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2f732fdc783b46dafa4ca2b3a0fb2e1637c7a056",
+      "size": 946
+    },
+    {
+      "path": "workflows/vscode-publisher.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2f017762cddd8f376fec59a2887d9ac64e8c213e",
+      "size": 3216
+    }
+  ]
+}
