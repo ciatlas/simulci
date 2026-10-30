@@ -45308,7 +45308,8 @@ const SCHEMA_VERSIONS = {
 	scenario: 1,
 	runPlan: 1,
 	test: 1,
-	config: 1
+	config: 1,
+	remotesLock: 1
 };
 /** Where the JSON schema of a document is published (the `$schema` of emitted documents). */
 const schemaUrl = (name) => `https://ciatlas.github.io/simulci/schemas/${name}/v${SCHEMA_VERSIONS[name]}.json`;

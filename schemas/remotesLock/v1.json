@@ -1,0 +1,87 @@
+{
+  "$id": "https://ciatlas.github.io/simulci/schemas/remotesLock/v1.json",
+  "title": "simulci remotes lockfile",
+  "description": "The commit each remote workflow and action a repository uses resolved to, and a digest of the file read there.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "remotes": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[^/@\\s]+\\/[^/@\\s]+(?:\\/[^@\\s]+)?@[^@\\s]+$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "workflow",
+              "action"
+            ]
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256-[A-Za-z0-9+/]{43}=$"
+          },
+          "host": {
+            "type": "string",
+            "minLength": 1
+          },
+          "calls": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[^/@\\s]+\\/[^/@\\s]+(?:\\/[^@\\s]+)?@[^@\\s]+$"
+            }
+          }
+        },
+        "required": [
+          "sha",
+          "kind",
+          "file",
+          "digest"
+        ]
+      }
+    },
+    "unreadable": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[^/@\\s]+\\/[^/@\\s]+(?:\\/[^@\\s]+)?@[^@\\s]+$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "unreachable",
+          "timeout",
+          "token",
+          "access",
+          "rate-limit",
+          "server",
+          "not-found",
+          "too-large",
+          "digest",
+          "other"
+        ]
+      }
+    }
+  },
+  "required": [
+    "version",
+    "remotes"
+  ]
+}
