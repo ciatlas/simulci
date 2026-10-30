@@ -150,6 +150,70 @@ describe('the screen', () => {
     expect(screen.queryByRole('button', { name: 'Open the workflow source' })).toBeNull();
   });
 
+  it('puts a rail naming its key where the scenario column or the right panel was, while the page keys are on', () => {
+    const { store } = mount();
+    expect(document.querySelector('[data-rail]')).toBeNull();
+    act(() => {
+      store.getState().togglePane('left');
+      store.getState().togglePane('right');
+    });
+    const left = screen.getByRole('button', { name: 'Open the scenario and outline' });
+    const right = screen.getByRole('button', { name: 'Open the plan details' });
+    expect([left.getAttribute('aria-keyshortcuts'), right.getAttribute('aria-keyshortcuts')]).toEqual([
+      '[',
+      ']',
+    ]);
+    act(() => store.getState().setPrefs({ keys: false }));
+    expect([left.hasAttribute('aria-keyshortcuts'), right.textContent]).toEqual([
+      false,
+      'Open the plan details',
+    ]);
+    // Where the panel is a row (768 to 1023 px), its bar takes its own height under the plan, which keeps the rest.
+    expect(classes(screen.getByRole('main'))).toEqual(
+      expect.arrayContaining(['md:grid-rows-[minmax(0,1fr)_auto]', 'lg:grid-rows-[minmax(0,1fr)]']),
+    );
+  });
+
+  it("opens a pane from its rail by a click or by its key, with the focus on the pane's first stop", async () => {
+    const { store, user } = mount();
+    const stop = installShortcuts(store);
+    try {
+      act(() => {
+        store.getState().togglePane('left');
+        store.getState().togglePane('right');
+      });
+      await user.click(screen.getByRole('button', { name: 'Open the scenario and outline' }));
+      expect(store.getState().ui.prefs.collapsed.left).toBe(false);
+      expect(screen.queryByRole('button', { name: 'Open the scenario and outline' })).toBeNull();
+      const column = screen.getByRole('complementary', { name: 'Scenario and outline' });
+      await waitFor(() => expect(column.contains(document.activeElement)).toBe(true));
+      expect(document.activeElement).toBe(within(column).getAllByRole('combobox')[0]);
+
+      screen.getByRole('button', { name: 'Open the plan details' }).focus();
+      fireEvent.keyDown(document.activeElement!, { key: ']' });
+      expect(store.getState().ui.prefs.collapsed.right).toBe(false);
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Reasons' })));
+    } finally {
+      stop();
+    }
+  });
+
+  it('leaves the focus where it was when a key opens a pane from elsewhere', async () => {
+    const { store } = mount();
+    const stop = installShortcuts(store);
+    try {
+      act(() => store.getState().togglePane('left'));
+      const plan = document.querySelector<HTMLElement>('[data-plan]')!;
+      plan.focus();
+      fireEvent.keyDown(plan, { key: '[' });
+      expect(store.getState().ui.prefs.collapsed.left).toBe(false);
+      await new Promise((done) => requestAnimationFrame(done));
+      expect(document.activeElement).toBe(plan);
+    } finally {
+      stop();
+    }
+  });
+
   it('keeps an editor that could not load inside the YAML pane, with a way to close it and one to reload', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     chunk.fails = true;
@@ -230,8 +294,9 @@ describe('the screen', () => {
     const details = screen.getByRole('complementary', { name: 'Plan details' });
     expect(classes(column)).toContain('relative');
     expect(classes(within(details).getByRole('tabpanel'))).toContain('relative');
+    // Closed, the panel leaves its rail in that row, so the column still spans it.
     act(() => store.getState().togglePane('right'));
-    expect(classes(column)).not.toContain('md:row-span-2');
+    expect(classes(column)).toContain('md:row-span-2');
   });
 
   it('draws an undecided gate in the amber kept for text, and names it', () => {

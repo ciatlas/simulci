@@ -458,7 +458,7 @@ class Planner {
    * (the steps stay planned), its outputs overlay the leg's. The job's result and outputs are then read from its legs.
    */
   private applyLegFacts(job: JobDecl, leg: LegPlan, jobNode: NodeId, location: Location): void {
-    const facts = this.mocks.factsFor(location, leg.id);
+    const facts = this.mocks.factsFor(location, leg.id, job.uses?.raw);
     if (facts.outcome) {
       leg.result = facts.outcome.value;
       this.record(facts.outcome.by, leg.id, 'outcome');

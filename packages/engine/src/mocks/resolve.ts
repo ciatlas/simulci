@@ -227,7 +227,7 @@ function addLeg(path: UnitPath, matrix: Record<string, string | number | boolean
   last.leg = { ...last.leg, ...Object.fromEntries(Object.entries(matrix).map(([k, v]) => [k, String(v)])) };
 }
 
-/** Whether an entry names the unit: a step entry a step, a job entry a job, a uses entry a step using the action. */
+/** Whether an entry names the unit: a step entry a step, a job entry a job, a uses entry a step or a calling job using what it names. */
 function namesUnit(c: CompiledEntry, location: Location, uses: string | undefined): boolean {
   const isStep = location.chain.at(-1)?.kind === 'step';
   if (c.entry.uses !== undefined) return usesEntryNames(c, location, isStep, uses);
@@ -241,9 +241,11 @@ function usesEntryNames(
   isStep: boolean,
   uses: string | undefined,
 ): boolean {
-  if (!isStep || uses === undefined || !usesMatches(c.uses!, uses)) return false;
+  if (uses === undefined || !usesMatches(c.uses!, uses)) return false;
   if (c.entry.workflow !== undefined && !workflowMatches(c.entry.workflow, location.workflow)) return false;
-  return !c.path || pathMatches(c.path, { workflow: location.workflow, chain: location.chain.slice(0, -1) });
+  // The `job:` scope is a step's job, or the calling job itself.
+  const chain = isStep ? location.chain.slice(0, -1) : location.chain;
+  return !c.path || pathMatches(c.path, { workflow: location.workflow, chain });
 }
 
 /** What a shipped model produces at the unit, as the layer under the author's. */

@@ -233,7 +233,7 @@ jobs:
 
   docs:
     # The docs site (apps/docs): the static export builds, with its search index and an llms.txt whose links are
-    # absolute.
+    # absolute, and its landing passes the browser pass under apps/docs/e2e in headless Chromium.
     name: Docs site
     runs-on: ubuntu-latest
     steps:
@@ -258,6 +258,16 @@ jobs:
             echo "::error::llms.txt and llms-full.txt link by absolute URL only"
             exit 1
           fi
+      # The Chromium build the pinned @playwright/test drives, and the system libraries it needs.
+      - run: pnpm --filter @simulci/docs exec playwright install --with-deps chromium
+      - run: pnpm --filter @simulci/docs e2e
+      - id: traces
+        # A failed test keeps its trace (apps/docs/playwright.config.ts); `pnpm exec playwright show-trace` replays it.
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-playwright-traces
+          path: apps/docs/test-results/
 
   ci-passed:
     # The only required status check: add new jobs to `needs` instead of changing the branch rules.
