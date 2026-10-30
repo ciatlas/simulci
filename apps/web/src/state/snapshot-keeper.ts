@@ -2,6 +2,7 @@ import { type BehindOptions, behind } from './behind';
 import {
   clockOf,
   type EditsSnapshot,
+  keepsSnapshot,
   restorePlan,
   type SnapshotStore,
   snapshotOf,
@@ -10,7 +11,7 @@ import {
 import { dirtyPaths, type SessionState, type SessionStore } from './store';
 
 /**
- * Keeps the crash snapshot of a folder's edits (`state/snapshot.ts`): written behind the edits (`state/behind.ts`),
+ * Keeps the crash snapshot of a folder's or a GitHub repository's edits (`state/snapshot.ts`): written behind the edits (`state/behind.ts`),
  * at once after a save (the base moves, the version does not), and dropped once nothing is unsaved, or once the author
  * lets the edits go by replacing the folder (the replace
  * prompt asked first) or forgetting it. When a folder's files come in, the snapshot that belongs to them comes back
@@ -42,7 +43,7 @@ export function createSnapshotKeeper({
 
   const writer = behind(() => {
     const s = store.getState();
-    if (s.source.kind !== 'folder' || restoring !== undefined) return undefined;
+    if (!keepsSnapshot(s.source) || restoring !== undefined) return undefined;
     const conflicts = s.edit.restore?.conflicts ?? [];
     const at = now();
     const snapshot = kept ? withConflicts(snapshotOf(s, at), kept, conflicts, at) : snapshotOf(s, at);
@@ -85,8 +86,7 @@ export function createSnapshotKeeper({
     restoring = undefined;
     kept = undefined;
     const gone = letGo(prev) ? writer.run(() => snapshots.drop(prev.source)) : Promise.resolve();
-    if (s.source.kind === 'folder' && Object.keys(s.files.byPath).length > 0)
-      void restore(s.files.epoch, gone);
+    if (keepsSnapshot(s.source) && Object.keys(s.files.byPath).length > 0) void restore(s.files.epoch, gone);
   };
 
   const unsubscribe = store.subscribe((s, prev) => {
@@ -112,6 +112,6 @@ export function createSnapshotKeeper({
   };
 }
 
-/** Whether a new epoch let a folder's unsaved edits go: the prompt asked first, and the author chose to. */
+/** Whether a new epoch let a folder's or a repository's unsaved edits go: the prompt asked first, and the author chose to. */
 const letGo = (prev: SessionState): boolean =>
-  prev.source.kind === 'folder' && dirtyPaths(prev.files).length > 0;
+  keepsSnapshot(prev.source) && dirtyPaths(prev.files).length > 0;

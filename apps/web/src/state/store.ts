@@ -25,7 +25,28 @@ export type Source =
   | { kind: 'sample'; name: string }
   /** Pasted files, or a sample once edited: its buffers follow every edit (`writtenThrough`); `name` says which sample. */
   | { kind: 'paste'; buffers: { path: string; text: string }[]; name?: string }
-  | { kind: 'folder'; name: string; handle?: FileSystemDirectoryHandle; readAt: number };
+  | { kind: 'folder'; name: string; handle?: FileSystemDirectoryHandle; readAt: number }
+  | GitHubSource;
+
+/**
+ * A public GitHub repository read at a commit (M4 synthesis § 5.5). Read-only to GitHub: its edits leave as a patch.
+ * `ref` is what was asked for (a branch, a tag, a commit), `sha` the commit it was read at, `readAt` when.
+ */
+export interface GitHubSource {
+  kind: 'github';
+  /** The GitHub host the API serves: `github.com`. */
+  host: string;
+  owner: string;
+  repo: string;
+  ref: string;
+  sha: string;
+  defaultBranch: string;
+  /** As GitHub said when it was opened: only a repository seen public has its files cached or put in the URL. */
+  private: boolean;
+  readAt: number;
+  /** The pull request it was opened for (WP). */
+  pull?: number;
+}
 
 export interface Issue {
   path: (string | number)[];
@@ -343,7 +364,8 @@ export type Saving =
 /** The conflicts of a save or a reload (§ 5.4, § 5.7), until the author chose for each or cancelled. */
 export interface Settling {
   seq: number;
-  mode: 'save' | 'reload';
+  /** `fetch`: a GitHub repository's Fetch again, a reload whose other side is GitHub. */
+  mode: 'save' | 'reload' | 'fetch';
   folder: string;
   conflicts: DiskConflict[];
 }
@@ -384,6 +406,11 @@ export interface SessionActions {
    */
   loadCase: (scenario: ScenarioInput, assume: AssumeEntry[], workflow: string) => void;
   forgetSource: () => void;
+  /**
+   * The source of `epoch` read again elsewhere, its files merged (a GitHub repository's Fetch again at a new commit):
+   * the files, their epoch and the history stay. Nothing happens for another epoch.
+   */
+  moveSource: (epoch: number, source: Source) => void;
   /** A source that has no files until the author acts: a stored folder waiting for Reopen. */
   awaitReopen: (source: Source) => void;
   setScenario: (
@@ -799,6 +826,7 @@ export function createSessionStore(initial: SessionState = initialSessionState()
           sel: undefined,
           error: replaceError(s.error, undefined),
         })),
+      moveSource: (epoch, source) => set((s) => (s.files.epoch === epoch ? { source } : s)),
       // A new epoch, so the session takes it for a source with no files, not for an edit that emptied them.
       awaitReopen: (source) => get().setFiles({}, source),
       setReadonly: (epoch, readonly) =>

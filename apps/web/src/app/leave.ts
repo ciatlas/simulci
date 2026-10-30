@@ -1,7 +1,8 @@
+import { keepsSnapshot } from '../state/snapshot';
 import { dirtyPaths, type SessionStore } from '../state/store';
 
 /**
- * Leaving the page asks first while a folder (or a copy of one) has unsaved edits, or while edited buffers are still
+ * Leaving the page asks first while a folder (or a copy of one) or a GitHub repository has unsaved edits, or while edited buffers are still
  * to be written (synthesis § 5.7): the crash snapshot keeps a folder's edits too, but a closed tab should not need it.
  * The listener is there only while it is needed, since a `beforeunload` listener keeps some browsers from keeping
  * the page in their back-forward cache. It also starts the writes that wait: one started in `pagehide` does not
@@ -22,7 +23,7 @@ export function installLeaveGuard({
 }): () => void {
   const needed = (): boolean => {
     const s = store.getState();
-    return (s.source.kind === 'folder' && dirtyPaths(s.files).length > 0) || pending();
+    return (keepsSnapshot(s.source) && dirtyPaths(s.files).length > 0) || pending();
   };
   const onBeforeUnload = (event: BeforeUnloadEvent): void => {
     if (!needed()) return;

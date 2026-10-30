@@ -1,5 +1,6 @@
 import { type ChangeEvent, useRef, useState } from 'react';
 import { SAMPLES } from '../input/samples';
+import { repoAt } from '../lib/repo-words';
 import { dirtyPaths, type Source } from '../state/store';
 import { PasteDialog } from './PasteDialog';
 import { useApp, useSession } from './providers';
@@ -40,6 +41,21 @@ export function SourceMenu() {
           Reload
         </button>
       )}
+      {source.kind === 'github' && (
+        <>
+          <a
+            className={button}
+            href={`https://${source.host}/${source.owner}/${source.repo}/tree/${source.sha}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open on GitHub
+          </a>
+          <button type="button" className={button} onClick={() => void sources.reload()}>
+            Fetch again
+          </button>
+        </>
+      )}
       {source.kind !== 'none' && (
         <button type="button" className={button} onClick={() => void sources.forget()}>
           Forget
@@ -63,6 +79,12 @@ function SourceStatus({ source, fileCount }: { source: Source; fileCount: number
     return (
       <span className="text-muted text-xs">
         {source.name === undefined ? `${files} pasted` : `${source.name} · ${files}`}
+      </span>
+    );
+  if (source.kind === 'github')
+    return (
+      <span className="text-muted text-xs">
+        {repoAt(source)} · {files}
       </span>
     );
   return (

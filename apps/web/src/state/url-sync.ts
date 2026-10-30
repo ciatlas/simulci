@@ -1,5 +1,5 @@
 import { debounce, type Timers } from '../lib/debounce';
-import { type DefaultScenario, defaultScenario } from '../scenario/defaults';
+import { type DefaultScenario, defaultBranchOf, defaultScenario } from '../scenario/defaults';
 import { initialSessionState, type SessionActions, type SessionState, type SessionStore } from './store';
 import { ASSUME_URL_LIMIT, readSearch, type UrlState, urlSliceChanged, urlStateOf, writeSearch } from './url';
 
@@ -94,9 +94,11 @@ export function createUrlSync({
 }
 
 /** The page's own scenario: the default for the loaded outline, or the store's first scenario before a load. */
-export function pageDefault(s: Pick<SessionState, 'project'>): DefaultScenario {
+export function pageDefault(s: Pick<SessionState, 'project' | 'source'>): DefaultScenario {
   const outline = s.project.outline;
-  return outline ? defaultScenario(outline) : { scenario: initialSessionState().scenario, assumed: [] };
+  return outline
+    ? defaultScenario(outline, defaultBranchOf(s.source))
+    : { scenario: initialSessionState().scenario, assumed: [] };
 }
 
 /** Puts back the page's own scenario and the focus that goes with it, nothing selected in it, as a load does. */

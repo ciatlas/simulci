@@ -31,11 +31,16 @@ export function SaveDialogs() {
 const WORDS: Record<Settling['mode'], Record<Choice, string>> = {
   save: { mine: 'Overwrite with mine', disk: 'Keep the disk version', skip: 'Skip' },
   reload: { mine: 'Keep mine', disk: 'Take the disk version', skip: 'Skip' },
+  fetch: { mine: 'Keep mine', disk: "Take GitHub's version", skip: 'Skip' },
 };
 
-const WHY: Record<DiskConflict['reason'], (name: string) => string> = {
-  'changed-on-disk': (name) => `${name} changed on disk since it was opened or last saved.`,
-  'deleted-on-disk': (name) => `${name} is gone from the folder.`,
+const WHY: Record<DiskConflict['reason'], (name: string, from: string) => string> = {
+  'changed-on-disk': (name, from) =>
+    from === 'GitHub'
+      ? `${name} changed on GitHub since it was read.`
+      : `${name} changed on disk since it was opened or last saved.`,
+  'deleted-on-disk': (name, from) =>
+    `${name} is gone from ${from === 'GitHub' ? 'the repository' : 'the folder'}.`,
   exists: (name) => `${name} is in the folder already.`,
 };
 
@@ -43,7 +48,20 @@ const AFTER: Record<Settling['mode'], string> = {
   save: 'Nothing is written until each file has a choice. Keep the disk version is one undo away from your edits.',
   reload:
     'Keep mine leaves your edits, and the next save writes them over the folder; Take the disk version is one undo away from them.',
+  fetch:
+    "Keep mine leaves your edits, and the next patch carries them; Take GitHub's version is one undo away from them.",
 };
+
+const TITLE: Record<Settling['mode'], (where: string) => string> = {
+  save: () => 'Changed on disk',
+  reload: (where) => `Reload ${where}: changed on both sides`,
+  fetch: (where) => `Fetch ${where} again: changed on both sides`,
+};
+
+const GO: Record<Settling['mode'], string> = { save: 'Save', reload: 'Reload', fetch: 'Fetch' };
+
+/** Whose change the other side is: the folder's, or GitHub's. */
+const otherSide = (mode: Settling['mode']): string => (mode === 'fetch' ? 'GitHub' : 'the folder');
 
 /**
  * The files the folder and the page both changed (§ 5.4, § 5.7), one row each with Compare (the folder's change and
@@ -74,7 +92,7 @@ function ConflictsDialog({ settling }: { settling: Settling }) {
     >
       <div className="flex flex-col gap-3 p-4">
         <h2 id="conflicts-title" className="font-semibold">
-          {mode === 'save' ? 'Changed on disk' : `Reload ${settling.folder}: changed on both sides`}
+          {TITLE[mode](settling.folder)}
         </h2>
         <p id="conflicts-body" className="text-sm">
           {AFTER[mode]}
@@ -93,7 +111,7 @@ function ConflictsDialog({ settling }: { settling: Settling }) {
             Cancel
           </button>
           <button type="button" className={primary} disabled={!ready} onClick={go}>
-            {mode === 'save' ? 'Save' : 'Reload'}
+            {GO[mode]}
           </button>
         </div>
       </div>
@@ -119,14 +137,14 @@ function ConflictRow({
   const ours = useMemo(() => diffOf(base, mine), [base, mine]);
   return (
     <section aria-label={path} className="flex flex-col gap-2 border-border border-t pt-3">
-      <p className="text-sm">{WHY[conflict.reason](name)}</p>
+      <p className="text-sm">{WHY[conflict.reason](name, otherSide(mode))}</p>
       <details>
         <summary className="cursor-pointer text-xs">Compare</summary>
         <div className="flex flex-col gap-2 pt-2">
           <span className="flex items-center gap-2 text-xs">
-            The folder's change <DiffCounts diff={theirs} />
+            {mode === 'fetch' ? "GitHub's change" : "The folder's change"} <DiffCounts diff={theirs} />
           </span>
-          <UnifiedDiff diff={theirs} label={`${name}: what the folder changed`} />
+          <UnifiedDiff diff={theirs} label={`${name}: what ${otherSide(mode)} changed`} />
           <span className="flex items-center gap-2 text-xs">
             Your change <DiffCounts diff={ours} />
           </span>
@@ -215,8 +233,8 @@ function ReportDialog({ saving }: { saving: Extract<Saving, { status: 'done' }> 
             className={button}
             disabled={unsaved === 0}
             onClick={() => {
-              const { files } = store.getState();
-              downloadPatch(files, dirtyPaths(files).sort(), 'base');
+              const { files, source } = store.getState();
+              downloadPatch(files, dirtyPaths(files).sort(), 'base', source);
             }}
           >
             Download patch

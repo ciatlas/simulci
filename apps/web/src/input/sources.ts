@@ -1,9 +1,19 @@
 import { type Dialogs, loadDialogs } from '../app/dialogs-load';
+import type { ReadOptions, RepoTarget } from '../github/github';
+import { type GitHubChunk, loadGitHub } from '../github/load';
 import { downloadText } from '../lib/download';
 import { fileLabel } from '../lib/file-label';
+import { repoName, shortSha } from '../lib/repo-words';
 import type { SourceStore, StoredSource } from '../state/persist';
 import type { ReloadPlan } from '../state/reload';
-import { type BaseDiff, dirtyPaths, type SessionStore, type Settling, type Source } from '../state/store';
+import {
+  type BaseDiff,
+  dirtyPaths,
+  type GitHubSource,
+  type SessionStore,
+  type Settling,
+  type Source,
+} from '../state/store';
 import { type Dropped, filesFromDrop } from './drop';
 import { filterFiles, isProjectFile, snapshotFiles } from './filter';
 import { canPickFolder, canReadFolder, pickFolder, readFolder, requestFolder } from './folder';
@@ -21,7 +31,8 @@ import type { Choices, DiskConflict } from './save';
  * folder or a sample, choosing or dropping files, a paste over an edited buffer and Forget first ask the author, who
  * can save them to the folder, download them (each, or as one patch), let them go, or keep them. Reload replaces
  * nothing: it merges the folder into the files one by one (`state/reload.ts`). The tests' snapshots a walk read go
- * apart, read-only (`files.readonly`); Reload reads them again.
+ * apart, read-only (`files.readonly`); Reload reads them again. A public GitHub repository is read by the `github-*`
+ * chunk (M4 synthesis § 5.5); its Fetch again is a Reload whose other side is GitHub.
  */
 export interface Sources {
   canPickFolder: boolean;
@@ -32,8 +43,14 @@ export interface Sources {
   removeBuffer(path: string): void;
   useSample(name: string): void;
   /**
+   * Reads a public GitHub repository at a ref (its default branch when none is named) and opens it, once the replace
+   * prompt let the files with unsaved edits go: the files are read first, so a failed read loses nothing.
+   */
+  openGitHub(target: RepoTarget, options?: ReadOptions): Promise<GitHubOpened>;
+  /**
    * Reads an opened folder again and takes in what changed on disk, file by file, as one undoable entry; the files
-   * both sides changed are the author's to settle. Says so when nothing changed.
+   * both sides changed are the author's to settle. Says so when nothing changed. For a GitHub repository, Fetch
+   * again: its ref's commit, and when the ref moved, its files there, merged the same way.
    */
   reload(): Promise<void>;
   /** Asks for the stored folder again; must run in a click. */
@@ -48,6 +65,11 @@ export interface Sources {
  * as one patch; let them go; or keep them.
  */
 export type ReplaceChoice = 'save' | 'download' | 'patch' | 'discard' | 'cancel';
+
+/** What opening a repository came to: opened, or not, with why (none when the author cancelled). */
+export type GitHubOpened =
+  | { ok: true; requests: number; rate?: string }
+  | { ok: false; message?: string; requests?: number };
 
 /** A paste the files took, once the replace prompt (if it asked) is answered: `done` is false when it was cancelled. */
 export type Pasted = { ok: true; path: string; done: Promise<boolean> } | Extract<PasteCheck, { ok: false }>;
@@ -72,10 +94,16 @@ export interface SourcesOptions {
   ) => Promise<Choices | undefined>;
   /** Fetches the dialogs chunk, which makes the patch and merges a reload (`app/dialogs-load.ts`). */
   load?: () => Promise<Pick<Dialogs, 'downloadPatch' | 'reloadPlan' | 'settledReload'>>;
+  /** Fetches the GitHub source's chunk (`github/load.ts`). */
+  github?: () => Promise<Pick<GitHubChunk, 'readRepository' | 'fetchAgain'>>;
 }
 
 const downloadFile = (name: string, text: string): void =>
   downloadText(name, text, name.endsWith('.patch') ? 'text/x-diff' : 'application/yaml');
+
+/** A reload, as the sentence that says why it stopped names it: `reloading repo`, `fetching octo/ship again`. */
+const reloading = (mode: 'reload' | 'fetch', name: string): string =>
+  mode === 'fetch' ? `fetching ${name} again` : `reloading ${name}`;
 
 const LOOKED_FOR = 'looked for .github/workflows/*.yml, .github/actions/**/action.yml and action.yml';
 
@@ -94,6 +122,7 @@ export function createSources({
   save,
   settle,
   load = loadDialogs,
+  github = loadGitHub,
 }: SourcesOptions): Sources {
   const actions = store.getState();
 
@@ -122,10 +151,10 @@ export function createSources({
    * files, when the chunk could not be fetched.
    */
   const downloadPatch = (paths: readonly string[]): Promise<boolean> => {
-    const { files } = store.getState();
+    const { files, source } = store.getState();
     return load().then(
       (dialogs) => {
-        dialogs.downloadPatch(files, paths, 'base', download);
+        dialogs.downloadPatch(files, paths, 'base', source, download);
         return true;
       },
       () => {
@@ -174,20 +203,22 @@ export function createSources({
     if (skipped.length) actions.notify(`${where}: ${leftOut(skipped)}`);
   };
 
+  /** Why files were refused goes to the store's error, unless the caller says it (`refuse`). */
   const accept = (
     { files, meta, skipped = [], base, readonly = snapshotFiles(files) }: Brought,
     source: Source,
     where: string,
+    refuse: (message: string) => void = fail,
   ): boolean => {
     // Route tests are kept beside the project, but a source of tests alone has nothing to simulate.
     const kept = filterFiles(files);
     if (!Object.keys(kept).some(isProjectFile)) {
-      fail(nothingIn(where, skipped, `no workflow files in ${where}: ${LOOKED_FOR}`));
+      refuse(nothingIn(where, skipped, `no workflow files in ${where}: ${LOOKED_FOR}`));
       return false;
     }
     const limit = overLimit({ ...kept, ...readonly });
     if (limit) {
-      fail(`${where} is too big: ${limit}`);
+      refuse(`${where} is too big: ${limit}`);
       return false;
     }
     actions.setFiles(kept, source, meta, base, readonly);
@@ -316,6 +347,28 @@ export function createSources({
   };
 
   /**
+   * What a read again changes (`state/reload.ts`, made by the dialogs chunk), its snapshots taken at once (`snapshots`:
+   * they changed); nothing when the chunk cannot be fetched (said so) or new files came meanwhile.
+   */
+  const planReload = async (
+    read: Walked,
+    epoch: number,
+    what: string,
+    retry: string,
+  ): Promise<{ code: Pick<Dialogs, 'settledReload'>; plan: ReloadPlan; snapshots: boolean } | undefined> => {
+    const code = await load().catch(() => undefined);
+    if (!code) {
+      fail(`${what} stopped: the page could not fetch the merge; ${retry}`);
+      return undefined;
+    }
+    if (store.getState().files.epoch !== epoch) return undefined;
+    const plan = code.reloadPlan(store.getState().files, read);
+    const before = store.getState().files.readonly;
+    actions.setReadonly(epoch, plan.readonly);
+    return { code, plan, snapshots: store.getState().files.readonly !== before };
+  };
+
+  /**
    * The folder read again, merged into the files (`state/reload.ts`, in the dialogs chunk with the conflicts dialog):
    * the files both sides changed wait for the author's choices, and Cancel leaves everything as it was.
    */
@@ -323,13 +376,9 @@ export function createSources({
     const where = `the folder ${name}`;
     const limit = overLimit(read.files);
     if (limit) return fail(`${where} is too big: ${limit}`);
-    const code = await load().catch(() => undefined);
-    if (!code) return fail(`reloading ${name} stopped: the page could not fetch the merge; reload again`);
-    if (store.getState().files.epoch !== epoch) return;
-    const plan = code.reloadPlan(store.getState().files, read);
-    const before = store.getState().files.readonly;
-    actions.setReadonly(epoch, plan.readonly);
-    const snapshots = store.getState().files.readonly !== before;
+    const planned = await planReload(read, epoch, `reloading ${name}`, 'reload again');
+    if (!planned) return;
+    const { code, plan, snapshots } = planned;
     if (Object.keys(plan.disk).length === 0)
       actions.notify(`${name}: ${snapshots ? 'only snapshots changed' : 'no changes'}`);
     else if (!(await takeIn(name, epoch, plan, code))) return;
@@ -345,21 +394,58 @@ export function createSources({
     epoch: number,
     plan: ReloadPlan,
     code: Pick<Dialogs, 'settledReload'>,
+    mode: Extract<Settling['mode'], 'reload' | 'fetch'> = 'reload',
   ): Promise<boolean> => {
     const { base } = store.getState().files;
     const asking = plan.conflicts.length > 0 && settle;
-    const choices = asking ? await settle('reload', name, plan.conflicts) : {};
+    const choices = asking ? await settle(mode, name, plan.conflicts) : {};
     const now = store.getState().files;
     if (!choices || now.epoch !== epoch) return false;
     if (now.base !== base) {
-      fail(`reloading ${name} stopped: the files were saved meanwhile`);
+      fail(`${reloading(mode, name)} stopped: the files were saved meanwhile`);
       return false;
     }
     const { disk, take, from } = code.settledReload(plan, choices);
-    const outcome = actions.fromDisk(epoch, `Reloaded ${name}`, disk, take, from);
+    const label = mode === 'fetch' ? `Fetched ${name} again` : `Reloaded ${name}`;
+    const outcome = actions.fromDisk(epoch, label, disk, take, from);
     if (outcome.ok || !outcome.refusal) return true;
-    fail(`reloading ${name} stopped: ${fileLabel(outcome.refusal.path)} changed meanwhile`);
+    fail(`${reloading(mode, name)} stopped: ${fileLabel(outcome.refusal.path)} changed meanwhile`);
     return false;
+  };
+
+  /** A repository read again at a commit, taken in as its new place: the source, and what a reload restores. */
+  const moved = (epoch: number, source: GitHubSource): void => {
+    actions.moveSource(epoch, source);
+    const now = store.getState();
+    if (now.files.epoch !== epoch) return;
+    void persist.save(source, now.files.base, now.files.meta, undefined, now.files.readonly);
+  };
+
+  /**
+   * Fetch again (M4 synthesis § 5.5): one request when the ref has not moved; else its files at the new commit,
+   * merged as a reload merges a folder (unedited files take GitHub's text, a file both changed is the author's to
+   * settle), and the source moves to that commit once they are taken in. Cancel leaves everything where it was.
+   */
+  const fetchAgain = async (source: GitHubSource, epoch: number): Promise<void> => {
+    const name = repoName(source);
+    const chunk = await github().catch(() => undefined);
+    if (!chunk)
+      return fail(`fetching ${name} again stopped: the page could not fetch the GitHub reader; try again`);
+    const answer = await chunk.fetchAgain(source);
+    if (store.getState().files.epoch !== epoch) return;
+    if (!answer.moved) return void actions.notify(`${name}: up to date (${shortSha(source.sha)})`);
+    const planned = await planReload(answer.walked, epoch, `fetching ${name} again`, 'try again');
+    if (!planned) return;
+    const { code, plan } = planned;
+    const now = shortSha(answer.source.sha);
+    if (Object.keys(plan.disk).length === 0) {
+      moved(epoch, answer.source);
+      actions.notify(`${name}: now at ${now}; no workflow file changed`);
+    } else if (await takeIn(name, epoch, plan, code, 'fetch')) {
+      moved(epoch, answer.source);
+      actions.notify(`${name}: now at ${now}`);
+    }
+    tellLeftOut(name, answer.walked.skipped);
   };
 
   /** What the last visit stored, set again; a kind this page does not know is nothing stored. */
@@ -388,6 +474,10 @@ export function createSources({
         break;
       case 'folder':
         await restoreFolder(stored.name, stored.handle, untouched);
+        break;
+      case 'github':
+        // Offline, as read: the crash snapshot brings the edits back over it.
+        actions.setFiles(filesOf(stored.buffers), stored.source, stored.meta, undefined, stored.readonly);
         break;
     }
   };
@@ -463,9 +553,31 @@ export function createSources({
       );
     },
 
+    openGitHub: async (target, options = {}) => {
+      const chunk = await github().catch(() => undefined);
+      if (!chunk) return { ok: false, message: 'The page could not fetch the GitHub reader: try again.' };
+      let read: Awaited<ReturnType<GitHubChunk['readRepository']>>;
+      try {
+        read = await chunk.readRepository(target, options);
+      } catch (e) {
+        if (options.signal?.aborted) return { ok: false };
+        const requests = (e as { requests?: number }).requests;
+        return { ok: false, message: messageOf(e), ...(requests === undefined ? {} : { requests }) };
+      }
+      const { source, walked, requests } = read;
+      // Asked once the files are in hand: a read that fails, or is cancelled, loses nothing.
+      if (!(await mayReplace(`Opening ${repoName(source)}`))) return { ok: false, requests };
+      let refused: string | undefined;
+      const where = `${repoName(source)} at ${shortSha(source.sha)}`;
+      if (!accept(walked, source, where, (m) => (refused = m)))
+        return { ok: false, message: refused, requests };
+      return { ok: true, requests, ...(read.rate === undefined ? {} : { rate: read.rate }) };
+    },
+
     reload: () =>
       guarded(async () => {
         const s = store.getState();
+        if (s.source.kind === 'github') return fetchAgain(s.source, s.files.epoch);
         if (s.source.kind !== 'folder') return;
         const epoch = s.files.epoch;
         // A save that moves the base while the folder is read leaves the read behind the base: it is read again.

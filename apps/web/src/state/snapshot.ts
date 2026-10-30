@@ -3,7 +3,7 @@ import type { FileMeta } from '../input/read';
 import { type KeyValueStore, openKeyValue } from '../lib/idb';
 import { stampOf, type TxFile } from './history';
 import { DB_NAME, STORE_NAME } from './persist';
-import { dirtyPaths, type RestoreConflict, type SessionState, type Source } from './store';
+import { dirtyPaths, type GitHubSource, type RestoreConflict, type SessionState, type Source } from './store';
 
 /**
  * The crash snapshot (synthesis § 5.6): a folder's unsaved edits survive a closed tab, a crash or a reload. Its files
@@ -11,7 +11,8 @@ import { dirtyPaths, type RestoreConflict, type SessionState, type Source } from
  * apart, under `edits` in the same IndexedDB store: per dirty file the fingerprint of the text it was edited from and
  * the text now. One snapshot per folder, the eight folders edited last: a folder waiting for Reopen, or one the
  * author left for another, keeps its edits while another is edited. Pasted and edited-sample buffers need none:
- * they carry their edits themselves (`state/buffers.ts`).
+ * they carry their edits themselves (`state/buffers.ts`). A GitHub repository's edits are kept the same way, keyed
+ * `github:<host>/<owner>/<repo>` whatever the commit: a ref that moved since leaves the files GitHub changed as conflicts.
  *
  * When a folder's files come in, from the last visit, after Reopen, or picked again, the snapshot that belongs to it
  * comes back: every file whose text is still the one it was edited from, as one undoable `restore` entry; every
@@ -21,7 +22,8 @@ import { dirtyPaths, type RestoreConflict, type SessionState, type Source } from
 
 export interface EditsSnapshot {
   v: 1;
-  source: { kind: 'folder' | 'copy'; name: string; handle?: FileSystemDirectoryHandle };
+  /** A folder's name, or a repository's `<host>/<owner>/<repo>`, lower-case (`repoKey`). */
+  source: { kind: 'folder' | 'copy' | 'github'; name: string; handle?: FileSystemDirectoryHandle };
   /** Per dirty file that was read: the stamp of the text it was edited from, its text now, what reading found. */
   files: Record<string, { base: string; text: string; meta: FileMeta }>;
   /** Files created since they were read, by path. */
@@ -113,7 +115,10 @@ function isSnapshot(value: unknown): value is EditsSnapshot {
 function isSnapshotSource(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) return false;
   const source = value as Record<string, unknown>;
-  return (source.kind === 'folder' || source.kind === 'copy') && typeof source.name === 'string';
+  return (
+    (source.kind === 'folder' || source.kind === 'copy' || source.kind === 'github') &&
+    typeof source.name === 'string'
+  );
 }
 
 const isRecordOf = (value: unknown, each: (v: unknown) => boolean): boolean =>
@@ -127,17 +132,23 @@ function isSnapshotFile(value: unknown): boolean {
   );
 }
 
-/** The snapshot of the store's edits, or undefined when its source is no folder or nothing is unsaved. */
+/** Whether a source's edits are kept in a crash snapshot: a folder's, or a GitHub repository's. */
+export const keepsSnapshot = (source: Source): source is Extract<Source, { kind: 'folder' | 'github' }> =>
+  source.kind === 'folder' || source.kind === 'github';
+
+/** A repository as its snapshot names it: one per repository, whichever commit or ref the edits were made over. */
+export const repoKey = (source: Pick<GitHubSource, 'host' | 'owner' | 'repo'>): string =>
+  `${source.host}/${source.owner}/${source.repo}`.toLowerCase();
+
+/** The snapshot of the store's edits, or undefined when its source keeps none or nothing is unsaved. */
 export function snapshotOf(s: Pick<SessionState, 'source' | 'files'>, at: number): EditsSnapshot | undefined {
   const { source, files } = s;
-  if (source.kind !== 'folder') return undefined;
+  if (!keepsSnapshot(source)) return undefined;
   const dirty = dirtyPaths(files);
   if (dirty.length === 0) return undefined;
   const snapshot: EditsSnapshot = {
     v: 1,
-    source: source.handle
-      ? { kind: 'folder', name: source.name, handle: source.handle }
-      : { kind: 'copy', name: source.name },
+    source: snapshotSource(source),
     files: {},
     created: {},
     at,
@@ -153,9 +164,28 @@ export function snapshotOf(s: Pick<SessionState, 'source' | 'files'>, at: number
   return snapshot;
 }
 
-/** Whether a snapshot was taken of this source: the same directory for a folder, the same name for a copy. */
+function snapshotSource(source: Extract<Source, { kind: 'folder' | 'github' }>): EditsSnapshot['source'] {
+  if (source.kind === 'github') return { kind: 'github', name: repoKey(source) };
+  return source.handle
+    ? { kind: 'folder', name: source.name, handle: source.handle }
+    : { kind: 'copy', name: source.name };
+}
+
+/**
+ * Whether a snapshot was taken of this source: the same directory for a folder, the same name for a copy, the same
+ * repository for a GitHub source.
+ */
 async function belongs(snapshot: EditsSnapshot, source: Source): Promise<boolean> {
-  if (source.kind !== 'folder' || snapshot.source.name !== source.name) return false;
+  if (source.kind === 'github')
+    return snapshot.source.kind === 'github' && snapshot.source.name === repoKey(source);
+  return source.kind === 'folder' && snapshot.source.kind !== 'github' && belongsToFolder(snapshot, source);
+}
+
+async function belongsToFolder(
+  snapshot: EditsSnapshot,
+  source: Extract<Source, { kind: 'folder' }>,
+): Promise<boolean> {
+  if (snapshot.source.name !== source.name) return false;
   if (snapshot.source.kind === 'copy') return source.handle === undefined;
   const stored = snapshot.source.handle;
   if (!stored || !source.handle) return false;
