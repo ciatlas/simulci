@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FetchLike } from '@ciatlas/core/remote-fetch';
 import { memoryCache, objectKey } from '../src/github/cache';
 import { createRepoClient, failureSentence, rateSentence, revalidating } from '../src/github/client';
+import { fetchAgain } from '../src/github/github';
 import { commitOf, readAt, repoInfo } from '../src/github/repo';
 
 /**
@@ -246,12 +247,45 @@ describe('revalidation', () => {
     ]);
   });
 
+  it('revalidates across reads that share what they kept, as Fetch again does', async () => {
+    const fake = fakeApi();
+    const kept = new Map();
+    await repoInfo(createRepoClient({ apiUrl: API, fetch: fake.fetch, kept }), {
+      owner: 'octo',
+      repo: 'ship',
+    });
+    const again = createRepoClient({ apiUrl: API, fetch: fake.fetch, kept });
+    expect(await repoInfo(again, { owner: 'octo', repo: 'ship' })).toMatchObject({ defaultBranch: 'trunk' });
+    expect(fake.headers.map((h) => h['if-none-match'])).toEqual([undefined, 'W/"repo"']);
+  });
+
+  it('refuses to fetch a source again from a host it was not read from', async () => {
+    const source = {
+      kind: 'github' as const,
+      host: 'ghe.example',
+      owner: 'octo',
+      repo: 'ship',
+      ref: 'main',
+      sha: SHA,
+      defaultBranch: 'main',
+      private: false,
+      readAt: 0,
+    };
+    await expect(fetchAgain(source)).rejects.toThrow(
+      'octo/ship was read from ghe.example; this page reads github.com. Open it again.',
+    );
+  });
+
   it('keeps 64 answers, the least recently used going first', async () => {
     const seen: (string | undefined)[] = [];
-    const fetch = revalidating((url, init) => {
-      seen.push(init.headers['if-none-match']);
-      return Promise.resolve(new Response('x', { status: 200, headers: { etag: `"${url}"` } }));
-    }, 2);
+    const fetch = revalidating(
+      (url, init) => {
+        seen.push(init.headers['if-none-match']);
+        return Promise.resolve(new Response('x', { status: 200, headers: { etag: `"${url}"` } }));
+      },
+      new Map(),
+      2,
+    );
     const signal = new AbortController().signal;
     const ask = (n: number) => fetch(`${API}/repos/o/r${n}`, { headers: { accept: 'a' }, signal });
     await ask(1);

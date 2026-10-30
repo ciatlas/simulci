@@ -1,9 +1,16 @@
 import { apiHost } from '@ciatlas/core/remote-fetch';
 import type { Walked } from '../input/limits';
 import { readHostConfig } from '../app/config';
+import { repoName } from '../lib/repo-words';
 import type { GitHubSource } from '../state/store';
 import { type GitHubCache, openGitHubCache } from './cache';
-import { createRepoClient, failureSentence, rateSentence, type RepoClient } from './client';
+import {
+  createRepoClient,
+  failureSentence,
+  rateSentence,
+  type RepoClient,
+  type Revalidation,
+} from './client';
 import { commitOf, readAt, repoInfo, type RepoInfo, type RepoTarget } from './repo';
 
 /**
@@ -40,15 +47,14 @@ export class ReadFailure extends Error {
 }
 
 let cache: GitHubCache | undefined;
+/** What every read revalidates against: Fetch again's commit comes back as a 304 when the ref has not moved. */
+const kept: Revalidation = new Map();
 
 function contextOf(options: ReadOptions): { client: RepoClient; host: string; cache: GitHubCache } {
   const { apiUrl } = readHostConfig();
   cache ??= openGitHubCache();
-  return {
-    client: createRepoClient({ apiUrl, ...(options.signal ? { signal: options.signal } : {}) }),
-    host: apiHost(apiUrl),
-    cache,
-  };
+  const signal = options.signal ? { signal: options.signal } : {};
+  return { client: createRepoClient({ apiUrl, kept, ...signal }), host: apiHost(apiUrl), cache };
 }
 
 /** `work`, its failures said in the page's words; a cancelled read rejects with the signal's reason. */
@@ -95,6 +101,11 @@ export async function fetchAgain(
   options: ReadOptions = {},
 ): Promise<{ moved: false; requests: number } | ({ moved: true } & RepoRead)> {
   const { client, host, cache: c } = contextOf(options);
+  if (host !== source.host)
+    throw new ReadFailure(
+      `${repoName(source)} was read from ${source.host}; this page reads ${host}. Open it again.`,
+      0,
+    );
   return reading(
     client,
     async () => {

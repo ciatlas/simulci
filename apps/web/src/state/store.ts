@@ -408,9 +408,11 @@ export interface SessionActions {
   forgetSource: () => void;
   /**
    * The source of `epoch` read again elsewhere, its files merged (a GitHub repository's Fetch again at a new commit):
-   * the files, their epoch and the history stay. Nothing happens for another epoch.
+   * the files, their epoch and the history stay, and the files it changed (`moved`) are opened anew at their new base,
+   * so "since opened" compares with the commit the source names and its patch applies there. Nothing happens for
+   * another epoch.
    */
-  moveSource: (epoch: number, source: Source) => void;
+  moveSource: (epoch: number, source: Source, moved: readonly string[]) => void;
   /** A source that has no files until the author acts: a stored folder waiting for Reopen. */
   awaitReopen: (source: Source) => void;
   setScenario: (
@@ -826,7 +828,8 @@ export function createSessionStore(initial: SessionState = initialSessionState()
           sel: undefined,
           error: replaceError(s.error, undefined),
         })),
-      moveSource: (epoch, source) => set((s) => (s.files.epoch === epoch ? { source } : s)),
+      moveSource: (epoch, source, moved) =>
+        set((s) => (s.files.epoch === epoch ? { source, files: reopened(s.files, moved) } : s)),
       // A new epoch, so the session takes it for a source with no files, not for an edit that emptied them.
       awaitReopen: (source) => get().setFiles({}, source),
       setReadonly: (epoch, readonly) =>
@@ -1255,6 +1258,16 @@ const contextOf = (s: SessionState): history.Context => {
     },
   };
 };
+
+/** The files with these paths opened again at their base (none: not there). */
+function reopened(files: SessionState['files'], paths: readonly string[]): SessionState['files'] {
+  if (paths.length === 0) return files;
+  const opened = { ...files.opened };
+  for (const path of paths)
+    if (Object.hasOwn(files.base, path)) opened[path] = files.base[path]!;
+    else delete opened[path];
+  return { ...files, opened };
+}
 
 /**
  * The files of a new source: a new epoch, every file at the new version, its text as read and as opened, except

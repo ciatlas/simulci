@@ -347,14 +347,16 @@ export function createSources({
   };
 
   /**
-   * What a read again changes (`state/reload.ts`, made by the dialogs chunk), its snapshots taken at once (`snapshots`:
-   * they changed); nothing when the chunk cannot be fetched (said so) or new files came meanwhile.
+   * What a read again changes (`state/reload.ts`, made by the dialogs chunk); nothing when the chunk cannot be fetched
+   * (said so) or new files came meanwhile. A folder's snapshots are taken at once (`snapshots`: they changed), since
+   * the disk holds them whatever the author chooses; a repository's go with its commit, once the merge is taken in.
    */
   const planReload = async (
     read: Walked,
     epoch: number,
     what: string,
     retry: string,
+    snapshotsNow = true,
   ): Promise<{ code: Pick<Dialogs, 'settledReload'>; plan: ReloadPlan; snapshots: boolean } | undefined> => {
     const code = await load().catch(() => undefined);
     if (!code) {
@@ -364,7 +366,7 @@ export function createSources({
     if (store.getState().files.epoch !== epoch) return undefined;
     const plan = code.reloadPlan(store.getState().files, read);
     const before = store.getState().files.readonly;
-    actions.setReadonly(epoch, plan.readonly);
+    if (snapshotsNow) actions.setReadonly(epoch, plan.readonly);
     return { code, plan, snapshots: store.getState().files.readonly !== before };
   };
 
@@ -414,8 +416,9 @@ export function createSources({
   };
 
   /** A repository read again at a commit, taken in as its new place: the source, and what a reload restores. */
-  const moved = (epoch: number, source: GitHubSource): void => {
-    actions.moveSource(epoch, source);
+  const moved = (epoch: number, source: GitHubSource, plan: ReloadPlan): void => {
+    actions.setReadonly(epoch, plan.readonly);
+    actions.moveSource(epoch, source, Object.keys(plan.disk));
     const now = store.getState();
     if (now.files.epoch !== epoch) return;
     void persist.save(source, now.files.base, now.files.meta, undefined, now.files.readonly);
@@ -431,18 +434,22 @@ export function createSources({
     const chunk = await github().catch(() => undefined);
     if (!chunk)
       return fail(`fetching ${name} again stopped: the page could not fetch the GitHub reader; try again`);
-    const answer = await chunk.fetchAgain(source);
+    const answer = await chunk
+      .fetchAgain(source)
+      .catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+    // Other files came meanwhile: neither GitHub's answer nor its failure is theirs.
     if (store.getState().files.epoch !== epoch) return;
+    if (answer instanceof Error) return fail(answer.message);
     if (!answer.moved) return void actions.notify(`${name}: up to date (${shortSha(source.sha)})`);
-    const planned = await planReload(answer.walked, epoch, `fetching ${name} again`, 'try again');
+    const planned = await planReload(answer.walked, epoch, `fetching ${name} again`, 'try again', false);
     if (!planned) return;
     const { code, plan } = planned;
     const now = shortSha(answer.source.sha);
     if (Object.keys(plan.disk).length === 0) {
-      moved(epoch, answer.source);
+      moved(epoch, answer.source, plan);
       actions.notify(`${name}: now at ${now}; no workflow file changed`);
     } else if (await takeIn(name, epoch, plan, code, 'fetch')) {
-      moved(epoch, answer.source);
+      moved(epoch, answer.source, plan);
       actions.notify(`${name}: now at ${now}`);
     }
     tellLeftOut(name, answer.walked.skipped);

@@ -28,6 +28,11 @@ export interface EditsSnapshot {
   files: Record<string, { base: string; text: string; meta: FileMeta }>;
   /** Files created since they were read, by path. */
   created: Record<string, string>;
+  /**
+   * Files removed since they were read, by path: the stamp of the text removed. Without it a removal came back as the
+   * file, unedited, and a GitHub source's patch lost it (absent in snapshots written before).
+   */
+  removed?: Record<string, string>;
   at: number;
 }
 
@@ -108,6 +113,7 @@ function isSnapshot(value: unknown): value is EditsSnapshot {
     isSnapshotSource(v.source) &&
     isRecordOf(v.files, isSnapshotFile) &&
     isRecordOf(v.created, (t) => typeof t === 'string') &&
+    (v.removed === undefined || isRecordOf(v.removed, (t) => typeof t === 'string')) &&
     typeof v.at === 'number'
   );
 }
@@ -156,8 +162,10 @@ export function snapshotOf(s: Pick<SessionState, 'source' | 'files'>, at: number
   for (const path of dirty) {
     const text = files.byPath[path];
     const base = files.base[path];
-    // A file removed since it was read has nothing to keep: its text is on disk.
-    if (text === undefined) continue;
+    if (text === undefined) {
+      if (base !== undefined) (snapshot.removed ??= {})[path] = stampOf(base);
+      continue;
+    }
     if (base === undefined) snapshot.created[path] = text;
     else snapshot.files[path] = { base: stampOf(base), text, meta: files.meta[path]! };
   }
@@ -200,15 +208,19 @@ async function belongsToFolder(
 export interface RestorePlan {
   files: TxFile[];
   conflicts: RestoreConflict[];
+  /** Files removed before that changed since: they stay, and the author is told. */
+  kept: string[];
 }
 
 /**
  * A file comes back when its text is still the one it was edited from (and its BOM as read): the disk did not
- * change, and nothing was typed since. A file created since comes back when its path is still free. Any other file
- * is a conflict: the disk, or the author, moved on.
+ * change, and nothing was typed since. A file created since comes back when its path is still free. A file removed
+ * goes again when it is still the text removed; one that changed since stays (`kept`). Any other file is a conflict:
+ * the disk, or the author, moved on.
  */
 export function restorePlan(snapshot: EditsSnapshot, files: SessionState['files']): RestorePlan {
-  const plan: RestorePlan = { files: [], conflicts: [] };
+  const plan: RestorePlan = { files: [], conflicts: [], kept: [] };
+  removals(snapshot, files, plan);
   for (const [path, f] of Object.entries(snapshot.files)) {
     const current = files.byPath[path];
     if (current === f.text) continue;
@@ -224,6 +236,17 @@ export function restorePlan(snapshot: EditsSnapshot, files: SessionState['files'
     else plan.conflicts.push({ path, text, reason: 'exists' });
   }
   return plan;
+}
+
+/** The snapshot's removals: each file still the text removed, untouched since, goes again; any other stays. */
+function removals(snapshot: EditsSnapshot, files: SessionState['files'], plan: RestorePlan): void {
+  for (const [path, stamp] of Object.entries(snapshot.removed ?? {})) {
+    const current = files.byPath[path];
+    if (current === undefined) continue;
+    if (current === files.base[path] && stampOf(current) === stamp)
+      plan.files.push({ path, edits: [], remove: true, expect: stamp });
+    else plan.kept.push(path);
+  }
 }
 
 /** Whether a file is still the text the snapshot's edits were made to, as read, BOM included, and untouched since. */

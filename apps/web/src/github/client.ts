@@ -17,7 +17,7 @@ import { clockOf } from '../state/snapshot';
  */
 
 /** A response kept for revalidation: its ETag, its body and its media type. */
-interface Kept {
+export interface Kept {
   etag: string;
   body: Uint8Array;
   type: string | null;
@@ -43,9 +43,14 @@ function fromKept(res: Response, kept: Kept): Response {
   return new Response(kept.body.slice(), { status: 200, headers });
 }
 
+/** The answers kept for revalidation, by media type and URL: one map for the page's life, shared by every read. */
+export type Revalidation = Map<string, Kept>;
+
+/** The largest body kept for revalidation; a larger answer is left to core's limits, unkept. */
+const KEPT_BYTES = 256 * 1024;
+
 /** A `fetch` that revalidates: `If-None-Match` for a URL it read with an ETag, the body kept on a 304. */
-export function revalidating(fetch: FetchLike, max = KEPT): FetchLike {
-  const kept = new Map<string, Kept>();
+export function revalidating(fetch: FetchLike, kept: Revalidation = new Map(), max = KEPT): FetchLike {
   const keep = (key: string, entry: Kept): void => {
     kept.delete(key);
     kept.set(key, entry);
@@ -64,12 +69,19 @@ export function revalidating(fetch: FetchLike, max = KEPT): FetchLike {
       keep(key, before);
       return fromKept(res, before);
     }
-    const etag = res.headers.get('etag');
-    if (!res.ok || !etag) return res;
+    const etag = keepable(res);
+    if (!etag) return res;
     const body = new Uint8Array(await res.arrayBuffer());
     keep(key, { etag, body, type: res.headers.get('content-type') });
     return new Response(body.slice(), { status: res.status, headers: res.headers });
   };
+}
+
+/** The ETag of an answer worth keeping: a success that has one, small enough. */
+function keepable(res: Response): string | undefined {
+  const etag = res.headers.get('etag');
+  if (!res.ok || !etag) return undefined;
+  return Number(res.headers.get('content-length') ?? 0) > KEPT_BYTES ? undefined : etag;
 }
 
 /** A client of the API, and the requests it sent. */
@@ -83,12 +95,14 @@ export interface ClientOptions {
   apiUrl: string;
   fetch?: FetchLike;
   signal?: AbortSignal;
+  /** The answers kept for revalidation across clients; by default this client's own. */
+  kept?: Revalidation;
 }
 
 /** The page's own `fetch`, called unbound (a page's `window.fetch` throws when called as a method of another object). */
 const pageFetch: FetchLike = (url, init) => globalThis.fetch(url, init);
 
-export function createRepoClient({ apiUrl, fetch = pageFetch, signal }: ClientOptions): RepoClient {
+export function createRepoClient({ apiUrl, fetch = pageFetch, signal, kept }: ClientOptions): RepoClient {
   let requests = 0;
   const counted: FetchLike = (url, init) => {
     requests++;
@@ -96,7 +110,7 @@ export function createRepoClient({ apiUrl, fetch = pageFetch, signal }: ClientOp
   };
   const api = createGitHubClient({
     api: { apiUrl },
-    fetch: revalidating(counted),
+    fetch: revalidating(counted, kept),
     ...(signal ? { signal } : {}),
     // The page's per-file limit; a tree of `.github` can be larger than core's 1 MB default too.
     maxFileBytes: LIMITS.fileBytes,

@@ -1,3 +1,4 @@
+import { fileLabel } from '../lib/file-label';
 import { type BehindOptions, behind } from './behind';
 import {
   clockOf,
@@ -58,6 +59,10 @@ export function createSnapshotKeeper({
     if (n > 0 && a.transact({ label: 'Restored unsaved edits', origin: 'restore', files: plan.files }).ok)
       a.notify(
         `Restored unsaved edits to ${n} ${n === 1 ? 'file' : 'files'} from ${clockOf(snapshot.at)} · undo starts here`,
+      );
+    if (plan.kept.length > 0)
+      a.notify(
+        `Not removed again, since each changed after it was removed: ${plan.kept.map(fileLabel).join(', ')}`,
       );
     if (plan.conflicts.length > 0) {
       kept = snapshot;

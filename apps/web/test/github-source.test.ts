@@ -118,6 +118,37 @@ describe('a GitHub source across a reload (failure mode 14)', () => {
     expect(after.store.getState().edit.past.map((t) => t.origin)).toEqual(['restore']);
   });
 
+  it('keeps a removal through a reload, and keeps a removed file that changed since', async () => {
+    const kv = memoryStore();
+    const before = page(kv);
+    before.store.getState().setFiles(FILES, repo());
+    await before.persist.save(repo(), FILES);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(
+      before.store.getState().transact({
+        label: 'Removed release.yml',
+        origin: 'op',
+        files: [{ path: RELEASE, edits: [], remove: true }],
+      }).ok,
+    ).toBe(true);
+    await vi.advanceTimersByTimeAsync(500);
+
+    const after = page(kv);
+    await after.sources.restore();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(after.store.getState().files.byPath[RELEASE]).toBeUndefined();
+    expect(after.store.getState().files.base[RELEASE]).toBe(FILES[RELEASE]);
+
+    // GitHub changed it since: it stays, and the author is told.
+    const moved = page(kv);
+    moved.store.getState().setFiles({ ...FILES, [RELEASE]: 'on: [release]\n' }, repo({ sha: MOVED }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(moved.store.getState().files.byPath[RELEASE]).toBe('on: [release]\n');
+    expect(moved.store.getState().notices.map((n) => n.text)).toContain(
+      'Not removed again, since each changed after it was removed: release.yml',
+    );
+  });
+
   it('belongs to its repository at any commit or ref, in any letter case, and to no folder of the same name', async () => {
     const snapshots = snapshotStore(memoryStore());
     const store = createSessionStore();
@@ -220,6 +251,9 @@ describe('Fetch again', () => {
     expect(s.files.base[CI]).toBe('on: [push]\n');
     expect(s.source).toMatchObject({ sha: MOVED, ref: 'main' });
     expect(s.edit.past.at(-1)?.label).toBe('Fetched octo/ship again');
+    // "Since opened" compares with the commit the source names now: GitHub's change is not the author's.
+    expect(s.files.opened[CI]).toBe('on: [push]\n');
+    expect(s.files.opened[RELEASE]).toBe(FILES[RELEASE]);
     expect(s.notices.at(-1)?.text).toBe('octo/ship: now at 9b1e2c3');
     expect(await persist.load()).toMatchObject({
       kind: 'github',
@@ -233,7 +267,7 @@ describe('Fetch again', () => {
 
   it('asks about a file both sides changed, and moves nothing when the author cancels', async () => {
     const fetchAgain = vi.fn(() =>
-      Promise.resolve({ moved: true, ...read({ ...FILES, [CI]: 'on: [push]\n' }) }),
+      Promise.resolve({ moved: true, ...read({ ...FILES, [CI]: 'on: [push]\n', [SNAP]: '{"moved":1}' }) }),
     );
     const store = createSessionStore();
     const settle = vi.fn(() => Promise.resolve(undefined));
@@ -244,12 +278,27 @@ describe('Fetch again', () => {
       load: () => Promise.resolve({ reloadPlan, settledReload, downloadPatch }),
       github: () => Promise.resolve({ fetchAgain } as never),
     });
-    store.getState().setFiles(FILES, repo());
+    store.getState().setFiles(FILES, repo(), undefined, undefined, { [SNAP]: '{}' });
     type(store, CI, '# mine\n');
     await sources.reload();
     expect(settle).toHaveBeenCalledWith('fetch', 'octo/ship', [expect.objectContaining({ path: CI })]);
     expect(store.getState().source.kind === 'github' && store.getState().source).toMatchObject({ sha: SHA });
+    // The snapshots stay the commit's the source still names.
+    expect(store.getState().files.readonly).toEqual({ [SNAP]: '{}' });
     expect(store.getState().files.byPath[CI]).toBe(`# mine\n${FILES[CI]}`);
+  });
+
+  it('says nothing over files that came while it asked GitHub', async () => {
+    let fail!: (e: Error) => void;
+    const fetchAgain = vi.fn(() => new Promise((_, reject) => (fail = reject)));
+    const { store, sources } = page(memoryStore(), { fetchAgain });
+    store.getState().setFiles(FILES, repo());
+    const fetching = sources.reload();
+    await vi.waitFor(() => expect(fetchAgain).toHaveBeenCalled());
+    store.getState().setFiles(FILES, { kind: 'sample', name: 'starter' });
+    fail(new Error('no answer from https://api.github.com within 30 s'));
+    await fetching;
+    expect(store.getState().error).toBeUndefined();
   });
 
   it('says why it failed, and keeps the files', async () => {
