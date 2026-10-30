@@ -31673,9 +31673,7 @@ function parseWorkflow(entryFile, contextOrTrace) {
 		value: readTemplate(context, WORKFLOW_ROOT, reader, fileId)
 	};
 }
-//#endregion
-//#region ../../node_modules/.pnpm/cronstrue@2.59.0/node_modules/cronstrue/dist/cronstrue.js
-var require_cronstrue = /* @__PURE__ */ __commonJSMin(((exports, module) => {
+(/* @__PURE__ */ __commonJSMin(((exports, module) => {
 	(function webpackUniversalModuleDefinition(root, factory) {
 		if (typeof exports === "object" && typeof module === "object") module.exports = factory();
 		else if (typeof define === "function" && define.amd) define("cronstrue", [], factory);
@@ -32535,9 +32533,7 @@ var require_cronstrue = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 			return __webpack_exports__;
 		})();
 	});
-}));
-//#endregion
-//#region ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/model/converter/cron-constants.js
+})))();
 const MONTHS = {
 	jan: 1,
 	feb: 2,
@@ -32583,7 +32579,8 @@ const DOW_RANGE = {
 	max: 6,
 	names: DAYS
 };
-require_cronstrue();
+//#endregion
+//#region ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/model/converter/cron.js
 function isValidCron(cron) {
 	const parts = cron.split(/ +/);
 	if (parts.length != 5) return false;
