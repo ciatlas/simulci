@@ -5,6 +5,7 @@ import type { PendingSel, Refused } from '../edit/types';
 import type { GraphState, GraphUi } from '../graph/types';
 import { isProjectFile } from '../input/filter';
 import { fileLabel } from '../lib/file-label';
+import { isTarget, type RepoTarget, targetText } from '../lib/repo-words';
 import { classifyEol, type FileMeta, textMeta } from '../input/read';
 import type { DiskConflict, DiskFile, FileOutcome } from '../input/save';
 import { type ChangeRow, changeRows, changeSentence } from '../plan/change-rows';
@@ -291,6 +292,11 @@ export interface SessionState {
   generated?: Record<string, string>;
   /** The Tests tab: the route tests run in the worker after each plan of new files (synthesis § 5.1). */
   tests: TestsState;
+  /**
+   * A repository a link names (`gh=`) that is not the source: the page offers to open it and asks GitHub for nothing
+   * until the author clicks (M4 synthesis § 5.5, failure mode 15). Opening it, or Dismiss, lets it go.
+   */
+  githubOffer?: RepoTarget;
 }
 
 /** What the Tests tab shows: the last run of the route tests, the one under way, and how they run. */
@@ -415,6 +421,8 @@ export interface SessionActions {
   moveSource: (epoch: number, source: Source, moved: readonly string[]) => void;
   /** A source that has no files until the author acts: a stored folder waiting for Reopen. */
   awaitReopen: (source: Source) => void;
+  /** The repository a link names, offered until it is opened or dismissed (`undefined`). */
+  offerGitHub: (target: RepoTarget | undefined) => void;
   setScenario: (
     scenario: ScenarioInput,
     options?: { assumed?: string[]; from?: SessionState['scenarioFrom'] },
@@ -811,6 +819,8 @@ export function createSessionStore(initial: SessionState = initialSessionState()
       setFiles: (byPath, source, meta, base, readonly) =>
         set((s) => ({
           source,
+          // The repository a link offered is open now.
+          githubOffer: s.githubOffer && isTarget(source, s.githubOffer) ? undefined : s.githubOffer,
           files: withReadonly(sourceFiles(s.files, byPath, metaOf(byPath, meta), base), readonly),
           ...UNLOADED,
           tests: untested(s.tests),
@@ -828,6 +838,13 @@ export function createSessionStore(initial: SessionState = initialSessionState()
           sel: undefined,
           error: replaceError(s.error, undefined),
         })),
+      offerGitHub: (target) =>
+        set((s) =>
+          target === s.githubOffer ||
+          (target && s.githubOffer && targetText(target) === targetText(s.githubOffer))
+            ? s
+            : { githubOffer: target },
+        ),
       moveSource: (epoch, source, moved) =>
         set((s) => (s.files.epoch === epoch ? { source, files: reopened(s.files, moved) } : s)),
       // A new epoch, so the session takes it for a source with no files, not for an edit that emptied them.

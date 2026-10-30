@@ -1,4 +1,5 @@
 import { debounce, type Timers } from '../lib/debounce';
+import { isTarget } from '../lib/repo-words';
 import { type DefaultScenario, defaultBranchOf, defaultScenario } from '../scenario/defaults';
 import { initialSessionState, type SessionActions, type SessionState, type SessionStore } from './store';
 import { ASSUME_URL_LIMIT, readSearch, type UrlState, urlSliceChanged, urlStateOf, writeSearch } from './url';
@@ -120,6 +121,8 @@ function applyUrl(store: SessionStore, url: UrlState): void {
   const assume = url.assume ?? (JSON.stringify(s.assume).length > ASSUME_URL_LIMIT ? s.assume : []);
   if (JSON.stringify(assume) !== JSON.stringify(s.assume)) s.setAssume(assume);
   applyView(s, url);
+  // A repository the source is not: offered, and nothing is asked of GitHub until the author clicks (M4 § 5.5).
+  s.offerGitHub(url.gh && !isTarget(s.source, url.gh) ? url.gh : undefined);
 }
 
 const sameScenario = (a: Session['scenario'], b: Session['scenario']): boolean =>

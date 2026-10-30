@@ -7,6 +7,41 @@ import type { GitHubSource, Source } from '../state/store';
  * source's patch is `simulci-changes.patch`, with no such line.
  */
 
+/** A repository and the ref to read; no ref reads its default branch. */
+export interface RepoTarget {
+  owner: string;
+  repo: string;
+  ref?: string;
+}
+
+/** `octo/ship@main`, or `octo/ship` for its default branch: the URL's `gh` (M4 synthesis § 5.5). */
+export const targetText = (t: RepoTarget): string =>
+  `${t.owner}/${t.repo}${t.ref === undefined ? '' : `@${t.ref}`}`;
+
+const OWNER = /^[A-Za-z\d](?:[A-Za-z\d-]{0,38})$/;
+const REPO = /^[\w.-]{1,100}$/;
+
+/** Whether a name can be a GitHub account's, and one a repository's (not `.` or `..`). */
+export const isRepoName = (owner: string, repo: string): boolean =>
+  OWNER.test(owner) && REPO.test(repo) && repo !== '.' && repo !== '..';
+
+/** The target `octo/ship@main` or `octo/ship` names, or nothing. */
+export function parseTargetText(text: string): RepoTarget | undefined {
+  const m = /^([^/@\s]+)\/([^/@\s]+)(?:@(\S+))?$/.exec(text);
+  if (!m || !isRepoName(m[1]!, m[2]!)) return undefined;
+  return m[3] === undefined ? { owner: m[1]!, repo: m[2]! } : { owner: m[1]!, repo: m[2]!, ref: m[3] };
+}
+
+/**
+ * Whether a source is the repository a target names, at its ref: the owner and the name in any letter case, no ref
+ * standing for the default branch.
+ */
+export const isTarget = (source: Source, t: RepoTarget): boolean =>
+  source.kind === 'github' &&
+  source.owner.toLowerCase() === t.owner.toLowerCase() &&
+  source.repo.toLowerCase() === t.repo.toLowerCase() &&
+  source.ref === (t.ref ?? source.defaultBranch);
+
 /** The patch of a source with no repository to name. */
 export const PATCH_NAME = 'simulci-changes.patch';
 

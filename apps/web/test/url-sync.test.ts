@@ -96,6 +96,67 @@ function bridge(first: Record<string, unknown> = {}) {
   return { store, history, stop, routeRenders };
 }
 
+describe('a link that names a GitHub repository (failure mode 15)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const repo = {
+    kind: 'github' as const,
+    host: 'github.com',
+    owner: 'octo',
+    repo: 'ship',
+    ref: 'main',
+    sha: 'a'.repeat(40),
+    defaultBranch: 'main',
+    private: false,
+    readAt: 0,
+  };
+
+  it('offers a repository the source is not, keeps it in the URL while it waits, and lets it go once it opens', async () => {
+    const { store, history, stop } = bridge({ event: 'push', gh: 'Octo/Ship' });
+    expect(store.getState().githubOffer).toEqual({ owner: 'Octo', repo: 'Ship' });
+    store.getState().setFiles({ [CI]: 'on: push\n' }, { kind: 'sample', name: 'starter' });
+    loaded(store);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(history.current().gh).toBe('Octo/Ship');
+    // Opening it (at its default branch) satisfies the link: the offer goes, the source names itself.
+    store.getState().setFiles({ [CI]: 'on: push\n' }, repo);
+    expect(store.getState().githubOffer).toBeUndefined();
+    loaded(store);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(history.current().gh).toBe('octo/ship@main');
+    stop();
+  });
+
+  it('offers nothing for the repository already open, and drops a dismissed offer from the URL', async () => {
+    const store = createSessionStore();
+    store.getState().setFiles({ [CI]: 'on: push\n' }, repo);
+    const history = fakeHistory({ event: 'push', gh: 'octo/ship@main' });
+    const sync = createUrlSync({ store, navigate: history.navigate, current: history.current });
+    const stop = sync.start();
+    sync.urlChanged(validateSearch(history.current()));
+    expect(store.getState().githubOffer).toBeUndefined();
+    sync.urlChanged(validateSearch({ event: 'push', gh: 'octo/boat' }));
+    expect(store.getState().githubOffer).toEqual({ owner: 'octo', repo: 'boat' });
+    store.getState().offerGitHub(undefined);
+    expect(store.getState().githubOffer).toBeUndefined();
+    stop();
+  });
+
+  it('never names a private repository', async () => {
+    const { store, history, stop } = bridge({ event: 'push' });
+    store.getState().setFiles({ [CI]: 'on: push\n' }, { ...repo, private: true });
+    loaded(store);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(history.current().gh).toBeUndefined();
+    stop();
+  });
+});
+
 describe('the URL bridge', () => {
   beforeEach(() => {
     vi.useFakeTimers();

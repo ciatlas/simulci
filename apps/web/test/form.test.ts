@@ -21,7 +21,7 @@ import {
   workflowNames,
 } from '../src/scenario/form';
 import { reportText } from '../src/state/report';
-import { urlSliceChanged, urlStateOf } from '../src/state/url';
+import { readSearch, urlSliceChanged, urlStateOf, writeSearch } from '../src/state/url';
 import type { Outline } from '../src/worker/protocol';
 
 const outline: Outline = {
@@ -249,6 +249,7 @@ describe('the form helpers', () => {
       detail: 'steps' as const,
       ui: { view: 'graph' as const, hideUntriggered: false },
       edit: { on: false },
+      source: { kind: 'none' as const },
     };
     expect(urlStateOf(base)).toEqual({ scenario: { event: 'push' }, assume: [] });
     expect(urlStateOf({ ...base, edit: { on: true } })).toMatchObject({ edit: true });
@@ -266,6 +267,44 @@ describe('the form helpers', () => {
     expect(urlSliceChanged(base, base)).toBe(false);
     expect(urlSliceChanged({ ...base, scenario: { event: 'push' } }, base)).toBe(true);
     expect(urlSliceChanged({ ...base, ui: { ...base.ui, hideUntriggered: true } }, base)).toBe(true);
+  });
+
+  it("names a public repository's source in gh, a private one never, and an offer while it waits", () => {
+    const base = {
+      scenario: { event: 'push' },
+      assume: [],
+      detail: 'steps' as const,
+      ui: { view: 'graph' as const, hideUntriggered: false },
+      edit: { on: false },
+    };
+    const source = {
+      kind: 'github' as const,
+      host: 'github.com',
+      owner: 'octo',
+      repo: 'ship',
+      ref: 'feature/x',
+      sha: 'a'.repeat(40),
+      defaultBranch: 'main',
+      private: false,
+      readAt: 0,
+    };
+    const offer = { owner: 'octo', repo: 'boat' };
+    expect(writeSearch(urlStateOf({ ...base, source }))).toMatchObject({ gh: 'octo/ship@feature/x' });
+    expect(
+      urlStateOf({ ...base, source: { ...source, private: true }, githubOffer: offer }).gh,
+    ).toBeUndefined();
+    expect(writeSearch(urlStateOf({ ...base, source: { kind: 'none' }, githubOffer: offer })).gh).toBe(
+      'octo/boat',
+    );
+    expect(readSearch({ event: 'push', gh: 'octo/ship@feature/x' }).gh).toEqual({
+      owner: 'octo',
+      repo: 'ship',
+      ref: 'feature/x',
+    });
+    for (const bad of ['octo', 'octo/ship/x', '-octo/ship', 'octo/..', 'octo/ship@', 7])
+      expect(readSearch({ event: 'push', gh: bad }).gh, String(bad)).toBeUndefined();
+    expect(urlSliceChanged({ ...base, source }, { ...base, source: { kind: 'none' } })).toBe(true);
+    expect(urlSliceChanged({ ...base, source, githubOffer: offer }, { ...base, source })).toBe(true);
   });
 
   it('write a failure report without file contents', () => {

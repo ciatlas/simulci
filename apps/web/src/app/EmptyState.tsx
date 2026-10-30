@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { offersGitHub } from '../github/load';
 import { SAMPLES } from '../input/samples';
-import { PasteDialog } from './PasteDialog';
 import { useApp, useSession } from './providers';
+import { SourceDialogs } from './SourceDialogs';
 
 const card = 'rounded-lg border border-border bg-surface p-4';
 const button = 'rounded border border-border bg-chrome px-3 py-1.5 text-sm hover:border-border-strong';
@@ -11,6 +12,8 @@ export function EmptyState() {
   const { sources } = useApp();
   const source = useSession((s) => s.source);
   const [pasting, setPasting] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const github = offersGitHub();
   const reopen = source.kind === 'folder' && source.handle ? source.name : undefined;
 
   return (
@@ -21,7 +24,8 @@ export function EmptyState() {
         </h2>
         <p className="mt-1 text-muted">
           Give simulci a repository's workflow files; it tells you which jobs and steps run for an event, and
-          why. Nothing leaves this page.
+          why. Your files never leave this page
+          {github && '; a public GitHub repository is read from api.github.com'}.
         </p>
       </div>
       {reopen && (
@@ -35,7 +39,7 @@ export function EmptyState() {
           </button>
         </div>
       )}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={`grid gap-4 sm:grid-cols-2 ${github ? 'lg:grid-cols-3' : ''}`}>
         <div className={card}>
           <h3 className="font-medium">A folder</h3>
           <p className="mt-1 text-muted text-sm">
@@ -62,6 +66,17 @@ export function EmptyState() {
             Paste YAML
           </button>
         </div>
+        {github && (
+          <div className={card}>
+            <h3 className="font-medium">A GitHub repository</h3>
+            <p className="mt-1 text-muted text-sm">
+              A public repository, by name or link, at its default branch or a ref.
+            </p>
+            <button type="button" className={`${button} mt-3`} onClick={() => setOpening(true)}>
+              Open GitHub repository…
+            </button>
+          </div>
+        )}
       </div>
       <div className={card}>
         <h3 className="font-medium">Or try a sample</h3>
@@ -80,7 +95,12 @@ export function EmptyState() {
           ))}
         </ul>
       </div>
-      {pasting && <PasteDialog onClose={() => setPasting(false)} />}
+      <SourceDialogs
+        pasting={pasting}
+        opening={opening}
+        closePaste={() => setPasting(false)}
+        closeOpen={() => setOpening(false)}
+      />
     </main>
   );
 }
