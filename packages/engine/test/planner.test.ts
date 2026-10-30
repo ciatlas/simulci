@@ -297,12 +297,13 @@ jobs:
     ]);
   });
 
-  it('stops a call past the nesting limit at the job, with or without a matrix', () => {
+  it('does not start a workflow whose calls nest past the limit, whatever its if:s say (lab R7)', () => {
     const files = {
       [CI]: `
 on: push
 jobs:
   call:
+    if: false
     uses: ./.github/workflows/callee.yml
   legs:
     strategy:
@@ -313,16 +314,23 @@ jobs:
       '.github/workflows/callee.yml':
         'on: workflow_call\njobs:\n  x:\n    runs-on: ubuntu-latest\n    steps: [{ run: echo }]\n',
     };
-    const jobsAt = (maxDepth: number) =>
-      simulate({ files, scenario: { event: 'push' }, maxDepth }).workflows.find((w) => w.path === CI)!.jobs;
-    for (const job of jobsAt(1)) {
-      expect(job.runs.verdict).toBe('no');
-      expect(decidingReason(job.runs.chain, 'no')).toEqual({ kind: 'limit', limit: 'nesting' });
-      expect(job.result).toEqual({ known: true, value: 'skipped' });
-      expect(job.legs.map((l) => [l.runs.verdict, l.call])).toEqual([['no', undefined]]);
-    }
-    expect(jobsAt(2).map((j) => [j.runs.verdict, j.legs.length])).toEqual([
-      ['yes', 1],
+    const at = (maxDepth: number) => simulate({ files, scenario: { event: 'push' }, maxDepth });
+    const refused = at(0);
+    const top = refused.workflows.find((w) => w.path === CI)!;
+    expect(top.triggered.verdict).toBe('no');
+    expect(decidingReason(top.triggered.chain, 'no')).toEqual({ kind: 'limit', limit: 'nesting' });
+    expect(top.jobs).toEqual([]);
+    expect(refused.diagnostics).toEqual([
+      {
+        severity: 'warning',
+        code: 'refused',
+        message: `GitHub does not start ${CI}: its reusable workflows nest 1 deep, more than 0`,
+        node: CI,
+      },
+    ]);
+    const jobs = at(1).workflows.find((w) => w.path === CI)!.jobs;
+    expect(jobs.map((j) => [j.runs.verdict, j.legs.length])).toEqual([
+      ['no', 1],
       ['yes', 2],
     ]);
   });

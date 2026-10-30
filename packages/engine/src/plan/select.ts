@@ -7,14 +7,24 @@ import {
   type UnitPath,
   workflowMatches,
 } from '../paths';
-import type { ActionPlan, JobPlan, LegPlan, NodeId, RunPlan, StepPlan, Tri, WorkflowPlan } from './types';
+import type {
+  ActionPlan,
+  JobPlan,
+  LegPlan,
+  NodeId,
+  RemoteUse,
+  RunPlan,
+  StepPlan,
+  Tri,
+  WorkflowPlan,
+} from './types';
 
 /**
  * Unit paths → plan nodes. A job without `[…]` is the JobPlan; with `[…]` the matching legs; a step is one StepPlan
  * per selected leg; `/` descends into a called workflow after a job and into a composite action after a step. A
  * name that does not exist where its parent is planned is an error (T204); a unit under a parent the plan did not
- * expand (an untriggered workflow, a skipped job, a callee that is not loaded) is reported as unexpanded, for the
- * caller to treat as skipped or missing.
+ * expand (an untriggered workflow, a skipped job, a callee that is not loaded, a remote one not fetched, not read,
+ * past a cap or that does not parse) is reported as unexpanded, for the caller to treat as skipped or missing.
  */
 
 export interface Selected {
@@ -35,7 +45,40 @@ export interface Unexpanded {
   verdict: Tri;
   /** The canonical path of the boundary node. */
   path: string;
-  reason: 'skipped' | 'untriggered' | 'not-loaded' | 'no-steps';
+  reason:
+    | 'skipped'
+    | 'untriggered'
+    | 'not-loaded'
+    | 'not-fetched'
+    | 'fetch-failed'
+    | 'limit'
+    | 'invalid'
+    | 'no-steps';
+  /** The remote the boundary calls, for the remote reasons. */
+  remote?: RemoteUse;
+}
+
+const REMOTE_REASONS = {
+  'not-fetched': 'not-fetched',
+  failed: 'fetch-failed',
+  limit: 'limit',
+  invalid: 'invalid',
+} as const;
+
+/** Why a leg that runs has no callee: its remote's state, or not loaded. */
+function callBoundary(leg: LegPlan, path: string, remotes: ReadonlyMap<NodeId, RemoteUse>): Unexpanded {
+  const base = { at: leg.id, verdict: leg.runs.verdict, path };
+  if (leg.runs.verdict === 'no') return { ...base, reason: 'skipped' };
+  const remote = remotes.get(leg.id);
+  const reason = remote && remote.state !== 'simulated' ? REMOTE_REASONS[remote.state] : 'not-loaded';
+  return remote ? { ...base, reason, remote } : { ...base, reason };
+}
+
+/** The remote workflow each calling leg names, by leg id. */
+export function remotesByLeg(plan: RunPlan): Map<NodeId, RemoteUse> {
+  const out = new Map<NodeId, RemoteUse>();
+  for (const r of plan.remotes ?? []) if (r.kind === 'workflow') for (const at of r.at) out.set(at, r);
+  return out;
 }
 
 export interface Selection {
@@ -64,7 +107,7 @@ export function selectNodes(plan: RunPlan, path: string | UnitPath, defaultWorkf
     throw new SelectionError('T201', `no workflow '${name ?? ''}' in the plan (workflows: ${known})`);
   }
   const out: Selection = { nodes: [] };
-  selectIn(wf, unit.segments, 0, '', out);
+  selectIn(wf, unit.segments, 0, '', out, remotesByLeg(plan));
   return out;
 }
 
@@ -74,6 +117,7 @@ function selectIn(
   i: number,
   prefix: string,
   out: Selection,
+  remotes: ReadonlyMap<NodeId, RemoteUse>,
 ): void {
   const seg = segments[i]!;
   if (wf.jobs.length === 0) {
@@ -89,7 +133,7 @@ function selectIn(
     return;
   }
   if (i === segments.length - 1) selectUnit(wf, job, legs, seg, prefix, out);
-  else selectCalled(job, legs, segments, i, prefix, out);
+  else selectCalled(job, legs, segments, i, prefix, out, remotes);
 }
 
 /** The last segment without a step: the job itself, or the legs its `[…]` picks. */
@@ -117,6 +161,7 @@ function selectCalled(
   i: number,
   prefix: string,
   out: Selection,
+  remotes: ReadonlyMap<NodeId, RemoteUse>,
 ): void {
   const name = `${prefix}${job.jobId}`;
   if (!job.uses) {
@@ -127,11 +172,8 @@ function selectCalled(
   }
   for (const leg of legs) {
     const path = `${name}${legSuffix(leg)}`;
-    if (leg.call) selectIn(leg.call, segments, i + 1, `${path}/`, out);
-    else {
-      const reason = leg.runs.verdict === 'no' ? 'skipped' : 'not-loaded';
-      out.unexpanded ??= { at: leg.id, verdict: leg.runs.verdict, path, reason };
-    }
+    if (leg.call) selectIn(leg.call, segments, i + 1, `${path}/`, out, remotes);
+    else out.unexpanded ??= callBoundary(leg, path, remotes);
   }
 }
 
