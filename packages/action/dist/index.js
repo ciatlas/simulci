@@ -45810,6 +45810,8 @@ var Planner = class {
 	openCalls = /* @__PURE__ */ new WeakSet();
 	/** The remote workflows and actions the plan uses, by the ref it shows. */
 	remoteUses = /* @__PURE__ */ new Map();
+	/** The composite actions being planned, outermost first: one that uses itself is not planned again. */
+	composites = [];
 	index;
 	constructor(loaded, scenario, detail, maxDepth, mocks, shipped, untriggered) {
 		this.loaded = loaded;
@@ -46603,15 +46605,12 @@ var Planner = class {
 		const remote = this.remoteTarget(scope, step.uses);
 		if (!remote) return this.localStep(step, sid, withValues, scope);
 		this.useRemote(remote, sid, scope, step.uses);
-		return {
-			...this.modelTarget(remote.display, sid, withValues),
-			shown: remote.display
-		};
+		return this.remoteAction(remote, sid, withValues);
 	}
 	/** A step whose `uses:` names no remote: this repository's action, else a model or nothing (a remote's `./`, docker). */
 	localStep(step, sid, withValues, scope) {
 		const action = scope.unit.external ? void 0 : this.index.actionOf(step);
-		if (!action) return this.modelTarget(step.uses.raw, sid, withValues);
+		if (!action || this.cyclic(action, sid)) return this.modelTarget(step.uses.raw, sid, withValues);
 		return {
 			action,
 			scope: {
@@ -46620,7 +46619,46 @@ var Planner = class {
 			}
 		};
 	}
-	modelTarget(uses, sid, withValues) {
+	/**
+	* A remote action: its shipped model, if any, and the action itself when a host read it, planned from its file (a
+	* composite's steps) or opaque with its declared outputs. One not read is the model alone, as before remotes.
+	*/
+	remoteAction(remote, sid, withValues) {
+		const target = {
+			...this.modelTarget(remote.display, sid, withValues, remote.source?.sha),
+			shown: remote.display
+		};
+		if (remote.state === "invalid") for (const e of remote.unit.parseErrors) this.diagnoseOnce(parseDiagnostic(remote.display, e, sid));
+		const problem = remoteProblem(remote.display, remote);
+		if (problem) this.diagnoseOnce({
+			severity: "warning",
+			...problem,
+			node: sid
+		});
+		const unit = remote.state === "simulated" ? remote.unit : void 0;
+		if (unit?.kind !== "action" || this.cyclic(unit, sid)) return target;
+		return {
+			...target,
+			action: unit,
+			scope: {
+				unit,
+				refName: refNameOf(remote.display)
+			}
+		};
+	}
+	/** A composite action already being planned above this step: planned as an opaque step, with a warning. */
+	cyclic(action, sid) {
+		if (action.using !== "composite" || !this.composites.includes(action)) return false;
+		const message = `${action.path}: a composite action that uses itself is not planned`;
+		this.diagnoseOnce({
+			severity: "warning",
+			code: "unsupported",
+			message,
+			node: sid
+		});
+		return true;
+	}
+	modelTarget(uses, sid, withValues, sha) {
 		const model = modelFor(uses, this.shipped);
 		if (!model) return {};
 		this.models.set(model.id, model.version);
@@ -46631,6 +46669,7 @@ var Planner = class {
 		};
 		const at = uses.indexOf("@");
 		if (at !== -1) ctx.ref = uses.slice(at + 1);
+		if (sha !== void 0) ctx.sha = sha;
 		return { model: {
 			model,
 			ctx
@@ -46704,13 +46743,15 @@ var Planner = class {
 	/** A composite action under its step: a mocked outcome makes it opaque, otherwise its inner steps decide. */
 	compositeProduct(target, step, sid, state, runs, location, facts, produced, base) {
 		const action = target.action;
-		const composite = this.planComposite(action, step, sid, state, runs, location, target.scope);
+		this.composites.push(action);
+		const composite = this.planComposite(action, step, sid, state, runs, location, target);
+		this.composites.pop();
 		const outcome = combine([base, facts.outcome ? produced : legResult(composite.steps.map((s) => s.conclusion))], ([o, i]) => o === "skipped" ? "skipped" : i);
 		const outputs = { ...composite.outputs };
 		this.overlayOutputs(outputs, facts, sid, {
 			closed: true,
 			names: Object.keys(action.outputs),
-			what: `action ${action.path}`
+			what: `action ${composite.path}`
 		});
 		return {
 			outcome,
@@ -46723,12 +46764,7 @@ var Planner = class {
 	opaqueOutputs(step, target, sid, state) {
 		if (step.run !== void 0) return this.scriptOutputs(step, sid, state);
 		const uses = step.uses?.raw ?? "";
-		if (target.action) return {
-			outputs: {},
-			names: Object.keys(target.action.outputs),
-			open: false,
-			what: `action ${uses}`
-		};
+		if (target.action) return actionInterface(target.action, target, uses);
 		if (target.model) {
 			const iface = target.model.model.interface(target.model.ctx);
 			return {
@@ -46766,8 +46802,9 @@ var Planner = class {
 			unknownId: (n) => `${sid}.env.${n}`
 		});
 	}
-	planComposite(action, step, stepNode, state, runs, location, scope) {
-		const id = compositeNodeId(stepNode, action.path);
+	planComposite(action, step, stepNode, state, runs, location, target) {
+		const path = target.shown ?? action.path;
+		const id = compositeNodeId(stepNode, path);
 		const given = this.bindings(step.with, state);
 		const inputs = {};
 		for (const [name, decl] of Object.entries(action.inputs)) inputs[name] = lookup(given, name) ?? inputDefault(decl);
@@ -46776,7 +46813,7 @@ var Planner = class {
 			...state,
 			steps: {},
 			status: known$1("success")
-		}, inputs, location, scope);
+		}, inputs, location, target.scope);
 		const steps = Object.fromEntries(inner.plans.filter((p) => p.stepId !== void 0).map((p) => [p.stepId, {
 			id: p.id,
 			outcome: p.outcome,
@@ -46785,7 +46822,7 @@ var Planner = class {
 		}]));
 		return {
 			id,
-			path: action.path,
+			path,
 			inputs,
 			steps: inner.plans,
 			outputs: this.outputsOf(action.outputs, {
@@ -46979,16 +47016,42 @@ function remoteUseOf(target, at) {
 	if (target.failure) use.failure = target.failure.failure;
 	return use;
 }
-/** The diagnostic of a call that is not planned and whose file is not the problem. */
-function callProblem(shown, job, remote) {
-	if (remote?.state === "failed") return {
+/**
+* The outputs of an action read from its file: a local one's declared names, closed; a remote node or docker action's
+* declared names and its model's, open unless the model closes it, since GitHub lets it set any output (lab R4).
+*/
+function actionInterface(action, target, uses) {
+	const names = Object.keys(action.outputs);
+	if (!action.external) return {
+		outputs: {},
+		names,
+		open: false,
+		what: `action ${uses}`
+	};
+	const iface = target.model?.model.interface(target.model.ctx);
+	return {
+		outputs: {},
+		names: [.../* @__PURE__ */ new Set([...names, ...iface?.names ?? []])],
+		open: iface?.open ?? true,
+		what: `action ${target.shown ?? uses}`
+	};
+}
+/** Why a remote was not read, when a host tried: it failed, or it is past a cap. */
+function remoteProblem(shown, remote) {
+	if (remote.state === "failed") return {
 		code: "remote-fetch-failed",
 		message: `${shown}: not read (${remote.failure.failure})`
 	};
-	if (remote?.state === "limit") return {
+	if (remote.state !== "limit") return void 0;
+	return {
 		code: "remote-limit",
 		message: `${shown}: not read, past the limit on how many remote files a run reads`
 	};
+}
+/** The diagnostic of a call that is not planned and whose file is not the problem. */
+function callProblem(shown, job, remote) {
+	const problem = remote && remoteProblem(shown, remote);
+	if (problem) return problem;
 	return {
 		code: "unsupported",
 		message: `${shown}: ${(remote ? remote.state === "not-fetched" : job.uses?.kind === "remote-workflow") ? "a remote reusable workflow is not loaded" : "the called workflow was not found or cannot be called"}`
