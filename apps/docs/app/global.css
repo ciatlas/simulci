@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/mona-sans/wdth.css';
 @import '@fontsource-variable/jetbrains-mono';
+/* The display face, for the landing's titles only: one weight, Latin. */
+@import '@fontsource/ibm-plex-serif/latin-500.css';
 @import 'fumadocs-ui/css/lib/default-colors.css';
 @import 'fumadocs-ui/css/preset.css';
 
@@ -11,6 +13,7 @@
 @theme {
   --font-sans: 'Mona Sans Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'IBM Plex Serif', ui-serif, Georgia, serif;
   --color-fd-background: #f7f4ee;
   --color-fd-foreground: #211d18;
   --color-fd-muted: #efebe3;
