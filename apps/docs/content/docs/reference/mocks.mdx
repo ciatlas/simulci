@@ -25,7 +25,7 @@ Mocks go in a test's `given.assume` or `when.assume`, in `--assume` and `--assum
 | ---------- | ----------------------------------------------------------------------------------------------- |
 | `step`     | a step, by [unit path](/docs/reference/test-files#unit-paths): `build.unit`, `test[os=windows-latest].#2`, `build.setup/cache` |
 | `job`      | a job, by unit path: `deploy`, `rel/build`; its `outcome` applies to the job as a whole          |
-| `uses`     | every step whose `uses:` matches: `actions/cache`, `actions/cache@v4`, `./.github/actions/x`; with `job`, within that job |
+| `uses`     | every step whose `uses:` matches (`actions/cache`, `actions/cache@v4`, `./.github/actions/x`), and every job that calls a matching workflow (`octo/ship/.github/workflows/deploy.yml`, `./.github/workflows/x.yml`); with `job`, within that job |
 | `workflow` | `ci.yml`, `.github/workflows/ci.yml` or `ci`, when the job id is in more than one workflow       |
 | `matrix`   | matrix values that select legs, instead of `[k=v]` in the path                                  |
 | `outcome`  | `success`, `failure` or `cancelled`                                                             |
@@ -35,12 +35,13 @@ Mocks go in a test's `given.assume` or `when.assume`, in `--assume` and `--assum
 
 An entry names a step, a job, or a `uses` pattern, and states an `outcome`, `outputs`, `env` or `as`. A value of
 `{ unknown: true }` takes back a value a model or another layer set. `actions/cache` matches every ref and
-`actions/cache/restore`; `actions/cache@v4` matches that ref only.
+`actions/cache/restore`; `actions/cache@v4` matches that ref only. A `uses` pattern that names a workflow sets the
+calling job's `outcome` and `outputs`, as a `job` entry would, but ranks below one.
 
 A mocked output must be one the step can set when simulci knows the step's outputs: a local action's `action.yml`,
 the `actions/cache` model, `dorny/paths-filter` with inline `filters`, or a `run:` script whose `$GITHUB_OUTPUT`
 writes it can read. For other steps any name goes. A job's mocked outputs must be among its `outputs:` (a call job's:
-the called workflow's).
+the called workflow's; any name goes when that workflow is not loaded).
 
 ## Layers
 

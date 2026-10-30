@@ -21,7 +21,7 @@ export const AssumeEntrySchema = z
     step: z.string().min(1).optional(),
     /** A job, by unit path (`deploy`, `rel/build`); its `outcome` applies at the job boundary. */
     job: z.string().min(1).optional(),
-    /** Every step whose `uses:` matches (`actions/cache`, `actions/cache@v4`, `./.github/actions/x`), within `job` when given. */
+    /** Every step or calling job whose `uses:` matches (`actions/cache@v4`, `./.github/actions/x`, `o/r/.github/workflows/d.yml`), within `job` when given. */
     uses: z.string().min(1).optional(),
     /** Matrix values that select legs, as an alternative to `[k=v]` in the path. */
     matrix: z.record(z.string(), Scalar).optional(),
