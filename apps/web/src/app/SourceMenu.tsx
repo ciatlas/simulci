@@ -1,10 +1,10 @@
-import { type ChangeEvent, Suspense, useRef, useState } from 'react';
-import { OpenRepoDialog, offersGitHub } from '../github/load';
+import { type ChangeEvent, useRef, useState } from 'react';
+import { offersGitHub } from '../github/load';
 import { SAMPLES } from '../input/samples';
 import { repoAt } from '../lib/repo-words';
 import { dirtyPaths, type Source } from '../state/store';
-import { PasteDialog } from './PasteDialog';
 import { useApp, useSession } from './providers';
+import { SourceDialogs } from './SourceDialogs';
 import { SaveButton } from './SaveButton';
 
 const button =
@@ -68,15 +68,12 @@ export function SourceMenu() {
           Forget
         </button>
       )}
-      {pasting && <PasteDialog onClose={() => setPasting(false)} />}
-      {opening && (
-        <Suspense fallback={null}>
-          <OpenRepoDialog
-            open={(target, options) => sources.openGitHub(target, options)}
-            onClose={() => setOpening(false)}
-          />
-        </Suspense>
-      )}
+      <SourceDialogs
+        pasting={pasting}
+        opening={opening}
+        closePaste={() => setPasting(false)}
+        closeOpen={() => setOpening(false)}
+      />
     </nav>
   );
 }

@@ -29,7 +29,11 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
   const dialog = useModal(onClose);
   const [text, setText] = useState(initial);
   const parsed = parseRepoInput(text);
-  const described = useDescribed(parsed.ok ? parsed.target : undefined);
+  // The modal puts the focus on its first field, this one, as it opens.
+  const described = useDescribed(
+    parsed.ok ? parsed.target.owner : undefined,
+    parsed.ok ? parsed.target.repo : undefined,
+  );
   const [reading, setReading] = useState<{ done: number; total: number; stop: AbortController }>();
   const [failure, setFailure] = useState<string>();
 
@@ -78,8 +82,6 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
             spellCheck={false}
             autoComplete="off"
             aria-describedby="github-about"
-            // oxlint-disable-next-line jsx-a11y/no-autofocus -- the one field of the dialog
-            autoFocus
           />
         </label>
         <p id="github-about" className="min-h-5 text-muted text-sm">
@@ -125,13 +127,25 @@ function aboutLine(parsed: ReturnType<typeof parseRepoInput>, described: Describ
   return described.line;
 }
 
-/** What GitHub says of the repository a whole name names, asked once per name, after the typing stops. */
-function useDescribed(target: RepoTarget | undefined): Described | undefined {
+/** The line GitHub's answer gives: `octo/ship · public · default branch main · 41 of 60 requests left this hour`. */
+const describedLine = (info: RepoInfo, rate: string | undefined): string =>
+  [
+    repoName(info),
+    info.private ? 'private' : 'public',
+    `default branch ${info.defaultBranch}`,
+    ...(rate ? [rate] : []),
+  ].join(' · ');
+
+/**
+ * What GitHub says of the repository a whole name names, asked once per name, after the typing stops. By its owner and
+ * name, not the parsed object: a new parse of the same text, or the same repository at another ref, asks nothing.
+ */
+function useDescribed(owner: string | undefined, repo: string | undefined): Described | undefined {
   const [described, setDescribed] = useState<Described>();
   const asked = useRef(new Map<string, Described>());
-  const name = target && key(target);
   useEffect(() => {
-    if (!target || !name) return undefined;
+    if (owner === undefined || repo === undefined) return undefined;
+    const name = key({ owner, repo });
     const known = asked.current.get(name);
     if (known) {
       setDescribed(known);
@@ -139,15 +153,9 @@ function useDescribed(target: RepoTarget | undefined): Described | undefined {
     }
     const stop = new AbortController();
     const timer = setTimeout(() => {
-      describeRepository(target, { signal: stop.signal }).then(
+      describeRepository({ owner, repo }, { signal: stop.signal }).then(
         ({ info, rate }) => {
-          const line = [
-            repoName(info),
-            info.private ? 'private' : 'public',
-            `default branch ${info.defaultBranch}`,
-            ...(rate ? [rate] : []),
-          ].join(' · ');
-          const d = { for: name, info, line };
+          const d = { for: name, info, line: describedLine(info, rate) };
           asked.current.set(name, d);
           setDescribed(d);
         },
@@ -161,8 +169,6 @@ function useDescribed(target: RepoTarget | undefined): Described | undefined {
       clearTimeout(timer);
       stop.abort();
     };
-    // The name, not the object: a new parse of the same text is the same repository.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [name]);
+  }, [owner, repo]);
   return described;
 }

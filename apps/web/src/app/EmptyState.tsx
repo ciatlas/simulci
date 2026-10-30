@@ -1,8 +1,8 @@
-import { Suspense, useState } from 'react';
-import { OpenRepoDialog, offersGitHub } from '../github/load';
+import { useState } from 'react';
+import { offersGitHub } from '../github/load';
 import { SAMPLES } from '../input/samples';
-import { PasteDialog } from './PasteDialog';
 import { useApp, useSession } from './providers';
+import { SourceDialogs } from './SourceDialogs';
 
 const card = 'rounded-lg border border-border bg-surface p-4';
 const button = 'rounded border border-border bg-chrome px-3 py-1.5 text-sm hover:border-border-strong';
@@ -95,15 +95,12 @@ export function EmptyState() {
           ))}
         </ul>
       </div>
-      {pasting && <PasteDialog onClose={() => setPasting(false)} />}
-      {opening && (
-        <Suspense fallback={null}>
-          <OpenRepoDialog
-            open={(target, options) => sources.openGitHub(target, options)}
-            onClose={() => setOpening(false)}
-          />
-        </Suspense>
-      )}
+      <SourceDialogs
+        pasting={pasting}
+        opening={opening}
+        closePaste={() => setPasting(false)}
+        closeOpen={() => setOpening(false)}
+      />
     </main>
   );
 }
