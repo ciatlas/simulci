@@ -23,6 +23,6 @@
     "yaml": "2.9.1"
   },
   "devDependencies": {
-    "@ciatlas/core": "github:ciatlas/core#v2.5.0"
+    "@ciatlas/core": "github:ciatlas/core#v2.6.0"
   }
 }

@@ -174,8 +174,8 @@ importers:
         version: 2.9.1
     devDependencies:
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v2.5.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/cf55cd8373233ba8a821439697c996db4188ecc3
+        specifier: github:ciatlas/core#v2.6.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/e718844f8459c64bb3a585cd94cff10fef40aec8
       '@simulci/engine':
         specifier: workspace:*
         version: link:packages/engine
@@ -408,8 +408,8 @@ importers:
         version: 2.9.1
     devDependencies:
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v2.5.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/cf55cd8373233ba8a821439697c996db4188ecc3
+        specifier: github:ciatlas/core#v2.6.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/e718844f8459c64bb3a585cd94cff10fef40aec8
 
   packages/engine:
     dependencies:
@@ -420,8 +420,8 @@ importers:
         specifier: ^0.3.61
         version: 0.3.61
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v2.5.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/cf55cd8373233ba8a821439697c996db4188ecc3
+        specifier: github:ciatlas/core#v2.6.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/e718844f8459c64bb3a585cd94cff10fef40aec8
       picomatch:
         specifier: ^4.0.7
         version: 4.0.7
@@ -536,9 +536,9 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/cf55cd8373233ba8a821439697c996db4188ecc3':
-    resolution: {gitHosted: true, integrity: sha512-A5xxC18lF3s2vaavJzv7vVSOT9GHicpuE+z3SqGe7KruKRLBS2D/0x7pRVX+Y0m9VhxVgT23fvhooH1M3S2IPg==, tarball: https://codeload.github.com/ciatlas/core/tar.gz/cf55cd8373233ba8a821439697c996db4188ecc3}
-    version: 2.5.0
+  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/e718844f8459c64bb3a585cd94cff10fef40aec8':
+    resolution: {gitHosted: true, integrity: sha512-VCtOCAwxUHKgtje/x09+hr3TfmmSoKMx2/ixKSmpoS4B6EzBP0nVj1/ZIvTH6dwacrMKbhSlwJMWKVw6yxpXFw==, tarball: https://codeload.github.com/ciatlas/core/tar.gz/e718844f8459c64bb3a585cd94cff10fef40aec8}
+    version: 2.6.0
     engines: {node: '>=22'}
 
   '@codemirror/autocomplete@6.20.3':
@@ -3550,7 +3550,7 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/cf55cd8373233ba8a821439697c996db4188ecc3':
+  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/e718844f8459c64bb3a585cd94cff10fef40aec8':
     dependencies:
       '@actions/expressions': 0.3.61
       '@actions/workflow-parser': 0.3.61
