@@ -12,18 +12,7 @@ cases:
     then:
       maybe: [smoke]
       checks: [Deployment smoke]
-      # With its remotes read (the Action and `simulci test` read SHA-pinned actions by default), the outputs that
-      # checkout, pnpm/action-setup and setup-node declare are unknown too, though nothing reads them.
-      unknowns:
-        - github.event.client_payload.project.name
-        - smoke.#3.outputs.commit
-        - smoke.#3.outputs.ref
-        - smoke.#4.outputs.bin_dest
-        - smoke.#4.outputs.dest
-        - smoke.#5.outputs.cache-hit
-        - smoke.#5.outputs.cache-matched-key
-        - smoke.#5.outputs.cache-primary-key
-        - smoke.#5.outputs.node-version
+      unknowns: [github.event.client_payload.project.name]
   - name: a failed deployment does not start it
     when: { event: repository_dispatch, action: vercel.deployment.error }
     then: { because: types }
