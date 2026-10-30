@@ -12,6 +12,7 @@ import {
   type ProjectIndex,
   parseExpression,
   type RemoteRef,
+  remoteKey,
   type StepDecl,
   skippedCheckName,
   type UnitDecl,
@@ -68,7 +69,13 @@ import type {
   WorkflowPlan,
 } from './plan/types';
 import { candidates, combine, known, unknown } from './plan/values';
-import { pinFor as remotePin, type RemoteInputs } from './remotes/lock';
+import {
+  type PinContext,
+  pinFor as remotePin,
+  REMOTES_LOCK_FILE,
+  type RemoteInputs,
+  type RemotesMode,
+} from './remotes/lock';
 import {
   type LoadedProject,
   loadFiles,
@@ -116,6 +123,8 @@ export interface SimulateOptions {
   repository?: string;
   /** The remote files a host read, when `files` is given (see `loadFiles`). */
   remotes?: RemoteInputs;
+  /** How the host read them, for the lockfile's diagnostics: `lock` by default. */
+  remotesMode?: RemotesMode;
   /** How many reusable workflows may nest under a workflow before GitHub refuses to start it (lab R7: ten). */
   maxDepth?: number;
   /** Mocks for this run (the `case` layer): what opaque steps and jobs produce. */
@@ -144,6 +153,7 @@ export function simulate(opts: SimulateOptions): RunPlan {
     loadFiles(opts.files ?? {}, {
       ...(repository === undefined ? {} : { repository }),
       ...(opts.remotes ? { remotes: opts.remotes } : {}),
+      ...(opts.remotesMode ? { mode: opts.remotesMode } : {}),
     });
   const layers: MockLayers = { ...opts.mocks };
   if (opts.assume) layers.case = [...(layers.case ?? []), ...opts.assume];
@@ -180,6 +190,8 @@ interface WorkflowContext {
 interface Scope {
   unit: UnitDecl;
   refName?: string;
+  /** The workflow of this repository that runs the unit, whose `actions.lock` entry pins its actions; none in a remote. */
+  running?: string;
 }
 
 /** A remote a job or step names: its ref, how the plan shows it (`./` inside a remote at its parent's ref name), its state. */
@@ -188,12 +200,11 @@ interface RemoteTarget extends RemoteLookup {
   display: string;
 }
 
-/** A remote the plan uses: where, and the first `uses:` that names it (a local one before a remote one, for its pin). */
+/** A remote the plan uses: where, and the pin context of the `uses:` that says most about its commit. */
 interface RemoteUseSite {
   target: RemoteTarget;
   at: (LegPlan | NodeId)[];
-  unit: UnitDecl;
-  uses: UsesRef;
+  context: PinContext;
 }
 
 /** What a workflow's jobs are planned with: its settings, node id, scenario, trigger decision, inputs and name. */
@@ -253,6 +264,8 @@ interface StepProduct {
 interface StepTarget {
   action?: ActionDecl;
   model?: ModelUse;
+  /** Where the action's own `uses:` resolve. */
+  scope?: Scope;
 }
 
 /** The outputs an opaque step may set before mocks: the names of its interface, those already valued, and whether it is open. */
@@ -385,7 +398,9 @@ class Planner {
       depth: ctx.depth,
       checkPrefix: ctx.checkPrefix,
       chain: ctx.chain ?? [],
-      scope: { unit: wf, ...(ctx.remote ? { refName: ctx.remote.refName } : {}) },
+      scope: wf.external
+        ? { unit: wf, ...(ctx.remote ? { refName: ctx.remote.refName } : {}) }
+        : { unit: wf, running: wf.path },
     };
     for (const jobId of topoOrder(wf)) {
       const settingsOfJob = settings.jobs[jobId] ?? { id: jobId, if: 'success()', steps: [] };
@@ -867,12 +882,25 @@ class Planner {
     return across ? [] : ctx.scenario.secrets;
   }
 
+  /**
+   * Records a use. Uses are one row per fetch key and shown ref: a `./` inside a remote is shown like a direct ref to
+   * the same file at the parent's ref name, but is another remote. The pin context kept is the one that says most: an
+   * `actions.lock` pin, else a use in this repository, else one in a remote.
+   */
   private useRemote(target: RemoteTarget, at: LegPlan | NodeId, scope: Scope, uses: UsesRef): void {
-    const site = this.remoteUses.get(target.display);
-    if (!site) this.remoteUses.set(target.display, { target, at: [at], unit: scope.unit, uses });
+    const row = `${target.key}\n${remoteKey(target.display)}`;
+    const context = pinContextOf(
+      this.loaded,
+      scope.unit,
+      uses,
+      target.ref,
+      scope.running ? [scope.running] : [],
+    );
+    const site = this.remoteUses.get(row);
+    if (!site) this.remoteUses.set(row, { target, at: [at], context });
     else {
       site.at.push(at);
-      if (site.unit.external && !scope.unit.external) Object.assign(site, { unit: scope.unit, uses });
+      if (contextRank(context) > contextRank(site.context)) site.context = context;
     }
   }
 
@@ -884,15 +912,17 @@ class Planner {
     const out: RemoteUse[] = [];
     for (const site of this.remoteUses.values()) {
       const at = [...new Set(site.at.map((a) => (typeof a === 'string' ? a : a.id)))].sort(byCodeUnit);
-      const { issue } = remotePin(
-        site.target.ref,
-        pinContextOf(this.loaded, site.unit, site.uses, site.target.ref),
-      );
+      const { issue } = remotePin(site.target.ref, site.context);
       if (issue) this.diagnostics.push({ ...issue, node: at[0]! });
       if (site.target.ref.kind === 'workflow' || site.target.state !== 'not-fetched')
         out.push(remoteUseOf(site.target, at));
     }
-    return out.sort((a, b) => byCodeUnit(a.ref, b.ref));
+    const { lockError, mode } = this.loaded.remotes;
+    if (lockError !== undefined && mode !== 'off') {
+      const message = `${REMOTES_LOCK_FILE} cannot be read, so no remote is pinned by it: ${lockError}`;
+      this.diagnostics.push({ severity: 'warning', code: 'remotes-lock-invalid', message });
+    }
+    return out.sort((a, b) => byCodeUnit(a.ref, b.ref) || byCodeUnit(a.at[0]!, b.at[0]!));
   }
 
   private unsupportedCall(leg: LegPlan, job: JobDecl, remote: RemoteTarget | undefined): void {
@@ -1053,7 +1083,8 @@ class Planner {
     const remote = this.remoteTarget(scope, step.uses);
     if (remote) this.useRemote(remote, sid, scope, step.uses);
     const action = remote || scope.unit.external ? undefined : this.index.actionOf(step);
-    if (action) return { action };
+    if (action)
+      return { action, scope: { unit: action, ...(scope.running ? { running: scope.running } : {}) } };
     return this.modelTarget(remote?.display ?? step.uses.raw, sid, withValues);
   }
 
@@ -1083,7 +1114,7 @@ class Planner {
     const { produced, base } = this.producedOutcome(facts, runs, cond, sid);
     if (target.action?.using === 'composite') {
       return {
-        ...this.compositeProduct(target.action, step, sid, state, runs, location, facts, produced, base),
+        ...this.compositeProduct(target, step, sid, state, runs, location, facts, produced, base),
         envWrites,
       };
     }
@@ -1144,7 +1175,7 @@ class Planner {
 
   /** A composite action under its step: a mocked outcome makes it opaque, otherwise its inner steps decide. */
   private compositeProduct(
-    action: ActionDecl,
+    target: StepTarget,
     step: StepDecl,
     sid: NodeId,
     state: ContextState,
@@ -1154,7 +1185,8 @@ class Planner {
     produced: Value<Result>,
     base: Value<Result>,
   ): Omit<StepProduct, 'envWrites'> {
-    const composite = this.planComposite(action, step, sid, state, runs, location);
+    const action = target.action!;
+    const composite = this.planComposite(action, step, sid, state, runs, location, target.scope!);
     const inner = facts.outcome ? produced : legResult(composite.steps.map((s) => s.conclusion));
     const outcome = combine([base, inner] as Value<Result>[], ([o, i]) =>
       o === 'skipped' ? 'skipped' : (i as Result),
@@ -1212,6 +1244,7 @@ class Planner {
     state: ContextState,
     runs: Decision,
     location: Location,
+    scope: Scope,
   ): ActionPlan {
     const id = compositeNodeId(stepNode, action.path);
     const given = this.bindings(step.with, state);
@@ -1227,7 +1260,7 @@ class Planner {
       { ...state, steps: {}, status: known('success') },
       inputs,
       location,
-      { unit: action },
+      scope,
     );
     const steps = Object.fromEntries(
       inner.plans
@@ -1451,6 +1484,9 @@ function stepShell(
 
 /** GitHub's limit on the reusable workflows one run names (lab R7). */
 const MAX_CALLED_WORKFLOWS = 50;
+
+/** How much a `uses:`'s pin context says about a remote's commit: an `actions.lock` pin, a local use, a remote one. */
+const contextRank = (c: PinContext): number => (c.actionsLock !== undefined ? 2 : c.inRemote ? 0 : 1);
 
 /** By code unit, not locale, so every host orders alike. */
 const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

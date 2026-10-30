@@ -699,6 +699,89 @@ dependencies:
   });
 });
 
+describe('one row per remote, with the use that says most about its pin', () => {
+  const LOCK = '.github/simulci/remotes.lock.yml';
+  const BUILD = 'octo/ship/.github/workflows/build.yml@v1';
+  const leaf = 'on: workflow_call\njobs:\n  leaf:\n    runs-on: x\n    steps: [{ run: echo }]\n';
+  const actionsLock = (paths: string[]) =>
+    `version: v0.0.3\nworkflows:\n${paths.map((p) => `  ${p}:\n    - octo/act@v1\n`).join('')}dependencies:\n  octo/act@v1:\n    commit: sha1-${SHA_B}\n`;
+  const usingAct = 'on: push\njobs:\n  x:\n    runs-on: x\n    steps: [{ uses: octo/act@v1 }]\n';
+
+  it('keeps a ./ inside a remote apart from a direct ref shown alike', () => {
+    const files = {
+      [CI]: `on: push\njobs:\n  call:\n    uses: ${DEPLOY}\n  build:\n    uses: ${BUILD}\n`,
+      [LOCK]: `version: 1\nremotes:\n  octo/ship/.github/workflows/build.yml@${SHA}:\n    sha: ${'c'.repeat(40)}\n    kind: workflow\n    file: x\n    digest: sha256-${'A'.repeat(43)}=\n`,
+    };
+    const outer = 'on: workflow_call\njobs:\n  inner:\n    uses: ./.github/workflows/build.yml\n';
+    const p = planWith({ sources: [source(DEPLOY, outer), source(BUILD, leaf, SHA_B)] }, files);
+    expect(p.remotes!.map((r) => [r.ref, r.state, r.sha, r.at])).toEqual([
+      [BUILD, 'simulated', SHA_B, [`${CI}#build`]],
+      [BUILD, 'not-fetched', undefined, [`${CALL}>${DEPLOY}#inner`]],
+      [DEPLOY, 'simulated', SHA, [CALL]],
+    ]);
+    expect(p.diagnostics.filter((d) => d.code === 'remote-pin-mismatch')).toEqual([
+      expect.objectContaining({
+        node: `${CALL}>${DEPLOY}#inner`,
+        message: expect.stringContaining('(its parent)'),
+      }),
+    ]);
+  });
+
+  it('lists case variants of one remote once', () => {
+    const files = {
+      [CI]: `on: push\njobs:\n  a:\n    uses: Octo/Ship/.github/workflows/deploy.yml@v1\n  b:\n    uses: ${DEPLOY}\n`,
+    };
+    expect(planWith({ sources: [] }, files).remotes!.map((r) => r.at)).toEqual([[`${CI}#a`, `${CI}#b`]]);
+  });
+
+  it('pins an action a covered workflow uses although an uncovered one uses it first', () => {
+    const files = {
+      '.github/workflows/a.yml': usingAct,
+      [CI]: usingAct,
+      '.github/workflows/actions.lock': actionsLock([CI]),
+    };
+    expect(remotesNeeded(loadFiles(files), 'lock')).toEqual([
+      { ref: 'octo/act@v1', kind: 'action', depth: 1, pin: { sha: SHA_B, pinned: 'actions-lock' } },
+    ]);
+  });
+
+  it('pins an action of a local composite under the workflow that runs it', () => {
+    const files = {
+      [CI]: 'on: push\njobs:\n  x:\n    runs-on: x\n    steps: [{ uses: ./.github/actions/a }]\n',
+      '.github/actions/a/action.yml': 'runs:\n  using: composite\n  steps: [{ uses: octo/act@v1 }]\n',
+      '.github/workflows/actions.lock': actionsLock([CI]),
+      [LOCK]: `version: 1\nremotes:\n  octo/act@v1:\n    sha: ${SHA}\n    kind: action\n    file: action.yml\n    digest: sha256-${'A'.repeat(43)}=\n`,
+    };
+    expect(remotesNeeded(loadFiles(files), 'lock').map((r) => r.pin)).toEqual([
+      { sha: SHA_B, pinned: 'actions-lock' },
+    ]);
+    const p = planWith({ sources: [] }, files);
+    expect(p.diagnostics.map((d) => [d.code, d.node])).toEqual([
+      ['remote-pin-mismatch', `${CI}#x/~github-actions-a>.github/actions/a/~octo-act`],
+    ]);
+  });
+
+  it('says a fetch-mode plan resolved a ref live, and that a lockfile it cannot read pins nothing', () => {
+    const files = { [CI]: caller, [LOCK]: 'version: 1\nremotes: {}\n' };
+    const resolved = [{ ...source(DEPLOY, deploy), pinned: 'resolved' as const }];
+    const fetched = simulate({
+      files,
+      scenario: SCENARIO,
+      remotes: { sources: resolved },
+      remotesMode: 'fetch',
+    });
+    expect(codes(fetched)).toEqual(['remote-unpinned']);
+    const broken = simulate({
+      files: { [CI]: caller, [LOCK]: 'version: 2\n' },
+      scenario: SCENARIO,
+      remotes: { sources: resolved },
+    });
+    expect(broken.diagnostics).toEqual([
+      expect.objectContaining({ code: 'remotes-lock-invalid', severity: 'warning' }),
+    ]);
+  });
+});
+
 describe('remotes in the plan’s other forms', () => {
   it('renders remote callees and calls with their state', () => {
     const read = renderText(planWith({ sources: [source(DEPLOY, deploy)] }));
