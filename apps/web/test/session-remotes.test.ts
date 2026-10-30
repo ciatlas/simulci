@@ -222,6 +222,47 @@ describe('the remotes loop', () => {
     expect(refsOf(f.loads.at(-1)!.body.remotes)).toEqual([DEPLOY.ref]);
   });
 
+  it('reads nothing the files before needed when a repository opened over them gives consent', async () => {
+    const { store, f, r } = setUp();
+    await vi.advanceTimersByTimeAsync(0);
+    f.answer(0, [DEPLOY, ACT]);
+    await vi.advanceTimersByTimeAsync(0);
+    // As sources.openGitHub does: the repository's files, then consent for them.
+    store.getState().setFiles({ [CI]: 'on: pull_request' }, { kind: 'sample', name: 'y' });
+    store.getState().consentRemotes('source');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(r.reads).toHaveLength(0);
+    f.answer(1, [BUILD]);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(r.reads.map((x) => x.needs)).toEqual([[BUILD]]);
+  });
+
+  it('asks for references again once a load of the same texts with remotes took the place of the project asked', async () => {
+    const { store, f, session } = setUp();
+    await vi.advanceTimersByTimeAsync(0);
+    f.answer(0);
+    await vi.advanceTimersByTimeAsync(0);
+    const asked: number[] = [];
+    f.client.refs = (body) => {
+      asked.push(body.project);
+      return Promise.resolve(
+        asked.length === 1
+          ? { id: 1, type: 'error', kind: 'stale', message: `project ${body.project} is not loaded` }
+          : { id: 2, type: 'refs', project: body.project, refs: [], exact: true, notes: [] },
+      );
+    };
+    const found = session.refs({ kind: 'job', workflow: CI, job: 'build' });
+    await vi.advanceTimersByTimeAsync(0);
+    // Remotes came in: the same texts load again, and that project replaces the one the first ask named.
+    store
+      .getState()
+      .remotesRead({ sources: [], failed: [{ ...ACT, failure: 'timeout', message: 'slow' }] }, true);
+    await vi.advanceTimersByTimeAsync(0);
+    f.answer(1);
+    expect(await found).toMatchObject({ ok: true, project: 2 });
+    expect(asked).toEqual([1, 2]);
+  });
+
   it('takes a reader that failed to load as each need not read, and stops reading once disposed', async () => {
     const store = createSessionStore();
     const f = fakeClient();

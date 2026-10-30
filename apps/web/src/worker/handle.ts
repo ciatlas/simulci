@@ -37,6 +37,7 @@ import type {
   RefsRequest,
   RemoteNeed,
   RemotePool,
+  RemotePoolSource,
   SimulateRequest,
   TestRequest,
 } from './protocol';
@@ -168,18 +169,25 @@ function withRemotes(
   for (let level = 0; ; level++) {
     const loaded = loadFiles(files, { ...opts, remotes: taken, mode });
     const needed = remotesNeeded(loaded, mode);
-    const found = level <= MAX_DEPTH ? needed.flatMap((n) => inPool(pool, n)) : [];
+    const found = level <= MAX_DEPTH ? needed.flatMap((n) => inPool(pool, withDigest(loaded, n))) : [];
     if (!found.length) return answer(loaded, needed);
-    for (const f of found) take(taken, f);
+    // Admitted in core's order (by `remoteKey`), a read that failed counting toward the cap as core counts it.
+    for (const f of found.sort((a, b) => byKey(a.ref, b.ref))) take(taken, f);
   }
 }
 
-/** A remote into what a load reads: a file, while fewer than 200 are, else past the cap; or why it was not read. */
+/** A remote into what a load reads while fewer than 200 are (a file, or why it was not read), else past the cap. */
 function take(taken: Required<RemoteInputs>, found: RemoteSourceInput | RemoteFailureInput): void {
-  if (!('text' in found)) taken.failed.push(found);
-  else if (taken.sources.length < MAX_UNITS) taken.sources.push(found);
-  else taken.limited.push(found.ref);
+  if (taken.sources.length + taken.failed.length >= MAX_UNITS) taken.limited.push(found.ref);
+  else if ('text' in found) taken.sources.push(found);
+  else taken.failed.push(found);
 }
+
+/** By `remoteKey`, then as written, by code unit: the order core admits a level's refs in. */
+const byKey = (a: string, b: string): number => {
+  const [x, y] = [remoteKey(a), remoteKey(b)];
+  return x < y ? -1 : x > y ? 1 : a < b ? -1 : a > b ? 1 : 0;
+};
 
 /** The lock files among the read-only files: the engine reads them from the project's files. */
 const locksOf = (readonly: Record<string, string> = {}): Record<string, string> =>
@@ -189,24 +197,40 @@ const locksOf = (readonly: Record<string, string> = {}): Record<string, string> 
     ),
   );
 
-/** What the pool holds of a need: its file read at the need's commit (or resolved live), or why it could not be. */
+/**
+ * What the pool holds of a need: its file read at the need's commit (or resolved live), or why it could not be. A file
+ * read for another pin whose digest is not the one the lockfile records for that commit fails as `simulci test` fails
+ * it, `digest`.
+ */
 function inPool(pool: RemotePool, need: RemoteNeed): (RemoteSourceInput | RemoteFailureInput)[] {
   const key = remoteKey(need.ref);
   const sha = need.pin?.sha;
   const source = pool.sources.findLast(
     (s) => remoteKey(s.ref) === key && (sha === undefined ? s.pinned === 'resolved' : s.sha === sha),
   );
-  if (source) return [{ ...source, ref: need.ref, pinned: need.pin?.pinned ?? 'resolved' }];
+  if (source)
+    return [
+      digestFailure(need, source) ?? { ...source, ref: need.ref, pinned: need.pin?.pinned ?? 'resolved' },
+    ];
   const failure = pool.failed.findLast((f) => remoteKey(f.ref) === key && f.sha === sha);
   if (!failure) return [];
   const { sha: _, ...rest } = failure;
   return [{ ...rest, ref: need.ref }];
 }
 
+/** A `digest` failure when the file's digest is known and is not the one the lockfile records for its commit. */
+function digestFailure(need: RemoteNeed, source: RemotePoolSource): RemoteFailureInput | undefined {
+  if (!need.digest || !source.digest || source.digest === need.digest) return undefined;
+  const message = `the digest of ${need.ref} at ${source.sha.slice(0, 7)} is ${source.digest}, not ${need.digest}`;
+  return { ref: need.ref, kind: need.kind, failure: 'digest', message };
+}
+
 /** A need with the digest its lockfile entry records, when that entry is for the commit to read. */
 function withDigest(loaded: LoadedProject, need: RemoteNeed): RemoteNeed {
   const lock = loaded.remotes.lock?.remotes ?? {};
-  const key = Object.keys(lock).find((k) => remoteKey(k) === remoteKey(need.ref));
+  const key = Object.hasOwn(lock, need.ref)
+    ? need.ref
+    : Object.keys(lock).find((k) => remoteKey(k) === remoteKey(need.ref));
   const entry = key === undefined ? undefined : lock[key];
   return entry?.digest && need.pin?.sha === entry.sha ? { ...need, digest: entry.digest } : need;
 }
@@ -330,7 +354,9 @@ function testCase(project: NonNullable<WorkerState['project']>, request: CaseReq
       what: 'workflow',
       issues: [{ path: ['workflow'], message: `no workflow at ${request.workflow}` }],
     };
-  const result = simulate({ project: project.loaded, detail: 'steps', ...planInputs(request) });
+  // A test case is planned as `simulci test` will run it: on the project with only the pinned remotes.
+  const loaded = request.format === 'test' ? project.tested() : project.loaded;
+  const result = simulate({ project: loaded, detail: 'steps', ...planInputs(request) });
   if (request.format === 'text') return { id: request.id, type: 'case', text: renderText(result) };
   if (request.format === 'mermaid') return { id: request.id, type: 'case', text: renderMermaid(result) };
   const opts = {

@@ -46,8 +46,15 @@ describe('reading remotes', () => {
     const read = await readRemotes([DEPLOY, ACT], { fetch: api.fetch, cache: remoteCacheOf(memoryCache()) });
     expect(read.failed).toEqual([]);
     expect(read.sources.sort((x, y) => x.ref.localeCompare(y.ref))).toEqual([
-      { ref: ACT.ref, kind: 'action', sha: B, text: act, pinned: 'resolved' },
-      { ref: DEPLOY.ref, kind: 'workflow', sha: A, text: deploy, pinned: 'lockfile' },
+      { ref: ACT.ref, kind: 'action', sha: B, text: act, pinned: 'resolved', digest: digestOf(act) },
+      {
+        ref: DEPLOY.ref,
+        kind: 'workflow',
+        sha: A,
+        text: deploy,
+        pinned: 'lockfile',
+        digest: digestOf(deploy),
+      },
     ]);
   });
 

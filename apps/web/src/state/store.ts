@@ -331,8 +331,11 @@ export interface RemotesState {
   needed: RemoteNeed[];
   /** `fetching` while a read is out; `done` once one came back. */
   status: 'idle' | 'fetching' | 'done';
-  /** The author let the page read them from GitHub; it holds for the page's life. */
-  consent: boolean;
+  /**
+   * Whether the author let the page read them from GitHub: `page` by the chip's Fetch, for the page's life; `source` by
+   * opening a GitHub repository, for that source only (another source's refs are not the repository's to ask about).
+   */
+  consent: 'none' | 'source' | 'page';
 }
 
 /** A read's place in the pool: its ref as written and the commit it was read at, or asked for. */
@@ -340,7 +343,7 @@ export const remotePoolKey = (ref: string, sha: string | undefined): string => `
 
 /** What every load sends of the remotes (`LoadRequest.remotes`): nothing until the author lets the page read them. */
 export const remotePool = ({ consent, byKey, failed }: RemotesState): RemotePool | undefined =>
-  consent ? { sources: Object.values(byKey), failed: Object.values(failed) } : undefined;
+  consent === 'none' ? undefined : { sources: Object.values(byKey), failed: Object.values(failed) };
 
 /** What the Tests tab shows: the last run of the route tests, the one under way, and how they run. */
 export interface TestsState {
@@ -445,8 +448,8 @@ export interface SessionActions {
   /** The "As CI" switch. */
   /** What the project of the newest files needs of the remotes, from its load. */
   setRemotesNeeded: (needed: RemoteNeed[]) => void;
-  /** The author lets the page read remotes from GitHub, for the page's life. */
-  consentRemotes: () => void;
+  /** The author lets the page read remotes from GitHub: for the page's life (the chip), or for the source shown. */
+  consentRemotes: (scope?: 'source' | 'page') => void;
   remotesFetching: () => void;
   /** Remotes read, or not; `done` when no other read is out. */
   remotesRead: (read: { sources: RemoteSourceInput[]; failed: RemotePoolFailure[] }, done: boolean) => void;
@@ -625,13 +628,15 @@ export function initialSessionState(prefs: Prefs = DEFAULT_PREFS): SessionState 
     notices: [],
     edit: { ...history.emptyHistory(), on: false, unlocked: [] },
     tests: { ci: true, status: 'idle' },
-    remotes: { byKey: {}, failed: {}, needed: [], status: 'idle', consent: false },
+    remotes: { byKey: {}, failed: {}, needed: [], status: 'idle', consent: 'none' },
   };
 }
 
-/** The remotes of new files: what was read stays, what the old files needed goes. */
+/** The remotes of new files: what was read stays, what the old files needed goes, and so does a source's consent. */
 const unneeded = (remotes: RemotesState): RemotesState =>
-  remotes.needed.length ? { ...remotes, needed: [] } : remotes;
+  remotes.needed.length || remotes.consent === 'source'
+    ? { ...remotes, needed: [], consent: remotes.consent === 'source' ? 'none' : remotes.consent }
+    : remotes;
 
 /** The Tests tab of new files: nothing ran yet, the switch as the author left it. */
 const untested = (tests: TestsState): TestsState => ({ ci: tests.ci, status: 'idle' });
@@ -916,8 +921,12 @@ export function createSessionStore(initial: SessionState = initialSessionState()
         set((s) =>
           needed.length === 0 && s.remotes.needed.length === 0 ? s : { remotes: { ...s.remotes, needed } },
         ),
-      consentRemotes: () =>
-        set((s) => (s.remotes.consent ? s : { remotes: { ...s.remotes, consent: true } })),
+      consentRemotes: (scope = 'page') =>
+        set((s) =>
+          s.remotes.consent === 'page' || s.remotes.consent === scope
+            ? s
+            : { remotes: { ...s.remotes, consent: scope } },
+        ),
       remotesFetching: () =>
         set((s) => (s.remotes.status === 'fetching' ? s : { remotes: { ...s.remotes, status: 'fetching' } })),
       remotesRead: (read, done) =>

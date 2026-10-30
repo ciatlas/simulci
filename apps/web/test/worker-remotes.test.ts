@@ -113,6 +113,21 @@ describe('a load with remotes', () => {
     expect(needed.map((n) => n.ref)).toEqual([ACT]);
   });
 
+  it("fails, as `simulci test` does, a file read for another pin whose digest is not the lockfile's", () => {
+    const other = { ...source(DEPLOY, A, deployText, 'sha-ref'), digest: digestOf('# another file') };
+    const { state, needed } = load({ files, readonly, remotes: { sources: [other], failed: [] } });
+    expect(
+      state.project!.loaded.remotes.failed.get('octo/ship/.github/workflows/deploy.yml@v1'),
+    ).toMatchObject({
+      failure: 'digest',
+    });
+    expect(needed.map((n) => n.ref)).toEqual([ACT]);
+    // The same bytes pass.
+    const same = { ...other, digest: digestOf(deployText) };
+    const ok = load({ files, readonly, remotes: { sources: [same], failed: [] } }).state;
+    expect(read(ok)).toEqual([`${DEPLOY} a lockfile`]);
+  });
+
   it('runs the route tests on the project `simulci test` loads: only what a pin names, in lock mode', () => {
     const pool: RemotePool = {
       sources: [
@@ -153,6 +168,50 @@ describe('a load with remotes', () => {
     expect(state.project!.loaded.remotes.sources.size).toBe(200);
     expect([...state.project!.loaded.remotes.limited]).toEqual([refs[200]]);
     expect(needed).toEqual([]);
+  });
+
+  it("counts a read that failed toward the cap, and admits in core's order, by remoteKey", () => {
+    const refs = Array.from({ length: 200 }, (_, i) => `octo/a${String(i).padStart(3, '0')}@v1`);
+    const all = ['Zed/z@v1', ...refs];
+    const steps = all.map((r) => `      - uses: ${r}\n`).join('');
+    const many = {
+      '.github/workflows/ci.yml': `on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n${steps}`,
+    };
+    const sources = refs.slice(1).map((r) => source(r, A, actText, 'resolved'));
+    const failed = [{ ref: refs[0]!, kind: 'action', failure: 'not-found', message: 'gone' }] as const;
+    const { state } = load({
+      files: many,
+      remotes: { sources: [...sources, source('Zed/z@v1', A, actText, 'resolved')], failed: [...failed] },
+    });
+    const { remotes } = state.project!.loaded;
+    expect([remotes.sources.size, remotes.failed.size]).toEqual([199, 1]);
+    expect([...remotes.limited]).toEqual(['zed/z@v1']);
+  });
+
+  it('plans a test case on the project `simulci test` loads, without what was resolved live', () => {
+    const pool: RemotePool = {
+      sources: [source('octo/ship/.github/workflows/deploy.yml@v2', A, buildText, 'resolved')],
+      failed: [],
+    };
+    const top = {
+      '.github/workflows/ci.yml':
+        'on: push\njobs:\n  ship:\n    uses: octo/ship/.github/workflows/deploy.yml@v2\n',
+    };
+    const { state } = load({ files: top, remotes: pool });
+    const project = state.project!.version;
+    const ask = (format: 'test' | 'text') =>
+      handle(state, {
+        id: 2,
+        type: 'case',
+        project,
+        workflow: '.github/workflows/ci.yml',
+        scenario: { event: 'push' },
+        assume: [],
+        detail: 'jobs',
+        format,
+      }).response;
+    expect(ask('text')).toMatchObject({ text: expect.stringContaining('(remote, aaaaaaa)') });
+    expect(ask('test')).toMatchObject({ text: expect.not.stringContaining('ship/b') });
   });
 
   it('accepts a load with a pool and refuses one with a malformed pool', () => {

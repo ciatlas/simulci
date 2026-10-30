@@ -10,9 +10,8 @@ import {
   type RemoteSourceKey,
   resolveRemoteCommit,
 } from '@ciatlas/core/remote-fetch';
-import type { RemoteSourceInput } from '@simulci/engine';
 import { readHostConfig } from '../app/config';
-import type { RemoteNeed, RemotePoolFailure } from '../worker/protocol';
+import type { RemoteNeed, RemotePoolFailure, RemotePoolSource } from '../worker/protocol';
 import { type GitHubCache, openGitHubCache } from './cache';
 import { pageFetch } from './client';
 
@@ -24,7 +23,7 @@ import { pageFetch } from './client';
  */
 
 export interface RemotesRead {
-  sources: RemoteSourceInput[];
+  sources: RemotePoolSource[];
   failed: RemotePoolFailure[];
 }
 
@@ -76,7 +75,7 @@ async function readOne(
   need: RemoteNeed,
   opts: RemoteFetchOptions,
   host: string,
-): Promise<RemoteSourceInput | RemotePoolFailure> {
+): Promise<RemotePoolSource | RemotePoolFailure> {
   const ref = parseRemoteRef(need.ref, need.kind);
   if (!ref) return failureOf(need, 'other', `${need.ref} is not a remote reference`);
   try {
@@ -94,7 +93,7 @@ async function sourceOf(
   ref: RemoteRef,
   opts: RemoteFetchOptions,
   host: string,
-): Promise<RemoteSourceInput> {
+): Promise<RemotePoolSource> {
   const sha = need.pin?.sha ?? (await resolveRemoteCommit(ref, opts));
   const digest = need.digest === undefined ? {} : { expectDigest: need.digest };
   const source = await fetchRemoteSourceAt(ref, sha, { ...opts, ...digest });
@@ -104,6 +103,7 @@ async function sourceOf(
     sha: source.sha,
     text: source.text,
     pinned: need.pin?.pinned ?? 'resolved',
+    digest: source.digest,
     ...(source.host === host ? {} : { host: source.host }),
   };
 }

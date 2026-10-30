@@ -138,7 +138,7 @@ describe('the remotes in the store', () => {
     } as const;
     a.remotesRead({ sources: [source], failed: [] }, true);
     const { remotes } = store.getState();
-    expect(remotes).toMatchObject({ status: 'done', consent: false, failed: {}, needed: [NEED] });
+    expect(remotes).toMatchObject({ status: 'done', consent: 'none', failed: {}, needed: [NEED] });
     expect(remotes.byKey).toEqual({ [remotePoolKey(NEED.ref, SHA)]: source });
     // No pane tab, no dirty state: the files did not move.
     expect(store.getState().files).toBe(files);
@@ -147,6 +147,6 @@ describe('the remotes in the store', () => {
     expect(remotePool(store.getState().remotes)).toEqual({ sources: [source], failed: [] });
     // A new source keeps what was read and needs nothing until its load says so.
     a.setFiles({ [RELEASE]: 'on: release' }, FOLDER);
-    expect(store.getState().remotes).toMatchObject({ byKey: remotes.byKey, needed: [], consent: true });
+    expect(store.getState().remotes).toMatchObject({ byKey: remotes.byKey, needed: [], consent: 'page' });
   });
 });

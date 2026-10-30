@@ -416,6 +416,19 @@ export function createSession({
 
   if (hasProjectFiles(store.getState())) void load('source');
 
+  /** Resolves once the project shown is no longer `project`: another load committed, failed, or other files came. */
+  const replaced = (project: number): Promise<void> =>
+    new Promise((resolve) => {
+      const still = (s: SessionState): boolean =>
+        s.project.version === project && s.project.status === 'ready';
+      if (!still(store.getState())) return resolve();
+      const stop = store.subscribe((s) => {
+        if (still(s)) return;
+        stop();
+        resolve();
+      });
+    });
+
   const current = (): Promise<Current> => {
     const { epoch } = store.getState().files;
     return new Promise((resolve) => {
@@ -442,12 +455,16 @@ export function createSession({
     },
     current,
     refs: async (target) => {
-      const at = await current();
-      if (!at.ok) return at;
-      const r = await client.refs({ project: at.project, target });
-      if (r.type === 'refs')
-        return { ...at, project: r.project, refs: r.refs, exact: r.exact, notes: r.notes };
-      return { ok: false, message: r.type === 'error' ? r.message : 'a newer request replaced it' };
+      for (let tries = 0; ; tries++) {
+        const at = await current();
+        if (!at.ok) return at;
+        const r = await client.refs({ project: at.project, target });
+        if (r.type === 'refs')
+          return { ...at, project: r.project, refs: r.refs, exact: r.exact, notes: r.notes };
+        // The worker took a load of the same texts meanwhile (remotes read since): asked again once it is on screen.
+        if (r.type === 'error' && r.kind === 'stale' && tries === 0) await replaced(at.project);
+        else return { ok: false, message: r.type === 'error' ? r.message : 'a newer request replaced it' };
+      }
     },
     testCase: (format, given) => requestCase(client, store.getState(), format, given),
     dispose: () => {

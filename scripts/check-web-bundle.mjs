@@ -26,7 +26,7 @@ const assets = join(dist, 'assets');
  */
 const BUDGETS = [
   // The engine, @ciatlas/core, yaml, zod and @actions/*: 149.4 kB measured; 164.9 with the route tests' runner and
-  // its assertions (156.5 before, synthesis § 5.11); 169.4 with remote workflows and actions planned, 170.4 with the
+  // its assertions (156.5 before, synthesis § 5.11); 169.4 with remote workflows and actions planned, 170.6 with the
   // remotes taken level by level from the page's pool (M4 § 5.3), and the budget stays 172.
   { name: 'the engine worker', test: (f) => f.startsWith('engine.worker-'), kB: 172 },
   // elkjs: 428.5 kB measured.
@@ -36,7 +36,7 @@ const BUDGETS = [
   // platform popover), the edit runtime's and the dialogs' loaders, Save's buttons and keys with its permission
   // request, the canvas's side of its gestures, a rename's remaps, the Tests tab's state, schedule and loader, and a
   // GitHub source's state, words, loader, menu entry, card and link offer, and the remotes' state, reads and chip:
-  // 246.5 kB measured (245.6 before the remotes, 244.0 before the dialog's entries, 242.2 before the GitHub source,
+  // 246.7 kB measured (245.6 before the remotes, 244.0 before the dialog's entries, 242.2 before the GitHub source,
   // 241.2 before the Tests tab, 246.5 before the dialogs moved to their own chunk). The synthesis keeps 251 (§ 8.5,
   // M4 § 5.11).
   { name: 'the page', test: (f) => f.startsWith('index-') && f.endsWith('.js'), kB: 251 },

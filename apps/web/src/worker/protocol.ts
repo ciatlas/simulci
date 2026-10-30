@@ -52,9 +52,12 @@ export interface LoadRequest {
 
 /** What the page read of remotes: content-addressed by ref and commit, so it holds across loads and sources. */
 export interface RemotePool {
-  sources: RemoteSourceInput[];
+  sources: RemotePoolSource[];
   failed: RemotePoolFailure[];
 }
+
+/** A remote file read, with the digest of its bytes (core's `sha256-…`), which a lockfile's entry is checked against. */
+export type RemotePoolSource = RemoteSourceInput & { digest?: string };
 
 /** A remote the page could not read: at the commit it asked for, or, without `sha`, resolving its ref failed. */
 export type RemotePoolFailure = RemoteFailureInput & { sha?: string };

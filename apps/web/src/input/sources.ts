@@ -576,10 +576,11 @@ export function createSources({
       if (!(await mayReplace(`Opening ${repoName(source)}`))) return { ok: false, requests };
       let refused: string | undefined;
       const where = `${repoName(source)} at ${shortSha(source.sha)}`;
-      // Opening a repository was the network action, and the dialog said what it reads: its remotes come too (§ 5.3).
-      actions.consentRemotes();
       if (!accept(walked, source, where, (m) => (refused = m)))
         return { ok: false, message: refused, requests };
+      // Opening the repository was the network action, and the dialog or the card said what it reads: its remotes come
+      // too (§ 5.3), for this source only. A refused one leaves the files on screen as they were, consent and all.
+      actions.consentRemotes('source');
       return { ok: true, requests, ...(read.rate === undefined ? {} : { rate: read.rate }) };
     },
 

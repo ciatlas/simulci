@@ -40,7 +40,7 @@ export function createRemoteReads({ store, read, timers, debounceMs = 500 }: Rem
   /** What the newest load needs and nobody asked for yet, marked asked; nothing without consent. */
   const toRead = (): RemoteNeed[] => {
     const { consent, needed } = store.getState().remotes;
-    if (!consent || stop.signal.aborted) return [];
+    if (consent === 'none' || stop.signal.aborted) return [];
     const todo = needed.filter((n) => !asked.has(remotePoolKey(n.ref, n.pin?.sha)));
     for (const n of todo) asked.add(remotePoolKey(n.ref, n.pin?.sha));
     return todo;
@@ -55,7 +55,7 @@ export function createRemoteReads({ store, read, timers, debounceMs = 500 }: Rem
 
   const later = debounce(() => void readNeeded(), debounceMs, timers);
   const unsubscribe = store.subscribe((s, prev) => {
-    if (s.remotes.consent && !prev.remotes.consent) {
+    if (s.remotes.consent !== 'none' && prev.remotes.consent === 'none') {
       later.cancel();
       void readNeeded();
     } else if (s.remotes.needed !== prev.remotes.needed && s.remotes.needed.length) later.call();

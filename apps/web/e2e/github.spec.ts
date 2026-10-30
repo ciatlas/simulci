@@ -191,7 +191,7 @@ test('a link to a repository offers it and asks GitHub nothing before the click'
   await page.goto(`/?event=push&gh=${NAME}@main`);
   const offer = page.getByRole('region', { name: 'Open from GitHub' });
   await expect(offer).toContainText(
-    `Open ${NAME} @ main from GitHub? simulci reads its workflow files from api.github.com.`,
+    `Open ${NAME} @ main from GitHub? simulci reads its workflow files, and the workflows and actions they call, from api.github.com.`,
   );
   await expect(page.getByRole('main').getByRole('heading', { name: 'What runs if…' })).toBeVisible();
   await page.waitForLoadState('networkidle');

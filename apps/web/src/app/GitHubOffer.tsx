@@ -41,8 +41,8 @@ function Offer({ offer }: { offer: RepoTarget }) {
       className="flex flex-wrap items-center gap-x-3 gap-y-2 border-border border-b bg-surface px-4 py-2 text-sm"
     >
       <p className="min-w-0 flex-1">
-        Open <strong className="font-semibold">{name}</strong> from GitHub? simulci reads its workflow files
-        from api.github.com.
+        Open <strong className="font-semibold">{name}</strong> from GitHub? simulci reads its workflow files,
+        and the workflows and actions they call, from api.github.com.
       </p>
       <p role="status" className="text-muted text-xs">
         {reading &&
