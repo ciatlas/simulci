@@ -4,8 +4,11 @@ import {
   renderAnnotations,
   renderJUnit,
   renderMarkdownReport,
+  renderMermaid,
   renderTextReport,
+  type RunResult,
   runTests,
+  simulate,
 } from '@simulci/engine';
 import { describe, expect, it } from 'vitest';
 
@@ -85,5 +88,51 @@ describe('reports', () => {
     const lines = renderAnnotations(many);
     expect(lines.filter((l) => l.startsWith('::error file=')).length).toBe(9);
     expect(lines).toContain('::error::3 more failures not shown; see the log');
+  });
+
+  it('keeps names from other repositories from writing Markdown, HTML or Mermaid', () => {
+    const name = 'x](https://evil.example) ![t](https://evil.example/t.png) <img src=x> | *b* `c` ~d~ \\';
+    const headline = 'expected ok\n```\n## injected\n````';
+    const hostile: RunResult = {
+      files: [
+        {
+          path: 't.test.yml',
+          status: 'failed',
+          failures: [],
+          notes: [],
+          cases: [
+            {
+              name,
+              status: 'failed',
+              notes: [],
+              failures: [{ status: 'failed', headline, detail: ['`````'], at: { line: 1, col: 1 } }],
+            },
+          ],
+        },
+      ],
+      summary: { passed: 0, failed: 1, invalid: 0, skipped: 0 },
+      exitCode: 1,
+    };
+    const markdown = renderMarkdownReport(hostile);
+    expect(markdown).toContain(
+      '| ❌ | x\\](https://evil.example) \\!\\[t\\](https://evil.example/t.png) &lt;img src=x&gt; \\| \\*b\\* \\`c\\` \\~d\\~ \\\\ | t.test.yml |',
+    );
+    // The failure's own backticks cannot close the block it is shown in.
+    expect(markdown).toContain('\n``````\nexpected ok\n```\n## injected\n````\n    `````\n');
+    expect(markdown).toMatch(/\n``````\n\n<\/details>\n$/);
+    expect(markdown).not.toContain('<img');
+
+    const plan = simulate({
+      files: {
+        '.github/workflows/ci.yml':
+          'name: "a\\"]\\nclick n1 href \\"https://evil.example\\"\\n<b>#quot;"\non: push\njobs:\n  b: { runs-on: x, steps: [{ run: t }] }\n',
+      },
+      scenario: { event: 'push', branch: 'main' },
+    });
+    const graph = renderMermaid(plan).split('\n');
+    expect(graph[1]).toBe(
+      '  subgraph n1["a#quot;] click n1 href #quot;https://evil.example#quot; #lt;b#gt;#35;quot;"]',
+    );
+    expect(graph.filter((l) => l.includes('click'))).toHaveLength(1);
   });
 });

@@ -141,23 +141,36 @@ export function renderMarkdownReport(
   ]);
   const max = opts.maxFailures ?? 50;
   for (const item of failed.slice(0, max)) {
+    const body = item.failures.flatMap((f) => [...failureLines(f, ''), '']);
+    const fence = fenceFor(body.join('\n'));
     lines.push(
       '',
       `<details><summary>${EMOJI.failed} ${inline(item.name)} — ${inline(item.failures[0]!.headline)}</summary>`,
       '',
-      '```',
+      fence,
+      ...body,
+      fence,
+      '',
+      '</details>',
     );
-    for (const f of item.failures) lines.push(...failureLines(f, ''), '');
-    lines.push('```', '', '</details>');
   }
   if (failed.length > max) lines.push('', `${failed.length - max} more failed cases are in the log.`);
   return `${lines.join('\n')}\n`;
 }
 
-/** A table cell: backslashes and pipes escaped, newlines flattened. */
-const md = (s: string): string => html(s).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+/**
+ * A table cell: tags and entities escaped, then every character with inline meaning (`\\`, `|`, emphasis, code, and
+ * the brackets of links and images), newlines flattened. Names reach it from other repositories' workflows.
+ */
+const md = (s: string): string =>
+  html(s)
+    .replace(/[\\|`*_~[\]!]/g, '\\$&')
+    .replace(/\r?\n|\r/g, ' ');
+/** A code fence no line of `text` can close: longer than any run of backticks in it. */
+const fenceFor = (text: string): string =>
+  '`'.repeat(Math.max(3, 1 + Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))));
 /** Text inside the raw HTML of a summary line: tags and entities escaped, newlines flattened. */
-const inline = (s: string): string => html(s).replace(/\n/g, ' ');
+const inline = (s: string): string => html(s).replace(/\r?\n|\r/g, ' ');
 const html = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export function renderJUnit(result: RunResult): string {
