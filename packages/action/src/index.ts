@@ -1,5 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import * as core from '@actions/core';
-import { run } from './main';
+import { run, withoutCommands } from './main';
+
+// Masked before anything is logged, so a message that ever held one prints *** instead.
+for (const name of ['token', 'github-com-token']) {
+  const token = core.getInput(name).trim();
+  if (token) core.setSecret(token);
+}
 
 try {
   await run({
@@ -14,9 +21,11 @@ try {
       core.summary.addRaw(markdown, true);
       await core.summary.write();
     },
-    log: (text) => core.info(text),
+    log: (text) => core.info(withoutCommands(text, randomUUID())),
+    warn: (message) => core.warning(message),
     fail: (message) => core.setFailed(message),
     workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
+    env: process.env,
   });
 } catch (e) {
   core.setFailed(e instanceof Error ? e.message : String(e));

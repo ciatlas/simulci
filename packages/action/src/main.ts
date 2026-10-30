@@ -4,8 +4,10 @@ import {
   type Annotation,
   annotationsOf,
   type AssumeEntry,
+  type LoadedProject,
   loadFiles,
   MocksError,
+  type RemotesMode,
   type RunOptions,
   type RunPlan,
   type RunResult,
@@ -30,6 +32,17 @@ import {
   TestsError,
 } from '@simulci/node';
 import { parse } from 'yaml';
+import {
+  effectiveMode,
+  failureLines,
+  inThisRepository,
+  printable,
+  printableAnnotation,
+  type RemotesSetup,
+  readRemotes,
+  remotesMode,
+  withLockfiles,
+} from './remotes';
 
 /**
  * The action, over what the runner gives it: inputs, outputs, annotations, the job summary, the log. `test` runs the
@@ -44,14 +57,20 @@ export interface Ports {
   annotate(annotation: Annotation): void;
   summary(markdown: string): Promise<void>;
   log(text: string): void;
+  warn(message: string): void;
   /** Marks the step failed with the message; the action still finishes what it was doing. */
   fail(message: string): void;
   workspace: string;
+  /** The runner's variables: `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`, `GITHUB_API_URL`. */
+  env: Record<string, string | undefined>;
+  /** What reads GitHub; by default `globalThis.fetch`. */
+  fetch?: RemotesSetup['fetch'];
 }
 
 const OUTPUTS = ['passed', 'failed', 'invalid', 'skipped'] as const;
 
-export async function run(ports: Ports): Promise<void> {
+export async function run(runner: Ports): Promise<void> {
+  const ports = shown(runner);
   for (const name of OUTPUTS) ports.setOutput(name, 0);
   ports.setOutput('exit-code', 2);
   ports.setOutput('triggered', '');
@@ -75,7 +94,13 @@ export async function run(ports: Ports): Promise<void> {
     ports.fail(e.message);
     return;
   }
-  const ctx: Context = { ports, root, dir, workflows, assume };
+  const remotes = remotesMode(ports.input('remotes'), mode === 'test');
+  if (typeof remotes !== 'string') {
+    ports.fail(remotes.error);
+    return;
+  }
+  const repository = ports.env.GITHUB_REPOSITORY || undefined;
+  const ctx: Context = { ports, root, dir, workflows, assume, remotes, repository };
   if (mode === 'plan') await plan(ctx);
   else await test(ctx);
 }
@@ -86,6 +111,42 @@ interface Context {
   dir: string;
   workflows: Record<string, string>;
   assume: AssumeEntry[];
+  remotes: RemotesMode;
+  repository: string | undefined;
+}
+
+/** GitHub shows ten annotations of a kind per step: past five unread remotes, the log has them all. */
+const UNREAD_SHOWN = 5;
+
+function shownUnread(lines: string[]): string[] {
+  if (lines.length <= UNREAD_SHOWN) return lines;
+  const rest = lines.length - (UNREAD_SHOWN - 1);
+  return [
+    ...lines.slice(0, UNREAD_SHOWN - 1),
+    `${rest} more remotes not read or lockfiles not used: see the log`,
+  ];
+}
+
+/** The engine's files and remotes, read as the `remotes` input says (`off` on an untrusted event). */
+async function loadInputs(ctx: Context) {
+  const { ports } = ctx;
+  const mode = effectiveMode({ mode: ctx.remotes, env: ports.env, warn: (m) => ports.warn(m) });
+  const load = await readRemotes(ctx.root, ctx.workflows, {
+    mode,
+    token: ports.input('token'),
+    apiUrl: ports.input('api-url'),
+    githubComToken: ports.input('github-com-token'),
+    env: ports.env,
+    ...(ports.fetch ? { fetch: ports.fetch } : {}),
+    log: (l) => ports.log(l),
+  });
+  const failed = failureLines(load.remotes.failed ?? []);
+  const lockErrors = load.lockErrors.map((e) => `not used: ${e}`);
+  const unread = [...failed, ...lockErrors];
+  const read = load.remotes.sources.length;
+  if (read + failed.length > 0) ports.log(`remotes: ${mode}, ${read} read, ${failed.length} not read\n`);
+  if (unread.length > UNREAD_SHOWN) ports.log(`${unread.join('\n')}\n`);
+  return { files: withLockfiles(ctx.root, ctx.workflows), mode, remotes: load.remotes, unread };
 }
 
 async function test(ctx: Context): Promise<void> {
@@ -99,21 +160,31 @@ async function test(ctx: Context): Promise<void> {
     );
     return;
   }
+  const inputs = await loadInputs(ctx);
+  let project: LoadedProject;
   let result: RunResult;
   try {
-    result = runTests(loadFiles(ctx.workflows), readTests(root, files), testOptions(ctx));
+    project = loadFiles(inputs.files, {
+      ...(ctx.repository ? { repository: ctx.repository } : {}),
+      remotes: inputs.remotes,
+      mode: inputs.mode,
+    });
+    result = runTests(project, readTests(root, files), testOptions(ctx));
   } catch (e) {
     if (!(e instanceof MocksError || e instanceof TestsError)) throw e;
     ports.fail(e.message);
     return;
   }
-  await reportTests(ctx, result);
+  await reportTests(ctx, inThisRepository(result, project));
   for (const name of OUTPUTS) ports.setOutput(name, result.summary[name]);
-  ports.setOutput('exit-code', result.exitCode);
-  if (result.exitCode !== 0) {
+  // A locked remote that cannot be read never gives a verdict: as `simulci test`, exit 2.
+  const exitCode = inputs.unread.length ? 2 : result.exitCode;
+  ports.setOutput('exit-code', exitCode);
+  for (const line of shownUnread(inputs.unread)) ports.fail(line);
+  if (exitCode !== 0) {
     const s = result.summary;
     ports.fail(
-      `simulci test: ${s.failed} failed, ${s.invalid} invalid, ${s.passed} passed (exit ${result.exitCode})`,
+      `simulci test: ${s.failed} failed, ${s.invalid} invalid, ${s.passed} passed (exit ${exitCode})`,
     );
   }
 }
@@ -151,10 +222,21 @@ async function plan(ctx: Context): Promise<void> {
     ports.fail('scenario is required in plan mode: a YAML mapping such as { event: push, branch: main }');
     return;
   }
+  const inputs = await loadInputs(ctx);
+  for (const line of shownUnread(inputs.unread)) ports.warn(line);
   let result: RunPlan;
   try {
     const scenario = parse(text) as ScenarioInput;
-    result = simulate({ files: ctx.workflows, scenario, mocks: { cli: ctx.assume } });
+    // The scenario's own `repository` wins: it may plan the workflows as another repository runs them.
+    const repository = scenario?.repository === undefined ? ctx.repository : undefined;
+    result = simulate({
+      files: inputs.files,
+      scenario,
+      mocks: { cli: ctx.assume },
+      ...(repository ? { repository } : {}),
+      remotes: inputs.remotes,
+      remotesMode: inputs.mode,
+    });
   } catch (e) {
     if (!(e instanceof Error)) throw e;
     ports.fail(`scenario: ${e.message}`);
@@ -176,18 +258,38 @@ function renderPlan(result: RunPlan, format: string): string {
 function planSummary(result: RunPlan, title: string): string {
   const text = renderText(result).trimEnd();
   const graph = renderMermaid(result).trimEnd();
-  return [
-    `## ${title}: ${result.scenario.id}`,
-    '',
-    '```',
-    text,
-    '```',
-    '',
-    '```mermaid',
-    graph,
-    '```',
-    '',
-  ].join('\n');
+  return [`## ${title}: ${result.scenario.id}`, '', fenced(text), '', fenced(graph, 'mermaid'), ''].join(
+    '\n',
+  );
+}
+
+/** A code block no line of the text can close: its fence is longer than any run of backticks in it. */
+function fenced(text: string, info = ''): string {
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((ticks) => ticks.length));
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  return `${fence}${info}\n${text}\n${fence}`;
+}
+
+/**
+ * Log text that cannot run a workflow command: the log shows other repositories' text, and between `stop-commands`
+ * and its one-time token the runner reads no line as one (`::error`, `::add-mask`, `##[group]`, …).
+ */
+export const withoutCommands = (text: string, resume: string): string =>
+  `::stop-commands::${resume}\n${text.replace(/\n$/, '')}\n::${resume}::`;
+
+/**
+ * The ports with every text a remote can reach made printable: the log, warnings, failures, annotations and the job
+ * summary. (The log's lines are also kept from being read as workflow commands; see `index.ts`.)
+ */
+function shown(ports: Ports): Ports {
+  return {
+    ...ports,
+    log: (text) => ports.log(printable(text)),
+    warn: (message) => ports.warn(printable(message)),
+    fail: (message) => ports.fail(printable(message)),
+    annotate: (a) => ports.annotate(printableAnnotation(a)),
+    summary: (markdown) => ports.summary(printable(markdown)),
+  };
 }
 
 /** Annotation paths are relative to the repository root; the tests' are relative to working-directory. */

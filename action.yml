@@ -54,6 +54,22 @@ inputs:
     description: 'In plan mode: what the log shows, `text`, `json` or `mermaid` (the summary always has text and the graph).'
     required: false
     default: text
+  remotes:
+    description: 'How remote workflows and actions are read: `lock` reads the commits `.github/simulci/remotes.lock.yml` and `actions.lock` pin, `off` reads nothing, `fetch` (plan mode only) also resolves the rest. Always `off` on `pull_request_target` and `workflow_run`.'
+    required: false
+    default: lock
+  token:
+    description: 'The token remotes are read with, sent only to `api-url`. `GITHUB_TOKEN` reads this repository and public ones; for private ones, pass a token that can read them.'
+    required: false
+    default: ${{ github.token }}
+  api-url:
+    description: The GitHub API remotes are read from.
+    required: false
+    default: ${{ github.api_url }}
+  github-com-token:
+    description: 'On GitHub Enterprise Server: read what the server lacks from github.com with this token. Empty: never ask github.com.'
+    required: false
+    default: ''
 
 outputs:
   passed:
