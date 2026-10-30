@@ -1,0 +1,154 @@
+name: 'flowpact'
+description: 'Grade releases of shared workflows and actions, check calls into other repositories, and find values that arrive empty.'
+author: 'Ruman Kazi'
+branding:
+  icon: git-merge
+  color: blue
+
+inputs:
+  mode:
+    description: '`lint` analyzes workflows and local actions. `check` also compares them with the locked contracts in `.github/flowpact/`.'
+    required: false
+    default: 'lint'
+  paths:
+    description: 'Workflow or action files or directories to report on, separated by spaces or newlines, relative to working-directory. Empty reports on everything. With impact, only the published workflows and actions within them are graded, so the impact verdict is about those alone; prefer directories, so a removed or renamed one stays within them.'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Directory holding the `.github` folder to analyze, relative to the workspace.'
+    required: false
+    default: '.'
+  config:
+    description: 'Path to the flowpact config file, relative to working-directory. Empty uses `.github/flowpact/flowpact.config.yml` when it exists.'
+    required: false
+    default: ''
+  fail-on:
+    description: 'Fail the step when findings at this level exist: `error`, `warning` or `never`.'
+    required: false
+    default: 'error'
+  annotations:
+    description: 'Annotate findings on the files in the run and pull request.'
+    required: false
+    default: 'true'
+  summary:
+    description: 'Write a Markdown report to the job summary.'
+    required: false
+    default: 'true'
+  summary-graph:
+    description: 'Add the workflow call graph (Mermaid) to the job summary.'
+    required: false
+    default: 'false'
+  max-findings:
+    description: 'Findings listed in full in the job summary; the rest are counted.'
+    required: false
+    default: '50'
+  report-json:
+    description: 'Write the JSON report to this path (relative to the workspace).'
+    required: false
+    default: ''
+  report-sarif:
+    description: 'Write a SARIF 2.1.0 report to this path (relative to the workspace), for github/codeql-action/upload-sarif.'
+    required: false
+    default: ''
+  report-markdown:
+    description: 'Write the Markdown report to this path (relative to the workspace), e.g. for a pull request comment.'
+    required: false
+    default: ''
+  upload-contracts:
+    description: 'In check mode, when contracts drifted, upload the regenerated contracts and a patch as an artifact.'
+    required: false
+    default: 'true'
+  artifact-name:
+    description: 'Name of the contract drift artifact. Defaults to flowpact-contracts, or flowpact-contracts-<working-directory> when working-directory is set. Must be unique per run (set it for matrix jobs).'
+    required: false
+    default: 'flowpact-contracts'
+  retention-days:
+    description: 'Days to keep the contract drift artifact (0 uses the repository default).'
+    required: false
+    default: '7'
+  plugins:
+    description: 'Load the plugins listed in the config (auto, true, false). Plugins run JavaScript from the checkout; auto disables them on pull_request_target and workflow_run events.'
+    required: false
+    default: 'auto'
+  base-config:
+    description: "Defaults under the repository's config, such as an organization's (see Base config in the docs). A relative path is read from the action's own directory, so a copy of the action can ship its organization's file."
+    required: false
+    default: ''
+  plugin:
+    description: "Plugins to load in addition to those the config lists, one path per line, such as an organization's rules. A relative path is read from the action's own directory. They load whatever the plugins input says, except files in the checkout when plugins from the checkout may not run."
+    required: false
+    default: ''
+  impact:
+    description: 'Check the release impact of changes to published workflows and actions against the impact the pull request declares (title, labels or expected-impact): off, auto (on pull requests, or on any event when base-ref is set, in repositories that publish workflows or actions that ignore does not leave out, and with paths when one is within them; never on pull_request_target) or on.'
+    required: false
+    default: 'off'
+  expected-impact:
+    description: 'The declared impact (none, patch, minor or major); overrides the pull request title and labels.'
+    required: false
+    default: ''
+  base-ref:
+    description: 'Baseline to compare with in impact mode: a commit, tag or branch (read from origin/<branch>, fetched when missing). Empty uses the pull request base, the commit before a push, or the last release tag for a release pull request.'
+    required: false
+    default: ''
+  remotes:
+    description: 'Remote workflows and actions: lockfile (check them against the committed .github/flowpact/remotes.lock.yaml only) or fetch (also fetch, with token, the interfaces of the references the lockfile lacks, for this run; on a pull request, or with base-ref, also grade the references it moves to another version against freshly fetched interfaces; not on pull_request_target or workflow_run).'
+    required: false
+    default: 'lockfile'
+  remotes-github-com:
+    description: 'With remotes: fetch on GitHub Enterprise Server or GHE.com: also look on github.com for the remote references the enterprise server lacks, as GitHub Connect does (true or false). It sends their names to github.com.'
+    required: false
+    default: 'false'
+  github-com-token:
+    description: 'Token for github.com with remotes-github-com (the enterprise token is never sent there). Empty reads public repositories without one.'
+    required: false
+    default: ''
+  token:
+    description: 'Token used only to fetch the baseline commit or release tags when the checkout is shallow, and with remotes: fetch to read the remote repositories through the GitHub API (contents: read is enough; private and internal repositories of the organization need a token that can read them).'
+    required: false
+    default: '${{ github.token }}'
+  debug:
+    description: 'Print flowpact debug logs (also enabled by re-running the job with debug logging).'
+    required: false
+    default: 'false'
+
+outputs:
+  errors:
+    description: 'Number of error findings.'
+  warnings:
+    description: 'Number of warning findings.'
+  infos:
+    description: 'Number of info findings.'
+  suppressed:
+    description: 'Number of findings accepted by overrides.'
+  ignored-by-comment:
+    description: 'Number of findings accepted by `# flowpact: ignore[…]` comments.'
+  findings:
+    description: 'Total number of findings (errors, warnings and info).'
+  drift:
+    description: '`true` when check mode found that the contracts drifted, otherwise `false`.'
+  breaking:
+    description: 'Number of breaking contract changes (check mode).'
+  exit-code:
+    description: 'The exit code the CLI would return: 0, 1 when findings reach fail-on, or 2 when the action stopped before reporting (invalid input or config, no workflows found, unexpected error).'
+  report-json:
+    description: 'Absolute path of the JSON report, when report-json was set.'
+  report-sarif:
+    description: 'Absolute path of the SARIF report, when report-sarif was set.'
+  patch:
+    description: 'Absolute path of the contract patch on the runner, when contracts drifted.'
+  artifact-id:
+    description: 'ID of the uploaded contract drift artifact, when one was uploaded.'
+  required-impact:
+    description: 'Impact mode: the release impact the changes to published workflows and actions require (none, patch, minor or major).'
+  declared-impact:
+    description: 'Impact mode: the impact the pull request declares, empty when none is declared.'
+  impact-ok:
+    description: 'Impact mode: true when the declared impact covers the required one (or nothing is declared), false otherwise, empty when impact mode did not run.'
+  version-changes:
+    description: 'With remotes: fetch on a pull request: how many remote references it moves to another version were graded; empty when none were looked for.'
+  version-verdict:
+    description: 'The worst verdict of the version changes graded: breaks (a check fails on a call with the new interface; the step fails unless fail-on is never), unchecked, or fits; empty when none were graded.'
+
+runs:
+  using: node24
+  main: packages/action/dist/index.js

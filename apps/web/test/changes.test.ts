@@ -1,7 +1,7 @@
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { rowsOf, diffOf } from '../src/app/DiffView';
-import { PATCH_NAME } from '../src/lib/patch';
+import { PATCH_NAME } from '../src/lib/repo-words';
 import { changedPaths, downloadPatch, patchFiles, revertOf, type Since } from '../src/state/changes';
 import { createSessionStore, dirtyPaths, type SessionStore } from '../src/state/store';
 
@@ -72,11 +72,37 @@ describe('patchFiles and downloadPatch', () => {
       { path: NEW, before: undefined, after: 'on: push\n' },
     ]);
     const downloads: [string, string][] = [];
-    downloadPatch(files, paths, 'base', (name, text) => downloads.push([name, text]));
+    downloadPatch(files, paths, 'base', store.getState().source, (name, text) =>
+      downloads.push([name, text]),
+    );
     expect(downloads).toHaveLength(1);
     expect(downloads[0]![0]).toBe(PATCH_NAME);
+    expect(downloads[0]![1]).toMatch(/^diff --git /);
     expect(downloads[0]![1]).toContain(' ﻿name: CI\r\n-on: push\r\n+on: [push]\r\n');
     expect(downloads[0]![1]).toContain(`--- /dev/null\n+++ b/${NEW}\n`);
+  });
+
+  it("names a GitHub repository's patch for it and its commit, and opens it with a line naming them", () => {
+    const store = folder();
+    rewrite(store, NEW, 'on: push\n');
+    const source = {
+      kind: 'github',
+      host: 'github.com',
+      owner: 'octo',
+      repo: 'ship',
+      ref: 'main',
+      sha: '3f2a9c1d'.padEnd(40, '0'),
+      defaultBranch: 'main',
+      private: false,
+      readAt: 0,
+    } as const;
+    const { files } = store.getState();
+    const downloads: [string, string][] = [];
+    downloadPatch(files, changedPaths(files, 'base'), 'base', source, (name, text) =>
+      downloads.push([name, text]),
+    );
+    expect(downloads[0]![0]).toBe('octo-ship-3f2a9c1.patch');
+    expect(downloads[0]![1]).toMatch(/^simulci: changes against octo\/ship@3f2a9c1 \(main\)\ndiff --git /);
   });
 });
 

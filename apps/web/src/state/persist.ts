@@ -1,6 +1,6 @@
 import type { FileMeta } from '../input/read';
 import { type KeyValueStore, openKeyValue } from '../lib/idb';
-import type { BaseDiff, Source } from './store';
+import type { BaseDiff, GitHubSource, Source } from './store';
 
 /**
  * The source survives a reload in IndexedDB: paste buffers as they are (the crash snapshot), a folder as its handle
@@ -8,7 +8,9 @@ import type { BaseDiff, Source } from './store';
  * with no handle, so they are stored as buffers too. Buffers keep the meta they were read with: their text no longer
  * shows a BOM or the bytes that were not UTF-8, and unlike a folder there is no disk to read them from again.
  * Pasted buffers keep the texts their edits were made to as well, so edits stay unsaved across a reload and
- * replacing them still asks (§ 5.7). A chosen folder's copy keeps its tests' snapshots too (`files.readonly`).
+ * replacing them still asks (§ 5.7). A chosen folder's copy keeps its tests' snapshots too (`files.readonly`). A GitHub
+ * repository is kept as read, with its source's fields, so it comes back without a request; like a folder's, its
+ * edits are the crash snapshot's (`state/snapshot.ts`), which brings them back over it.
  */
 
 export type StoredSource =
@@ -29,6 +31,14 @@ export type StoredSource =
       buffers: { path: string; text: string }[];
       meta?: Record<string, FileMeta>;
       /** The route tests' snapshots, read-only beside the buffers. */
+      readonly?: Record<string, string>;
+    }
+  | {
+      kind: 'github';
+      source: GitHubSource;
+      /** The files as read at `source.sha`; the edits are the crash snapshot's. */
+      buffers: { path: string; text: string }[];
+      meta?: Record<string, FileMeta>;
       readonly?: Record<string, string>;
     };
 
@@ -97,10 +107,11 @@ export function toStored(
   }
   if (source.kind === 'folder' && source.handle)
     return { kind: 'folder', name: source.name, handle: source.handle };
-  if (source.kind === 'folder') {
-    const buffers = Object.entries(files).map(([path, text]) => ({ path, text }));
+  const buffers = Object.entries(files).map(([path, text]) => ({ path, text }));
+  if (source.kind === 'folder')
     return { kind: 'copy', name: source.name, buffers, ...(meta && { meta }), ...(readonly && { readonly }) };
-  }
+  if (source.kind === 'github')
+    return { kind: 'github', source, buffers, ...(meta && { meta }), ...(readonly && { readonly }) };
   return undefined;
 }
 
@@ -121,7 +132,22 @@ const STORED_SHAPES: Record<string, (v: Record<string, unknown>) => boolean> = {
   paste: (v) => Array.isArray(v.buffers),
   copy: (v) => typeof v.name === 'string' && Array.isArray(v.buffers),
   folder: (v) => typeof v.name === 'string' && typeof v.handle === 'object' && v.handle !== null,
+  github: (v) => isGitHubSource(v.source) && Array.isArray(v.buffers),
 };
+
+const GITHUB_STRINGS = ['host', 'owner', 'repo', 'ref', 'sha', 'defaultBranch'] as const;
+
+function isGitHubSource(value: unknown): value is GitHubSource {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v.kind === 'github' &&
+    GITHUB_STRINGS.every((k) => typeof v[k] === 'string') &&
+    typeof v.private === 'boolean' &&
+    typeof v.readAt === 'number' &&
+    (v.pull === undefined || typeof v.pull === 'number')
+  );
+}
 
 function isStoredSource(value: unknown): value is StoredSource {
   if (typeof value !== 'object' || value === null) return false;
@@ -144,15 +170,21 @@ function isFileMeta(value: unknown): value is FileMeta {
  * base that is not one is left out whole: the buffers then read as unedited, as they did before bases were kept.
  */
 function withMeta(stored: StoredSource): StoredSource {
-  if (stored.kind !== 'paste' && stored.kind !== 'copy') return stored;
-  const meta: Record<string, FileMeta> = {};
-  for (const [path, m] of Object.entries(stored.meta ?? {})) if (isFileMeta(m)) meta[path] = m;
-  if (stored.kind === 'copy') {
+  if (stored.kind === 'sample' || stored.kind === 'folder') return stored;
+  const meta = fileMetas(stored.meta);
+  if (stored.kind === 'copy' || stored.kind === 'github') {
     const { readonly, ...rest } = stored;
     return isTexts(readonly) ? { ...rest, meta, readonly } : { ...rest, meta };
   }
   const { base, ...rest } = stored;
   return isBaseDiff(base) ? { ...rest, meta, base } : { ...rest, meta };
+}
+
+/** The stored meta entries that are one. */
+function fileMetas(stored: Record<string, unknown> | undefined): Record<string, FileMeta> {
+  const meta: Record<string, FileMeta> = {};
+  for (const [path, m] of Object.entries(stored ?? {})) if (isFileMeta(m)) meta[path] = m;
+  return meta;
 }
 
 const isTexts = (value: unknown): value is Record<string, string> =>

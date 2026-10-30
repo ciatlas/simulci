@@ -2,9 +2,10 @@ import { regionEdit } from '@simulci/document/edits';
 import { asWritten } from '../input/read';
 import { downloadText } from '../lib/download';
 import { fileLabel } from '../lib/file-label';
-import { PATCH_NAME, type PatchFile, patchOf } from '../lib/patch';
+import { type PatchFile, patchOf } from '../lib/patch';
+import { patchName, patchPreamble } from '../lib/repo-words';
 import { stampOf, type TxFile, type TxInput } from './history';
-import { dirtyPaths, type SessionState } from './store';
+import { dirtyPaths, type SessionState, type Source } from './store';
 
 /**
  * What the files changed since a point (synthesis § 5.2): the last save (`base`, what "unsaved" means) or the start
@@ -33,14 +34,19 @@ export const patchFiles = (files: Files, paths: readonly string[], since: Since)
     };
   });
 
-/** Hands `simulci-changes.patch` of the files' changes to the browser to save: one download, whatever the count. */
+/**
+ * Hands the patch of the files' changes to the browser to save, one download whatever the count: named for the
+ * source (`octo-ship-3f2a9c1.patch` for a GitHub repository, with a first line naming the commit; else
+ * `simulci-changes.patch`).
+ */
 export function downloadPatch(
   files: Files,
   paths: readonly string[],
   since: Since,
+  source: Source,
   download: (name: string, text: string) => void = (name, text) => downloadText(name, text, 'text/x-diff'),
 ): void {
-  download(PATCH_NAME, patchOf(patchFiles(files, paths, since)));
+  download(patchName(source), patchOf(patchFiles(files, paths, since), patchPreamble(source)));
 }
 
 /**

@@ -75,6 +75,30 @@ describe('the chunk rules', () => {
     expect(chunkProblems('layout.worker-abc.js', [...LAYOUT, edits])).toHaveLength(1);
   });
 
+  it("let the GitHub source's chunk hold core's remote fetcher and its references, and no other chunk", () => {
+    const core = '../../../../node_modules/.pnpm/@ciatlas+core@x/node_modules/@ciatlas/core/src';
+    const fetcher = [`${core}/remote-fetch.ts`, `${core}/remote-ref.ts`];
+    expect(chunkProblems('github-abc.js', ['../../src/github/github.ts', ...fetcher])).toEqual([]);
+    expect(chunkProblems('github-abc.js', [`${core}/remote.ts`])).toHaveLength(1);
+    expect(chunkProblems('github-abc.js', [ZOD])).toHaveLength(1);
+    expect(chunkProblems('index-abc.js', [...PAGE, ...fetcher])).toHaveLength(2);
+    expect(chunkProblems('edit-abc.js', fetcher)).toHaveLength(2);
+  });
+
+  it("keeps core's remote fetcher free of anything but its references, which import nothing", () => {
+    const core = join(root, 'node_modules/@ciatlas/core/src');
+    const imports = (file: string): string[] =>
+      [
+        ...readFileSync(join(core, file), 'utf8').matchAll(
+          /^\s*(?:import|export)\b[^;]*?\bfrom\s*'([^']+)'/gm,
+        ),
+      ].map((m) => m[1]);
+    expect(imports('remote-fetch.ts').sort()).toEqual(['./remote-ref', './remote-ref']);
+    expect(imports('remote-ref.ts')).toEqual([]);
+    expect(readFileSync(join(core, 'remote-ref.ts'), 'utf8')).not.toMatch(/\bimport\s*\(/);
+    expect(readFileSync(join(core, 'remote-fetch.ts'), 'utf8')).not.toMatch(/\bimport\s*\(/);
+  });
+
   it("keep core, zod and the engine proper in the worker, which builds from core's browser entry", () => {
     expect(
       chunkProblems('index-abc.js', [...PAGE, '../../../../packages/engine/src/trigger/push.ts']),
@@ -182,7 +206,7 @@ describe('the web app as it builds', () => {
   }, 60_000);
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-  it('splits the page, the YAML pane, the edit runtime, the dialogs, the catalog, the Tests tab and the two workers, and no chunk they share', () => {
+  it('splits the page, the YAML pane, the edit runtime, the dialogs, the catalog, the Tests tab, the GitHub source and the two workers, and no chunk they share', () => {
     // A module two lazy chunks share that the page does not hold goes to a chunk of its own, named after it; so does
     // the page's when rolldown cannot leave it there: a name outside this list is that.
     expect(chunks.map((f) => f.replace(/-[\w-]{8}\.js$/, '')).sort()).toEqual([
@@ -191,6 +215,7 @@ describe('the web app as it builds', () => {
       'dialogs',
       'edit',
       'engine.worker',
+      'github',
       'index',
       'layout.worker',
       'tests',
@@ -279,6 +304,30 @@ describe('the web app as it builds', () => {
     const code = readFileSync(join(dir, 'assets', page), 'utf8');
     expect(code).toContain(`import(\`./${tests}\`)`);
     expect(code).not.toMatch(new RegExp(`from\\s*["'\`]\\./${tests.replace('.', '\\.')}`));
+  });
+
+  it("puts the GitHub source's reader, client, cache and dialog with core's fetcher in a chunk of their own, which the page loads only on demand", () => {
+    const github = chunks.find((f) => f.startsWith('github-'))!;
+    const page = chunks.find((f) => f.startsWith('index-'))!;
+    // github.ts, the chunk's door, only re-exports: the map names what it re-exports.
+    const lazy = [
+      'src/github/read.ts',
+      'src/github/repo.ts',
+      'src/github/client.ts',
+      'src/github/cache.ts',
+      'src/github/target.ts',
+      'src/github/OpenRepo.tsx',
+    ];
+    const holds = (chunk: string, modules: string[]) =>
+      modules.filter((m) => sourcesOf(chunk).some((s) => s.endsWith(m)));
+    expect(holds(github, lazy)).toEqual(lazy);
+    expect(holds(page, lazy)).toEqual([]);
+    expect(sourcesOf(github).some((s) => s.endsWith('@ciatlas/core/src/remote-fetch.ts'))).toBe(true);
+    // Only the loader stays on the page.
+    expect(holds(page, ['src/github/load.ts'])).toEqual(['src/github/load.ts']);
+    const code = readFileSync(join(dir, 'assets', page), 'utf8');
+    expect(code).toContain(`import(\`./${github}\`)`);
+    expect(code).not.toMatch(new RegExp(`from\\s*["'\`]\\./${github.replace('.', '\\.')}`));
   });
 });
 

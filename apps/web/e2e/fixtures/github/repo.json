@@ -1,0 +1,21 @@
+{
+  "id": 1408943843,
+  "node_id": "R_kgDOU_rG4w",
+  "name": "flowpact",
+  "full_name": "ciatlas/flowpact",
+  "private": false,
+  "owner": {
+    "login": "ciatlas",
+    "id": 340914892,
+    "type": "Organization",
+    "html_url": "https://github.com/ciatlas"
+  },
+  "html_url": "https://github.com/ciatlas/flowpact",
+  "description": "Data-flow linter for GitHub Actions: finds inputs, secrets and matrix values that arrive empty across reusable workflows, local actions and matrix combinations, and grades the release impact of changes. CLI, GitHub Action, VS Code extension.",
+  "fork": false,
+  "url": "https://api.github.com/repos/ciatlas/flowpact",
+  "visibility": "public",
+  "default_branch": "main",
+  "archived": false,
+  "disabled": false
+}

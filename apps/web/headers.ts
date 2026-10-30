@@ -30,9 +30,13 @@ export interface Rewrite {
 /** Every path but the hashed assets: a deep link is the page, a missing chunk is not. */
 const OUTSIDE_ASSETS = '/((?!assets/).*)';
 
-/** Where the page fetches from: nothing until the GitHub source; on a server, its own proxy too. */
+/**
+ * Where the page fetches from: github.com's API for a public repository (the page's `github-*` chunk, never a worker);
+ * nothing on a static host that reads a GitHub Enterprise Server, which hides the GitHub source; on a server, its own
+ * proxy too.
+ */
 const CONNECT: Record<HostMode['serve'], Record<HostMode['github'], string>> = {
-  static: { 'github.com': "'none'", ghes: "'none'" },
+  static: { 'github.com': 'https://api.github.com', ghes: "'none'" },
   server: { 'github.com': "'self' https://api.github.com", ghes: "'self'" },
 };
 
@@ -62,6 +66,8 @@ export function headerRules(mode: HostMode): HeaderRule[] {
         { key: 'Referrer-Policy', value: 'no-referrer' },
         { key: 'X-Content-Type-Options', value: 'nosniff' },
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        // No window the page opens (a link to github.com) shares its browsing context group.
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
       ],
     },
     {

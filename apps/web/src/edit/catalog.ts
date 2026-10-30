@@ -7,7 +7,7 @@ import type { OutlineInput } from '../worker/protocol';
  * commit that ref pointed at when the catalog was built, and its interface. `scripts/build-catalog.mjs` writes
  * `catalog/catalog.json`, which the build puts in a chunk of its own (`catalog-*`): it is fetched from the app's own
  * origin as a script the first time the palette or Properties asks, so nothing is ever fetched from GitHub
- * (`connect-src 'none'` holds).
+ * (no `connect-src` is needed).
  */
 
 export interface CatalogAction {

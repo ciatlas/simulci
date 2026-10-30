@@ -16,6 +16,7 @@ import { TextView } from '../text/TextView';
 import { EmptyState } from './EmptyState';
 import { ErrorBanner } from './ErrorBanner';
 import { ErrorBoundary } from './ErrorBoundary';
+import { GitHubOffer } from './GitHubOffer';
 import { ReplacePrompt } from './ReplaceDialog';
 import { useApp, useSession } from './providers';
 import { ScenarioForm } from './ScenarioForm';
@@ -78,6 +79,7 @@ export function SimulateView() {
     >
       <TopBar />
       <ErrorBanner />
+      <GitHubOffer />
       <WhenShown shown={restoreShown}>
         <RestoreConflicts />
       </WhenShown>

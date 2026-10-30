@@ -1,6 +1,6 @@
 /**
  * Offers text as a file the browser saves: a Blob behind an object URL on a clicked `<a download>`, revoked once the
- * click has handed it over. Nothing leaves the page (`connect-src 'none'` holds: a download is not a fetch).
+ * click has handed it over. Nothing leaves the page (a download is not a fetch: `connect-src` has no say).
  */
 export function downloadText(
   name: string,

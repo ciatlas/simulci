@@ -1,8 +1,10 @@
 import { type ChangeEvent, useRef, useState } from 'react';
+import { offersGitHub } from '../github/load';
 import { SAMPLES } from '../input/samples';
+import { repoAt } from '../lib/repo-words';
 import { dirtyPaths, type Source } from '../state/store';
-import { PasteDialog } from './PasteDialog';
 import { useApp, useSession } from './providers';
+import { SourceDialogs } from './SourceDialogs';
 import { SaveButton } from './SaveButton';
 
 const button =
@@ -15,6 +17,7 @@ export function SourceMenu() {
   const fileCount = useSession((s) => Object.keys(s.files.byPath).length);
   const unsaved = useSession((s) => dirtyPaths(s.files).length);
   const [pasting, setPasting] = useState(false);
+  const [opening, setOpening] = useState(false);
   return (
     <nav aria-label="Source" className="flex flex-wrap items-center gap-2">
       <SourceStatus source={source} fileCount={fileCount} />
@@ -34,18 +37,43 @@ export function SourceMenu() {
       <button type="button" className={button} onClick={() => setPasting(true)}>
         Paste YAML
       </button>
+      {offersGitHub() && (
+        <button type="button" className={button} onClick={() => setOpening(true)}>
+          Open GitHub repository…
+        </button>
+      )}
       <SamplePicker onPick={(name) => sources.useSample(name)} />
       {source.kind === 'folder' && source.handle && (
         <button type="button" className={button} onClick={() => void sources.reload()}>
           Reload
         </button>
       )}
+      {source.kind === 'github' && (
+        <>
+          <a
+            className={button}
+            href={`https://${source.host}/${source.owner}/${source.repo}/tree/${source.sha}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open on GitHub
+          </a>
+          <button type="button" className={button} onClick={() => void sources.reload()}>
+            Fetch again
+          </button>
+        </>
+      )}
       {source.kind !== 'none' && (
         <button type="button" className={button} onClick={() => void sources.forget()}>
           Forget
         </button>
       )}
-      {pasting && <PasteDialog onClose={() => setPasting(false)} />}
+      <SourceDialogs
+        pasting={pasting}
+        opening={opening}
+        closePaste={() => setPasting(false)}
+        closeOpen={() => setOpening(false)}
+      />
     </nav>
   );
 }
@@ -63,6 +91,12 @@ function SourceStatus({ source, fileCount }: { source: Source; fileCount: number
     return (
       <span className="text-muted text-xs">
         {source.name === undefined ? `${files} pasted` : `${source.name} · ${files}`}
+      </span>
+    );
+  if (source.kind === 'github')
+    return (
+      <span className="text-muted text-xs">
+        {repoAt(source)} · {files}
       </span>
     );
   return (

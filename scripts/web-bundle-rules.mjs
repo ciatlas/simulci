@@ -7,6 +7,12 @@
 /** What only the engine worker may hold: the engine's dependencies but the YAML parser. */
 const ENGINE_WORKER_ONLY = [/@ciatlas\/core\//, /\/@actions\//, /\/zod\//, /picomatch/, /cronstrue/];
 /**
+ * The one exception (M4 synthesis § 5.11): core's remote fetcher and the references it reads, which import nothing
+ * else (scripts/test/check-web-bundle.test.ts holds them to that), may be in the GitHub source's chunk, `github-*`,
+ * whose requests go to GitHub's API from the page.
+ */
+const GITHUB_CHUNK_OK = /@ciatlas\/core\/src\/remote-(?:ref|fetch)\.ts$/;
+/**
  * The YAML parser: the engine worker's, and the edit runtime's, which edits the text on the page (synthesis § 8.5).
  * Matched as a package, so the YAML pane's CodeMirror grammar (`@lezer/yaml`, `@codemirror/lang-yaml`) stays allowed.
  */
@@ -43,6 +49,7 @@ const isLayoutWorker = (file) => file.startsWith('layout.worker-');
 /** The edit runtime, fetched when the author edits: the page's but for the document model and its YAML parser. */
 const isEditRuntime = (file) => file.startsWith('edit-');
 const isCatalog = (file) => file.startsWith('catalog-');
+const isGitHubChunk = (file) => file.startsWith('github-');
 
 /**
  * What breaks the contract in one JavaScript chunk.
@@ -106,13 +113,15 @@ function layoutWorkerProblems(file, sources) {
 /**
  * The page holds none of the engine but its plan/ and render/ entries, none of the document model but its text edits
  * (the edit history's and the pane's), and nothing that only a worker may. The edit runtime is a page chunk that may
- * also hold the document model and the YAML parser; a lazy chunk of the page (the YAML pane) may hold neither.
+ * also hold the document model and the YAML parser; the GitHub source's chunk, core's remote fetcher; a lazy chunk of
+ * the page (the YAML pane) may hold neither.
  */
 function pageProblems(file, sources) {
   const problems = [];
   const edit = isEditRuntime(file);
+  const github = isGitHubChunk(file);
   for (const s of sources) {
-    if (ENGINE_WORKER_ONLY.some((re) => re.test(s)))
+    if (ENGINE_WORKER_ONLY.some((re) => re.test(s)) && !(github && GITHUB_CHUNK_OK.test(s)))
       problems.push(`${file} holds ${s}, which only the engine worker may`);
     if (YAML.test(s) && !edit)
       problems.push(`${file} holds ${s}, which only the engine worker and the edit runtime may`);

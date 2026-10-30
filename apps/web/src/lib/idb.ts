@@ -5,19 +5,22 @@ export interface KeyValueStore {
   delete(key: string): Promise<void>;
 }
 
+/** Version 1 of a database, `create` making its stores the first time; a refusal or a block rejects. */
+export function openDatabase(dbName: string, create: (db: IDBDatabase) => void): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName, 1);
+    request.addEventListener('upgradeneeded', () => create(request.result));
+    request.addEventListener('success', () => resolve(request.result));
+    request.addEventListener('error', () => reject(request.error ?? new Error('IndexedDB refused to open')));
+    request.addEventListener('blocked', () => reject(new Error('IndexedDB is blocked by another tab')));
+  });
+}
+
 export function openKeyValue(dbName: string, storeName: string): KeyValueStore {
   if (typeof indexedDB === 'undefined') return memoryStore();
   let opened: Promise<IDBDatabase> | undefined;
   const db = (): Promise<IDBDatabase> => {
-    opened ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open(dbName, 1);
-      request.addEventListener('upgradeneeded', () => request.result.createObjectStore(storeName));
-      request.addEventListener('success', () => resolve(request.result));
-      request.addEventListener('error', () =>
-        reject(request.error ?? new Error('IndexedDB refused to open')),
-      );
-      request.addEventListener('blocked', () => reject(new Error('IndexedDB is blocked by another tab')));
-    });
+    opened ??= openDatabase(dbName, (d) => d.createObjectStore(storeName));
     return opened;
   };
   /** A read is done when its request succeeds; a write only once its transaction has committed. */

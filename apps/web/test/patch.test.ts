@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { asWritten } from '../src/input/read';
-import { filePatch, PATCH_NAME, type PatchFile, patchOf } from '../src/lib/patch';
+import { filePatch, type PatchFile, patchOf } from '../src/lib/patch';
+import { PATCH_NAME } from '../src/lib/repo-words';
 
 const CI = '.github/workflows/ci.yml';
 
@@ -89,18 +90,24 @@ describe('git apply', () => {
     { path: '.github/workflows/no break.yml', before: 'a\nb', after: 'a\nb\nc' },
     { path: '.github/workflows/naïve.yml', before: 'a\n', after: 'b\n' },
   ];
-  const patch = patchOf(
-    cases.map(({ path, before, after, bom }): PatchFile => ({
-      path,
-      before: before === undefined ? undefined : asWritten(before, { bom: bom === true }),
-      after: after === undefined ? undefined : asWritten(after, { bom: bom === true }),
-    })),
-  );
+  const files = cases.map(({ path, before, after, bom }): PatchFile => ({
+    path,
+    before: before === undefined ? undefined : asWritten(before, { bom: bom === true }),
+    after: after === undefined ? undefined : asWritten(after, { bom: bom === true }),
+  }));
+  // A GitHub source's patch opens with a line naming the commit (M4 synthesis § 5.7), which git reads past.
+  const patches: Record<string, string> = {
+    plain: patchOf(files),
+    'with a preamble': patchOf(files, 'simulci: changes against octo/ship@3f2a9c1 (main)'),
+  };
   const root = mkdtempSync(join(tmpdir(), 'simulci-patch-'));
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  it.each(['false', 'true', 'input'])('applies cleanly under core.autocrlf=%s', (autocrlf) => {
-    const dir = join(root, autocrlf);
+  it.each(
+    ['false', 'true', 'input'].flatMap((autocrlf) => Object.keys(patches).map((kind) => [autocrlf, kind])),
+  )('applies cleanly under core.autocrlf=%s, %s', (autocrlf, kind) => {
+    const patch = patches[kind]!;
+    const dir = join(root, `${autocrlf}-${kind.replaceAll(' ', '-')}`);
     mkdirSync(dir);
     // Nothing of this machine's git configuration: no global or system file, no attributes file.
     const env = {
