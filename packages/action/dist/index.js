@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
 import * as os$1 from "os";
 import os, { EOL } from "os";
 import * as crypto from "crypto";
@@ -10,6 +11,7 @@ import "child_process";
 import "timers";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { spawnSync } from "node:child_process";
 //#region \0rolldown/runtime.js
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -16463,6 +16465,38 @@ var ExitCode;
 	ExitCode[ExitCode["Failure"] = 1] = "Failure";
 })(ExitCode || (ExitCode = {}));
 /**
+* Registers a secret which will get masked from logs
+*
+* @param secret - Value of the secret to be masked
+* @remarks
+* This function instructs the Actions runner to mask the specified value in any
+* logs produced during the workflow run. Once registered, the secret value will
+* be replaced with asterisks (***) whenever it appears in console output, logs,
+* or error messages.
+*
+* This is useful for protecting sensitive information such as:
+* - API keys
+* - Access tokens
+* - Authentication credentials
+* - URL parameters containing signatures (SAS tokens)
+*
+* Note that masking only affects future logs; any previous appearances of the
+* secret in logs before calling this function will remain unmasked.
+*
+* @example
+* ```typescript
+* // Register an API token as a secret
+* const apiToken = "abc123xyz456";
+* setSecret(apiToken);
+*
+* // Now any logs containing this value will show *** instead
+* console.log(`Using token: ${apiToken}`); // Outputs: "Using token: ***"
+* ```
+*/
+function setSecret(secret) {
+	issueCommand("add-mask", {}, secret);
+}
+/**
 * Gets the value of an input.
 * Unless trimWhitespace is set to false in InputOptions, the value is also trimmed.
 * Returns an empty string if the value is not defined.
@@ -16504,6 +16538,14 @@ function setFailed(message) {
 */
 function error$1(message, properties = {}) {
 	issueCommand("error", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+/**
+* Adds a warning issue
+* @param message warning issue message. Errors will be converted to string via toString()
+* @param properties optional properties to add to the annotation.
+*/
+function warning(message, properties = {}) {
+	issueCommand("warning", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
 * Adds a notice issue
@@ -23175,7 +23217,7 @@ var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
 })))();
-const ACTIONS_LOCK_FILE = ".github/workflows/actions.lock";
+const ACTIONS_LOCK_FILE$1 = ".github/workflows/actions.lock";
 /** The schema versions read: v0.0.1 to v0.0.3 so far, which differ in keys this reader does not use. */
 const KNOWN_VERSION = /^v0\.0\.\d+$/;
 /** A pin as `actions.lock` keys it: owner and repository in any case, then the ref, without a path. */
@@ -23184,7 +23226,7 @@ const actionsLockKey = (owner, repo, ref) => `${owner.toLowerCase()}/${repo.toLo
 * A pin's key from the file. `gh actions-lock` writes `owner/repo@ref`; an `owner/repo/path@ref` is keyed by its
 * repository too, because the commit belongs to the repository. Undefined for anything else.
 */
-function keyOf$2(pin) {
+function keyOf$4(pin) {
 	const m = /^([^/@:]+)\/([^/@:]+)(?:\/[^@:]*)?@([^:]+)$/.exec(pin);
 	return m ? actionsLockKey(m[1], m[2], m[3]) : void 0;
 }
@@ -23217,7 +23259,7 @@ function workflowsOf(value) {
 	const workflows = /* @__PURE__ */ new Map();
 	for (const [path, pins] of Object.entries(value)) {
 		if (!Array.isArray(pins) || !pins.every((p) => typeof p === "string")) return void 0;
-		const keys = pins.map(keyOf$2).filter((k) => k !== void 0);
+		const keys = pins.map(keyOf$4).filter((k) => k !== void 0);
 		workflows.set(workflowPathOf$1(path), new Set(keys));
 	}
 	return workflows;
@@ -23227,7 +23269,7 @@ function commitsOf(value) {
 	const commits = /* @__PURE__ */ new Map();
 	for (const [pin, dependency] of Object.entries(value)) {
 		if (!isRecord$1(dependency)) return void 0;
-		const key = keyOf$2(pin);
+		const key = keyOf$4(pin);
 		const commit = commitOf(dependency.commit);
 		if (key && commit) commits.set(key, commit);
 	}
@@ -24669,7 +24711,7 @@ function looseEquals(a, b) {
 	if (ta === "number" || ta === "boolean" || ta === "null") return a === b;
 	return a === b;
 }
-function compare(a, b) {
+function compare$2(a, b) {
 	if (typeof a === "string" && typeof b === "string") {
 		const x = a.toUpperCase();
 		const y = b.toUpperCase();
@@ -24742,7 +24784,7 @@ function evaluate(e, resolve, options = {}) {
 			case TokenType$1.GREATER_EQUAL:
 			case TokenType$1.LESS:
 			case TokenType$1.LESS_EQUAL: {
-				const c = compare(l.value, r.value);
+				const c = compare$2(l.value, r.value);
 				if (c === void 0) return known$2(false, taint);
 				const t = e.operator.type;
 				return known$2(t === TokenType$1.GREATER ? c > 0 : t === TokenType$1.GREATER_EQUAL ? c >= 0 : t === TokenType$1.LESS ? c < 0 : c <= 0, taint);
@@ -25331,6 +25373,13 @@ function parseRemoteRef(raw, kind) {
 		ref: m[4]
 	};
 }
+/** Whether a ref is a full commit SHA (40 hexadecimal digits, in any letter case). */
+const isFullSha = (ref) => /^[0-9a-f]{40}$/i.test(ref);
+/**
+* The files a remote reference is read from, in order: its workflow file, or its action's `action.yml`, then
+* `action.yaml`.
+*/
+const remoteSourceFiles = (r) => r.kind === "workflow" ? [r.path] : ["action.yml", "action.yaml"].map((n) => r.path ? `${r.path}/${n}` : n);
 /**
 * The key of a remote `uses:` reference (`owner/repo/path@ref`): GitHub matches the owner and repository in any letter
 * case, and the path and ref as written.
@@ -26306,7 +26355,7 @@ function pairs(node) {
 	if (!(0, import_dist.isMap)(node)) return [];
 	return node.items.filter((p) => (0, import_dist.isPair)(p) && (0, import_dist.isScalar)(p.key));
 }
-function get(node, key) {
+function get$1(node, key) {
 	for (const p of pairs(node)) if (String(p.key.value) === key) return p.value ?? void 0;
 }
 function getPair(node, key) {
@@ -26833,13 +26882,13 @@ function inputDecls(unit, node, base) {
 	for (const pair of pairs(node)) {
 		const name = String(pair.key.value);
 		const def = pair.value;
-		const type = str(get(def, "type"));
-		const description = str(get(def, "description"));
-		const opts = get(def, "options");
+		const type = str(get$1(def, "type"));
+		const description = str(get$1(def, "description"));
+		const opts = get$1(def, "options");
 		out[name] = {
 			name,
 			...type ? { type } : {},
-			required: toJs(get(def, "required")) === true,
+			required: toJs(get$1(def, "required")) === true,
 			...defaultOf(unit, getPair(def, "default"), [
 				...base,
 				name,
@@ -26867,10 +26916,10 @@ function secretDecls(unit, node) {
 	const out = {};
 	for (const pair of pairs(node)) {
 		const name = String(pair.key.value);
-		const description = str(get(pair.value, "description"));
+		const description = str(get$1(pair.value, "description"));
 		out[name] = {
 			name,
-			required: toJs(get(pair.value, "required")) === true,
+			required: toJs(get$1(pair.value, "required")) === true,
 			...description ? { description } : {},
 			loc: nodeLoc(unit.source, pair.key)
 		};
@@ -26881,13 +26930,13 @@ function outputDecls(unit, node, base, valueKey) {
 	const out = {};
 	for (const pair of pairs(node)) {
 		const name = String(pair.key.value);
-		const valueNode = valueKey ? get(pair.value, "value") : pair.value;
+		const valueNode = valueKey ? get$1(pair.value, "value") : pair.value;
 		const site = unit.siteByPath.get(pathKey(valueKey ? [
 			...base,
 			name,
 			"value"
 		] : [...base, name]));
-		const description = valueKey ? str(get(pair.value, "description")) : void 0;
+		const description = valueKey ? str(get$1(pair.value, "description")) : void 0;
 		out[name] = {
 			name,
 			loc: nodeLoc(unit.source, pair.key),
@@ -27007,15 +27056,15 @@ function steps(unit, node, base, at, ctx) {
 	if (!(0, import_dist.isSeq)(node)) return [];
 	return node.items.map((item, index) => {
 		const p = [...base, index];
-		const id = str(get(item, "id"));
+		const id = str(get$1(item, "id"));
 		const idPair = getPair(item, "id");
-		const usesNode = get(item, "uses");
-		const runNode = get(item, "run");
+		const usesNode = get$1(item, "uses");
+		const runNode = get$1(item, "run");
 		const run = str(runNode);
-		const name = str(get(item, "name"));
+		const name = str(get$1(item, "name"));
 		const usesRaw = str(usesNode);
 		const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
-		const ifNode = get(item, "if");
+		const ifNode = get$1(item, "if");
 		const ifValue = (0, import_dist.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
 		return {
 			index,
@@ -27030,8 +27079,8 @@ function steps(unit, node, base, at, ctx) {
 				run,
 				runLoc: nodeLoc(unit.source, runNode)
 			} : {},
-			with: bindings(unit, get(item, "with"), [...p, "with"]),
-			env: bindings(unit, get(item, "env"), [...p, "env"]),
+			with: bindings(unit, get$1(item, "with"), [...p, "with"]),
+			env: bindings(unit, get$1(item, "env"), [...p, "env"]),
 			...ifValue !== void 0 ? { ifValue } : {},
 			...ifSite ? { ifSite } : {},
 			writesOutputs: run !== void 0 ? scanRunWrites(run, "GITHUB_OUTPUT") : scriptWrites$1(item, "GITHUB_OUTPUT"),
@@ -27047,14 +27096,14 @@ function steps(unit, node, base, at, ctx) {
 }
 /** `actions/github-script` and similar take an inline script in `with.script`. */
 function scriptWrites$1(item, fileVar) {
-	const script = str(get(get(item, "with"), "script"));
+	const script = str(get$1(get$1(item, "with"), "script"));
 	if (!script) return {
 		names: [],
 		dynamic: false,
 		mentions: false
 	};
 	const scanned = scanRunWrites(script, fileVar);
-	const githubScript = /(^|\/)github-script@/.test(str(get(item, "uses")) ?? "");
+	const githubScript = /(^|\/)github-script@/.test(str(get$1(item, "uses")) ?? "");
 	const dynamic = scanned.dynamic || scriptDelegates(script) || fileVar === "GITHUB_OUTPUT" && !githubScript;
 	if (fileVar === "GITHUB_OUTPUT" && githubScript) return {
 		names: [.../* @__PURE__ */ new Set([...scanned.names, "result"])],
@@ -27254,7 +27303,7 @@ function jobs(unit, node, ctx) {
 		const id = String(pair.key.value);
 		const j = pair.value;
 		const p = ["jobs", id];
-		const needsNode = get(j, "needs");
+		const needsNode = get$1(j, "needs");
 		const needs = [];
 		if ((0, import_dist.isScalar)(needsNode) && needsNode.value != null) needs.push({
 			id: String(needsNode.value),
@@ -27266,17 +27315,17 @@ function jobs(unit, node, ctx) {
 				loc: nodeLoc(unit.source, n)
 			});
 		}
-		const usesNode = get(j, "uses");
+		const usesNode = get$1(j, "uses");
 		const usesRaw = str(usesNode);
 		const secretsPair = getPair(j, "secrets");
 		const secretsInherit = (0, import_dist.isScalar)(secretsPair?.value) && String(secretsPair.value.value) === "inherit";
 		const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
-		const name = str(get(j, "name"));
+		const name = str(get$1(j, "name"));
 		const nameSite = unit.siteByPath.get(pathKey([...p, "name"]));
 		const namePair = getPair(j, "name");
-		const ifNode = get(j, "if");
+		const ifNode = get$1(j, "if");
 		const ifValue = (0, import_dist.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
-		const m = matrix(unit, get(j, "strategy"), [...p, "strategy"]);
+		const m = matrix(unit, get$1(j, "strategy"), [...p, "strategy"]);
 		out[id] = {
 			id,
 			loc: nodeLoc(unit.source, pair.key),
@@ -27288,23 +27337,23 @@ function jobs(unit, node, ctx) {
 			needs,
 			...ifSite ? { ifSite } : {},
 			...usesRaw ? { uses: classifyUses(usesRaw, "job", nodeLoc(unit.source, usesNode), ctx) } : {},
-			with: bindings(unit, get(j, "with"), [...p, "with"]),
+			with: bindings(unit, get$1(j, "with"), [...p, "with"]),
 			secrets: secretsInherit ? {} : bindings(unit, secretsPair?.value, [...p, "secrets"]),
 			secretsInherit,
 			...secretsPair ? { secretsLoc: nodeLoc(unit.source, secretsPair.key) } : {},
-			env: bindings(unit, get(j, "env"), [...p, "env"]),
-			outputs: outputDecls(unit, get(j, "outputs"), [...p, "outputs"], false),
+			env: bindings(unit, get$1(j, "env"), [...p, "env"]),
+			outputs: outputDecls(unit, get$1(j, "outputs"), [...p, "outputs"], false),
 			...m ? { matrix: m } : {},
-			steps: steps(unit, get(j, "steps"), [...p, "steps"], "workflow", ctx)
+			steps: steps(unit, get$1(j, "steps"), [...p, "steps"], "workflow", ctx)
 		};
 	}
 	return out;
 }
 /** A job's `permissions:`, `runs-on:` and `environment:`, each only when it has one. */
 function jobSettings(source, j) {
-	const perms = permissions(get(j, "permissions"));
-	const runs = runsOn(source, get(j, "runs-on"));
-	const env = environment(source, get(j, "environment"));
+	const perms = permissions(get$1(j, "permissions"));
+	const runs = runsOn(source, get$1(j, "runs-on"));
+	const env = environment(source, get$1(j, "environment"));
 	return {
 		...perms ? { permissions: perms } : {},
 		...runs ? { runsOn: runs } : {},
@@ -27321,8 +27370,8 @@ function texts(node) {
 /** `runs-on:` as written: labels and group, or undefined when the job has none (a job that calls a workflow). */
 function runsOn(source, node) {
 	if (!node) return void 0;
-	const group = (0, import_dist.isMap)(node) ? str(get(node, "group")) : void 0;
-	const labels = texts((0, import_dist.isMap)(node) ? get(node, "labels") : node);
+	const group = (0, import_dist.isMap)(node) ? str(get$1(node, "group")) : void 0;
+	const labels = texts((0, import_dist.isMap)(node) ? get$1(node, "labels") : node);
 	const dynamic = [...labels, group ?? ""].some(isExpression$1) || !((0, import_dist.isMap)(node) || labels.length);
 	return {
 		labels,
@@ -27333,7 +27382,7 @@ function runsOn(source, node) {
 }
 /** `environment:` as written: a name, or the `name` of a map; undefined without one. */
 function environment(source, node) {
-	const name = str((0, import_dist.isMap)(node) ? get(node, "name") : node);
+	const name = str((0, import_dist.isMap)(node) ? get$1(node, "name") : node);
 	if (name === void 0 || !node) return void 0;
 	return {
 		name,
@@ -27451,7 +27500,7 @@ function parseWorkflowFile(path, text, ctx) {
 	const { unit, root } = load(path, text);
 	const generated = generatedMarker(path, text);
 	if (root) collectSites(unit, "workflow", path, ctx, root);
-	const on = get(root, "on");
+	const on = get$1(root, "on");
 	const triggers = [];
 	if ((0, import_dist.isScalar)(on) && on.value != null) triggers.push(String(on.value));
 	else if ((0, import_dist.isSeq)(on)) {
@@ -27461,13 +27510,13 @@ function parseWorkflowFile(path, text, ctx) {
 	const dispatchPair = getPair(on, "workflow_dispatch");
 	const call = triggers.includes("workflow_call") ? {
 		loc: nodeLoc(unit.source, callPair?.key ?? on),
-		inputs: inputDecls(unit, get(callPair?.value, "inputs"), [
+		inputs: inputDecls(unit, get$1(callPair?.value, "inputs"), [
 			"on",
 			"workflow_call",
 			"inputs"
 		]),
-		secrets: secretDecls(unit, get(callPair?.value, "secrets")),
-		outputs: outputDecls(unit, get(callPair?.value, "outputs"), [
+		secrets: secretDecls(unit, get$1(callPair?.value, "secrets")),
+		outputs: outputDecls(unit, get$1(callPair?.value, "outputs"), [
 			"on",
 			"workflow_call",
 			"outputs"
@@ -27475,14 +27524,14 @@ function parseWorkflowFile(path, text, ctx) {
 	} : void 0;
 	const dispatch = triggers.includes("workflow_dispatch") ? {
 		loc: nodeLoc(unit.source, dispatchPair?.key ?? on),
-		inputs: inputDecls(unit, get(dispatchPair?.value, "inputs"), [
+		inputs: inputDecls(unit, get$1(dispatchPair?.value, "inputs"), [
 			"on",
 			"workflow_dispatch",
 			"inputs"
 		])
 	} : void 0;
-	const name = str(get(root, "name"));
-	const workflowPermissions = permissions(get(root, "permissions"));
+	const name = str(get$1(root, "name"));
+	const workflowPermissions = permissions(get$1(root, "permissions"));
 	return {
 		kind: "workflow",
 		path,
@@ -27496,18 +27545,18 @@ function parseWorkflowFile(path, text, ctx) {
 		triggers,
 		...call ? { call } : {},
 		...dispatch ? { dispatch } : {},
-		env: bindings(unit, get(root, "env"), ["env"]),
+		env: bindings(unit, get$1(root, "env"), ["env"]),
 		...workflowPermissions ? { permissions: workflowPermissions } : {},
-		jobs: jobs(unit, get(root, "jobs"), ctx)
+		jobs: jobs(unit, get$1(root, "jobs"), ctx)
 	};
 }
 /** `dir` is the repo-relative action directory (what `uses: ./dir` points at); `file` is its action.yml. */
 function parseActionFile(dir, file, text, ctx) {
 	const { unit, root } = load(file, text);
 	if (root) collectSites(unit, "action", dir, ctx, root);
-	const runs = get(root, "runs");
-	const using = str(get(runs, "using"));
-	const name = str(get(root, "name"));
+	const runs = get$1(root, "runs");
+	const using = str(get$1(runs, "using"));
+	const name = str(get$1(root, "name"));
 	const generated = generatedMarker(file, text);
 	return {
 		kind: "action",
@@ -27520,9 +27569,9 @@ function parseActionFile(dir, file, text, ctx) {
 		schemaErrors: [],
 		...generated ? { generated } : {},
 		...using ? { using } : {},
-		inputs: inputDecls(unit, get(root, "inputs"), ["inputs"]),
-		outputs: outputDecls(unit, get(root, "outputs"), ["outputs"], true),
-		steps: steps(unit, get(runs, "steps"), ["runs", "steps"], "action", ctx)
+		inputs: inputDecls(unit, get$1(root, "inputs"), ["inputs"]),
+		outputs: outputDecls(unit, get$1(root, "outputs"), ["outputs"], true),
+		steps: steps(unit, get$1(runs, "steps"), ["runs", "steps"], "action", ctx)
 	};
 }
 //#endregion
@@ -35343,6 +35392,429 @@ function loadProject(opts) {
 	return loadProjectWith(opts, nodeHost);
 }
 //#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote-fetch.ts
+/**
+* Remote sources over the GitHub REST API: a remote reference's ref resolved to a commit, and its workflow file or
+* `action.yml` read at that commit. What it does I/O with is injected (`fetch`, the token, a cache), so it runs in Node
+* and in the browser; it imports `remote-ref.ts` only (`@ciatlas/core/remote-fetch` serves both without the parser).
+*
+* The token goes only into the `authorization` header of requests to its API's origin, and into no message: a fallback
+* API gets its own token or none. Messages state what failed and its status; advice is the host's, by `kind`.
+*/
+const GITHUB_COM_API = "https://api.github.com";
+/**
+* The GitHub host an API serves: `github.com` for `https://api.github.com`, `acme.ghe.com` for
+* `https://api.acme.ghe.com`, and the server for `https://HOST/api/v3`, whose name is kept as it is (a GHES may be
+* called `api.corp.example`). `api.` is dropped only from an API at the root of its host.
+*/
+function apiHost(apiUrl) {
+	const { hostname, pathname } = new URL(apiUrl);
+	return hostname.startsWith("api.") && pathname.replace(/\/+$/, "") === "" ? hostname.slice(4) : hostname;
+}
+/** A failure to read from a GitHub API: its kind, the GitHub host asked (`GitHubApi.host`), and the HTTP status. */
+var RemoteFetchError = class extends Error {
+	kind;
+	host;
+	status;
+	retryAfterS;
+	brief;
+	name = "RemoteFetchError";
+	constructor(message, kind, host, status, retryAfterS, brief = message) {
+		super(message);
+		this.kind = kind;
+		this.host = host;
+		this.status = status;
+		this.retryAfterS = retryAfterS;
+		this.brief = brief;
+	}
+};
+/** A cache in memory, of `maxBytes` at most (32 MiB by default): over that, the least recently used go first. */
+function memoryRemoteCache(maxBytes = 33554432) {
+	const entries = /* @__PURE__ */ new Map();
+	let size = 0;
+	const keyOf = (k) => `${[
+		k.host,
+		k.owner,
+		k.repo,
+		k.sha
+	].join("\n").toLowerCase()}\n${k.file}`;
+	const drop = (key) => {
+		size -= entries.get(key)?.byteLength ?? 0;
+		entries.delete(key);
+	};
+	return {
+		get(k) {
+			const key = keyOf(k);
+			const bytes = entries.get(key);
+			if (bytes) {
+				entries.delete(key);
+				entries.set(key, bytes);
+			}
+			return bytes;
+		},
+		set(k, bytes) {
+			if (bytes.byteLength > maxBytes) return;
+			const key = keyOf(k);
+			drop(key);
+			entries.set(key, bytes.slice());
+			size += bytes.byteLength;
+			for (const oldest of entries.keys()) {
+				if (size <= maxBytes) break;
+				drop(oldest);
+			}
+		}
+	};
+}
+/**
+* The commit a remote reference's ref points at now, lower-case, from `GET /repos/{owner}/{repo}/commits/{ref}`
+* (a full SHA is checked the same way). On `not-found`, `fallback` is asked when set.
+*/
+async function resolveRemoteCommit(r, opts = {}) {
+	checkNames$1(r, targetOf(opts.api));
+	return withFallback(opts, async (at) => {
+		const body = await onceMore(() => get(`${repoUrl(r, at)}/commits/${encodeURIComponent(r.ref)}`, "application/vnd.github.sha", at), opts);
+		const sha = body && decode$1(body).trim();
+		if (!sha || !isFullSha(sha)) throw notFound(`${r.owner}/${r.repo}@${r.ref}`, at);
+		return sha.toLowerCase();
+	});
+}
+/**
+* A remote reference's file at a commit: its workflow file, or its `action.yml` (else `action.yaml`), from the cache
+* when it has it, else from `GET /repos/{owner}/{repo}/contents/{path}?ref={sha}` (then kept in the cache). On
+* `not-found`, `fallback` is asked when set. With `expectDigest`, a file whose digest differs fails as `digest`.
+*/
+async function fetchRemoteSourceAt(r, sha, opts = {}) {
+	const targets = [targetOf(opts.api), ...opts.fallback ? [targetOf(opts.fallback)] : []];
+	checkNames$1(r, targets[0]);
+	if (!isFullSha(sha)) throw new RemoteFetchError(`${sha} is not a full commit SHA`, "other", targets[0].host);
+	const commit = sha.toLowerCase();
+	for (const t of targets) {
+		const cached = await fromCache(r, commit, t, opts);
+		if (cached) return cached;
+	}
+	return withFallback(opts, async (at) => {
+		const found = await onceMore(() => firstSource(r, commit, at), opts);
+		if (!found) throw new RemoteFetchError(`${r.kind === "workflow" ? `${r.path} not found` : `no action.yml in ${r.path || "the repository root"}`} at ${commit.slice(0, 7)}`, "not-found", at.t.host);
+		const source = await sourceOf(r, commit, found.file, found.bytes, at.t.host);
+		if (opts.expectDigest !== void 0 && source.digest !== opts.expectDigest) throw new RemoteFetchError(`the digest of ${r.owner}/${r.repo}/${found.file} at ${commit.slice(0, 7)} is ${source.digest}, not ${opts.expectDigest}`, "digest", at.t.host);
+		try {
+			await opts.cache?.set(keyOf$3(r, commit, found.file, at.t), source.bytes);
+		} catch {}
+		return source;
+	});
+}
+function targetOf(api = { apiUrl: GITHUB_COM_API }) {
+	const url = new URL(api.apiUrl);
+	return {
+		base: `${url.origin}${url.pathname.replace(/\/+$/, "")}`,
+		origin: url.origin,
+		host: api.host ?? apiHost(api.apiUrl),
+		...api.token ? { token: api.token } : {}
+	};
+}
+/**
+* `work` against `opts.api`, then, when that finds nothing (`not-found`) and `opts.fallback` is set, against the
+* fallback, whose own failure is reported when it fails too. The fallback has its own `Target`: it never sees
+* `api.token`.
+*/
+async function withFallback(opts, work) {
+	try {
+		return await work({
+			t: targetOf(opts.api),
+			opts
+		});
+	} catch (e) {
+		if (!opts.fallback || !(e instanceof RemoteFetchError && e.kind === "not-found")) throw e;
+		return work({
+			t: targetOf(opts.fallback),
+			opts
+		});
+	}
+}
+/**
+* Refuses a reference with a `.` or `..` name (owner, repository, ref or path segment), which GitHub has none of: the
+* URL parser would resolve it, and send the request, and the token, to another endpoint of the API.
+*/
+function checkNames$1(r, t) {
+	if ([
+		r.owner,
+		r.repo,
+		r.ref,
+		...r.path.split("/")
+	].some((n) => n === "." || n === "..")) throw new RemoteFetchError(`${r.raw} has a "." or ".." name, which no repository has`, "other", t.host);
+}
+const repoUrl = (r, at) => `${at.t.base}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
+const keyOf$3 = (r, sha, file, t) => ({
+	host: t.host.toLowerCase(),
+	owner: r.owner.toLowerCase(),
+	repo: r.repo.toLowerCase(),
+	sha,
+	file
+});
+/** The first of a reference's files in the cache under `t`'s host, unless its digest is not the one expected. */
+async function fromCache(r, sha, t, opts) {
+	if (!opts.cache) return void 0;
+	for (const file of remoteSourceFiles(r)) {
+		let bytes;
+		try {
+			bytes = await opts.cache.get(keyOf$3(r, sha, file, t));
+		} catch {
+			bytes = void 0;
+		}
+		if (!bytes) continue;
+		const source = await sourceOf(r, sha, file, bytes, t.host);
+		return opts.expectDigest === void 0 || source.digest === opts.expectDigest ? source : void 0;
+	}
+}
+/** The first of a reference's files (`remoteSourceFiles`) the repository has at `sha`, as served. */
+async function firstSource(r, sha, at) {
+	for (const file of remoteSourceFiles(r)) {
+		const path = file.split("/").map(encodeURIComponent).join("/");
+		const bytes = await get(`${repoUrl(r, at)}/contents/${path}?ref=${sha}`, "application/vnd.github.raw", at);
+		if (bytes !== void 0) return {
+			file,
+			bytes
+		};
+	}
+}
+async function sourceOf(r, sha, file, bytes, host) {
+	const hash = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes));
+	const digest = `sha256-${btoa(String.fromCharCode(...hash))}`;
+	return {
+		ref: r,
+		sha,
+		file,
+		bytes,
+		text: decode$1(bytes),
+		digest,
+		host
+	};
+}
+/** UTF-8, without a byte order mark (`TextDecoder` drops one). */
+const decode$1 = (bytes) => new TextDecoder().decode(bytes);
+const notFound = (what, at) => new RemoteFetchError(`${what} not found, or not readable with this token`, "not-found", at.t.host);
+/**
+* `read`, and once more after a pause when it finds nothing: GitHub's API answers 404 now and then for a commit or a
+* file it has, and one such answer would make the reference unreadable.
+*/
+async function onceMore(read, opts) {
+	const first = await read();
+	if (first !== void 0) return first;
+	await pause(opts.retryDelayMs ?? RETRY_DELAY_MS, opts.signal);
+	return read();
+}
+const RETRY_DELAY_MS = 300;
+/** A GET's body; undefined on 404, and on 422 (a SHA that is no commit of the repository). */
+const get = async (url, accept, at) => (await getReply(url, accept, at))?.bytes;
+async function getReply(url, accept, at) {
+	const reply = await withRetries(url, accept, at);
+	if (reply.res.status === 404 || reply.res.status === 422) return void 0;
+	if (!reply.res.ok) throw httpError(reply.res, at.t);
+	return reply;
+}
+/** How many times a request is sent at most: once, and twice more after a failure that passes. */
+const ATTEMPTS = 3;
+/** The longest `Retry-After` waited for; after a longer one the request fails, saying when to try again. */
+const MAX_RETRY_AFTER_S = 60;
+/** A request, sent again while it fails in a way that passes, at most `ATTEMPTS` times in all. */
+async function withRetries(url, accept, at) {
+	const host = new URL(url).host;
+	for (let attempt = 1;; attempt++) {
+		at.opts.signal?.throwIfAborted();
+		const down = at.opts.unreachableHosts?.get(host);
+		if (down) throw down;
+		const answer = await attemptOf(url, accept, at);
+		const wait = attempt < ATTEMPTS ? retryWait(answer, attempt, at.opts) : void 0;
+		if (wait === void 0) return lastAnswer(answer, host, at.opts);
+		at.opts.onRetry?.({
+			host,
+			attempt: attempt + 1,
+			attempts: ATTEMPTS,
+			why: answer instanceof RemoteFetchError ? answer.brief : redact$1(statusOf$1(answer.res), at.t.token),
+			waitMs: Math.round(wait)
+		});
+		await pause(wait, at.opts.signal);
+	}
+}
+/** The answer a request ends with: its reply, or its error, thrown; a host that did not answer is kept as unreachable. */
+function lastAnswer(answer, host, opts) {
+	if (!(answer instanceof RemoteFetchError)) return answer;
+	if (answer.kind === "unreachable" || answer.kind === "timeout") opts.unreachableHosts?.set(host, answer);
+	throw answer;
+}
+/** A request's headers: the token only for its API's origin. */
+function headersOf(url, accept, at) {
+	const headers = {
+		accept,
+		"x-github-api-version": "2022-11-28"
+	};
+	if (at.opts.userAgent) headers["user-agent"] = at.opts.userAgent;
+	if (at.t.token && new URL(url).origin === at.t.origin) headers.authorization = `Bearer ${at.t.token}`;
+	return headers;
+}
+/** The request's signal: the caller's, and its timeout. */
+function signalOf(opts) {
+	const timeout = AbortSignal.timeout(opts.timeoutMs ?? TIMEOUT_MS);
+	return opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+}
+/** One request and, for a success, its body; or why there is no answer. A cancelled read rejects as `signal` says. */
+async function attemptOf(url, accept, at) {
+	const fetchOf = at.opts.fetch ?? globalThis.fetch;
+	let res;
+	try {
+		res = await fetchOf(url, {
+			headers: headersOf(url, accept, at),
+			signal: signalOf(at.opts)
+		});
+	} catch (e) {
+		return networkError(e, at);
+	}
+	at.seen?.(res);
+	if (!res.ok) {
+		res.body?.cancel().catch(() => {});
+		return {
+			res,
+			bytes: /* @__PURE__ */ new Uint8Array()
+		};
+	}
+	try {
+		return {
+			res,
+			bytes: await bodyOf(res, at)
+		};
+	} catch (e) {
+		return e instanceof RemoteFetchError ? e : networkError(e, at);
+	}
+}
+/**
+* How long to wait before sending a request again, or undefined when another try would not help. Retried: no answer
+* (the network, a timeout), a server error (5xx), and the secondary rate limit (429, or 403 with `Retry-After`) for as
+* long as it asks, up to `MAX_RETRY_AFTER_S`. Not retried: what another try cannot change (401, 403 without
+* `Retry-After`, 404 and 422, which the lookups ask once more for themselves, a response too large) and a used-up
+* primary rate limit. Waits grow exponentially, with jitter so that requests made together do not come back together.
+*/
+function retryWait(answer, attempt, opts) {
+	if (answer instanceof RemoteFetchError) return answer.kind === "unreachable" || answer.kind === "timeout" ? backoffMs(attempt, opts) : void 0;
+	if (!passes(answer.res)) return void 0;
+	const after = retryAfterOf(answer.res);
+	if (after === void 0) return backoffMs(attempt, opts);
+	return after <= MAX_RETRY_AFTER_S ? after * 1e3 : void 0;
+}
+/** The wait before the next attempt: doubling from `retryDelayMs`, with as much again at random at most. */
+function backoffMs(attempt, opts) {
+	const base = opts.retryDelayMs ?? RETRY_DELAY_MS;
+	return base * 2 ** (attempt - 1) + Math.random() * base;
+}
+/** A wait that `signal` cuts short, rejecting with its reason. */
+function pause(ms, signal) {
+	signal?.throwIfAborted();
+	return new Promise((done, fail) => {
+		const stop = () => {
+			clearTimeout(timer);
+			fail(signal.reason);
+		};
+		const timer = setTimeout(() => {
+			signal?.removeEventListener("abort", stop);
+			done();
+		}, ms);
+		signal?.addEventListener("abort", stop, { once: true });
+	});
+}
+/** The secondary rate limit: GitHub asks to slow down, and says when to try again (`Retry-After`, in seconds). */
+function retryAfterOf(res) {
+	const header = res.headers.get("retry-after");
+	const seconds = header === null ? NaN : Number(header);
+	return Number.isFinite(seconds) && seconds >= 0 ? seconds : void 0;
+}
+/** The primary rate limit is used up: it resets within the hour, too long to wait. */
+const rateLimitUsedUp = (res) => (res.status === 403 || res.status === 429) && res.headers.get("x-ratelimit-remaining") === "0";
+/** Whether an answer reports a failure that passes: a server error, or the secondary rate limit. */
+const passes = (res) => res.status >= 500 || slowDown(res) && !rateLimitUsedUp(res);
+/** GitHub asks to slow down: 429, or 403 with `Retry-After` (its secondary rate limit). */
+const slowDown = (res) => res.status === 429 || res.status === 403 && retryAfterOf(res) !== void 0;
+/** Seconds until the primary rate limit resets (`x-ratelimit-reset`, in seconds since the epoch), when it says. */
+function resetInS(res) {
+	const reset = Number(res.headers.get("x-ratelimit-reset") ?? NaN);
+	return Number.isFinite(reset) ? Math.max(0, Math.ceil(reset - Date.now() / 1e3)) : void 0;
+}
+const TIMEOUT_MS = 3e4;
+/**
+* Why a request got no answer. Node's fetch only says `fetch failed`, with the reason in `cause.code`. A cancelled
+* read rethrows the signal's reason.
+*/
+function networkError(e, at) {
+	const { opts, t } = at;
+	if (opts.signal?.aborted) throw opts.signal.reason;
+	const error = Object(e);
+	if (error.name === "TimeoutError") return timeoutError(at);
+	const why = redact$1(String(error.cause?.code ?? error.cause?.message ?? error.message), t.token);
+	return new RemoteFetchError(`could not reach ${t.origin} (${why})`, "unreachable", t.host, void 0, void 0, NETWORK_CODES[why] ?? `could not connect (${why})`);
+}
+function timeoutError({ opts, t }) {
+	const seconds = (opts.timeoutMs ?? TIMEOUT_MS) / 1e3;
+	const brief = `no answer within ${seconds} s`;
+	return new RemoteFetchError(`no answer from ${t.origin} within ${seconds} s`, "timeout", t.host, void 0, void 0, brief);
+}
+const redact$1 = (text, token) => token ? text.split(token).join("***") : text;
+/** The network's error codes a retry's notice puts in words. */
+const NETWORK_CODES = {
+	UND_ERR_CONNECT_TIMEOUT: "connection timed out",
+	ETIMEDOUT: "connection timed out",
+	ECONNREFUSED: "connection refused",
+	ECONNRESET: "connection reset",
+	ENOTFOUND: "host not found",
+	EAI_AGAIN: "host name lookup failed",
+	EHOSTUNREACH: "host unreachable",
+	ENETUNREACH: "network unreachable"
+};
+/** A response's status, as `503 Service Unavailable`. */
+const statusOf$1 = (res) => `${res.status}${res.statusText ? ` ${res.statusText}` : ""}`;
+/** Why the GitHub API refused a request. */
+function httpError(res, t) {
+	const status = redact$1(statusOf$1(res), t.token);
+	const fail = (message, kind, retryAfterS) => new RemoteFetchError(message, kind, t.host, res.status, retryAfterS);
+	if (res.status === 401) return fail(t.token ? `the GitHub API rejected the token (${status})` : `the GitHub API asks for a token (${status})`, "token");
+	if (rateLimitUsedUp(res)) return fail(`the GitHub API rate limit is used up (${status})`, "rate-limit", resetInS(res));
+	if (slowDown(res)) {
+		const after = retryAfterOf(res);
+		return fail(`the GitHub API asks to slow down (${status}): try again${after === void 0 ? " later" : ` in ${after} s`}`, "rate-limit", after);
+	}
+	if (res.status === 403) return fail(`the GitHub API refused the request (${status})`, "access");
+	return fail(`${status} from the GitHub API`, res.status >= 500 ? "server" : "other");
+}
+/** A response's body, refused over `maxFileBytes` by its length header or by what it holds, read as it comes. */
+async function bodyOf(res, at) {
+	const max = at.opts.maxFileBytes ?? MAX_FILE_BYTES;
+	const tooLarge = () => new RemoteFetchError(`a response over ${max} bytes`, "too-large", at.t.host, res.status);
+	if (Number(res.headers.get("content-length") ?? 0) > max) {
+		res.body?.cancel().catch(() => {});
+		throw tooLarge();
+	}
+	const reader = res.body?.getReader();
+	if (!reader) return /* @__PURE__ */ new Uint8Array();
+	const chunks = [];
+	let size = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		size += value.byteLength;
+		if (size > max) {
+			reader.cancel().catch(() => {});
+			throw tooLarge();
+		}
+		chunks.push(value);
+	}
+	const bytes = new Uint8Array(size);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return bytes;
+}
+/** Workflow and action files are small; a larger response is refused rather than parsed. */
+const MAX_FILE_BYTES = 1e6;
+//#endregion
 //#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote.ts
 /** GitHub calls only workflows directly inside `.github/workflows`, matching the directory's case exactly. */
 const CALLABLE = /^\.github\/workflows\/[^/]+\.[yY][aA]?[mM][lL]$/;
@@ -35365,6 +35837,174 @@ function remoteRefOfUses(unit, uses) {
 function atOrigin(o, target, kind) {
 	if (kind === "workflow" ? !CALLABLE.test(target) : target === ".." || target.startsWith("../")) return void 0;
 	return parseRemoteRef(`${o.owner}/${o.repo}${target === "." ? "" : `/${target}`}@${o.sha ?? o.ref}`, kind);
+}
+/**
+* The remote references of `units` (by default the project's workflows and actions and its external units), each once
+* by `remoteKey`, sorted by it. Give `units` to scope them, as to the units some paths reach.
+*/
+function remoteRefsOf(project, units = [
+	...project.workflows.values(),
+	...project.actions.values(),
+	...project.external?.values() ?? []
+]) {
+	const out = /* @__PURE__ */ new Map();
+	for (const unit of units) for (const uses of usesOf(unit)) {
+		const r = remoteRefOfUses(unit, uses);
+		if (r && !out.has(remoteKey(r.raw))) out.set(remoteKey(r.raw), r);
+	}
+	return [...out].sort(([a], [b]) => compare$1(a, b)).map(([, r]) => r);
+}
+function* usesOf(unit) {
+	const users = unit.kind === "action" ? unit.steps : Object.values(unit.jobs).flatMap((j) => [j, ...j.steps]);
+	for (const { uses } of users) if (uses) yield uses;
+}
+const compare$1 = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+/**
+* The remote sources a project reaches: its own remote references, then the ones each source read names (resolved by
+* `remoteRefOfUses`, so a `./` inside a remote is read at that remote's commit), breadth first. Each reference is read
+* at `pin`'s commit, which may depend on the source that names it; else at its ref when that is a full SHA; else, with
+* `resolveUnpinned`, at the commit its ref points at now (resolved once per reference); else not at all. A reference
+* at a commit is read once, so cycles stop.
+*
+* A `RemoteFetchError` is recorded in `failed`; anything else (an abort, a host's `pin` throwing) rejects.
+*/
+async function fetchRemoteClosure(project, pin, opts) {
+	const run = {
+		...opts,
+		unreachableHosts: opts.unreachableHosts ?? /* @__PURE__ */ new Map()
+	};
+	const { maxDepth = 10, maxUnits = 200, concurrency = 8 } = opts;
+	const sources = [];
+	const failed = /* @__PURE__ */ new Map();
+	const limited = /* @__PURE__ */ new Map();
+	const read = /* @__PURE__ */ new Set();
+	const resolved = /* @__PURE__ */ new Map();
+	const progress = {
+		done: 0,
+		total: 0
+	};
+	const report = (ref, outcome) => opts.onProgress?.({
+		done: ++progress.done,
+		total: progress.total,
+		ref,
+		outcome
+	});
+	const fail = (r, e) => {
+		if (!(e instanceof RemoteFetchError)) throw e;
+		failed.set(remoteKey(r.raw), {
+			ref: r.raw,
+			kind: e.kind,
+			error: e.message
+		});
+	};
+	const commitOf = async ({ ref, parent }) => {
+		const pinned = await pin(ref, parent) ?? (isFullSha(ref.ref) ? { sha: ref.ref } : void 0);
+		if (pinned || !opts.resolveUnpinned) return pinned;
+		const key = remoteKey(ref.raw);
+		if (!resolved.has(key)) resolved.set(key, resolveRemoteCommit(ref, run));
+		try {
+			return { sha: await resolved.get(key) };
+		} catch (e) {
+			const first = !failed.has(key);
+			fail(ref, e);
+			if (first) {
+				progress.total++;
+				report(ref.raw, "failed");
+			}
+			return;
+		}
+	};
+	let level = remoteRefsOf(project, [...project.workflows.values(), ...project.actions.values()]).map((ref) => ({ ref }));
+	for (let depth = 1; level.length; depth++) {
+		if (depth > maxDepth) {
+			for (const { ref } of level) limited.set(remoteKey(ref.raw), ref.raw);
+			break;
+		}
+		const pins = await mapLimited(level, concurrency, commitOf);
+		const admitted = [];
+		level.forEach((found, i) => {
+			const p = pins[i];
+			const key = remoteKey(found.ref.raw);
+			if (!p || read.has(`${key}@${p.sha.toLowerCase()}`)) return;
+			if (read.size >= maxUnits) limited.set(key, found.ref.raw);
+			else {
+				read.add(`${key}@${p.sha.toLowerCase()}`);
+				admitted.push({
+					...found,
+					...p
+				});
+			}
+		});
+		progress.total += admitted.length;
+		const next = [];
+		await mapLimited(admitted, concurrency, async ({ ref, sha, digest }) => {
+			const cache = opts.cache && watched(opts.cache);
+			try {
+				const source = await fetchRemoteSourceAt(ref, sha, {
+					...run,
+					...cache ? { cache } : {},
+					...digest !== void 0 ? { expectDigest: digest } : {}
+				});
+				sources.push(source);
+				for (const child of remoteRefsOf(project, [unitOf$1(source)])) next.push({
+					ref: child,
+					parent: source
+				});
+				report(ref.raw, cache && !cache.kept ? "cached" : "fetched");
+			} catch (e) {
+				fail(ref, e);
+				report(ref.raw, "failed");
+			}
+		});
+		level = next.sort((a, b) => compare$1(foundKey(a), foundKey(b)));
+	}
+	const done = /* @__PURE__ */ new Set([...sources.map((s) => remoteKey(s.ref.raw)), ...failed.keys()]);
+	return {
+		sources: sources.sort((a, b) => compare$1(remoteKey(a.ref.raw), remoteKey(b.ref.raw)) || compare$1(a.sha, b.sha)),
+		failed: [...failed].sort(([a], [b]) => compare$1(a, b)).map(([, f]) => f),
+		limited: [...limited].filter(([key]) => !done.has(key)).sort(([a], [b]) => compare$1(a, b)).map(([, raw]) => raw)
+	};
+}
+/** A cache that notes whether anything was kept in it: a read that kept nothing came from the cache. */
+function watched(cache) {
+	return {
+		kept: false,
+		get: (key) => cache.get(key),
+		set(key, bytes) {
+			this.kept = true;
+			return cache.set(key, bytes);
+		}
+	};
+}
+/** A found reference's order: by its key, then by the source that names it. */
+const foundKey = ({ ref, parent }) => `${remoteKey(ref.raw)}\n${parent ? `${remoteKey(parent.ref.raw)}@${parent.sha}` : ""}`;
+/** A source's unit, parsed as its own repository's at the commit it was read at (as `loadProject`'s `remotes`). */
+function unitOf$1({ ref: r, sha, text }) {
+	const ctx = createParseContext(`${r.owner}/${r.repo}`);
+	return {
+		...r.kind === "workflow" ? parseWorkflowFile(r.raw, text, ctx) : parseActionFile(r.raw, r.raw, text, ctx),
+		external: true,
+		origin: {
+			owner: r.owner,
+			repo: r.repo,
+			path: r.path,
+			ref: r.ref,
+			sha
+		}
+	};
+}
+/** `work` over each item, `limit` at a time, the results in the items' order. */
+async function mapLimited(items, limit, work) {
+	const out = new Array(items.length);
+	let next = 0;
+	const worker = async () => {
+		while (next < items.length) {
+			const i = next++;
+			out[i] = await work(items[i]);
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, worker));
+	return out;
 }
 new Set(CONTEXT_FUNCTIONS.map((f) => f.name.toLowerCase()));
 //#endregion
@@ -44696,7 +45336,7 @@ function remotesState(files, o, sources) {
 function locksOf(files) {
 	const lockText = files[REMOTES_LOCK_FILE];
 	const lock = lockText === void 0 ? void 0 : parseRemotesLock(lockText);
-	const actionsText = files[ACTIONS_LOCK_FILE];
+	const actionsText = files[ACTIONS_LOCK_FILE$1];
 	const actions = actionsText === void 0 ? void 0 : readActionsLock(actionsText);
 	return {
 		...lock && "lock" in lock ? { lock: lock.lock } : {},
@@ -45006,7 +45646,7 @@ function readJobs(context, token) {
 			steps: []
 		};
 		jobs[job.id] = job;
-		if (isMapping(item.value)) for (const prop of item.value) readJobProperty(context, job, keyOf$1(prop.key), prop.value);
+		if (isMapping(item.value)) for (const prop of item.value) readJobProperty(context, job, keyOf$2(prop.key), prop.value);
 	}
 	return jobs;
 }
@@ -45033,7 +45673,7 @@ function readJobProperty(context, job, key, value) {
 function readStrategy(context, token, job) {
 	if (!isMapping(token)) return;
 	for (const prop of token) {
-		const key = keyOf$1(prop.key);
+		const key = keyOf$2(prop.key);
 		if (key === "fail-fast") job.failFast = readBoolean(context, prop.value, key);
 		else if (key === "max-parallel") job.maxParallel = readNumber(context, prop.value, key);
 	}
@@ -45048,7 +45688,7 @@ function readSteps(context, token) {
 			if: DEFAULT_IF
 		};
 		steps.push(step);
-		if (isMapping(item)) for (const prop of item) readStepProperty(context, step, keyOf$1(prop.key), prop.value);
+		if (isMapping(item)) for (const prop of item) readStepProperty(context, step, keyOf$2(prop.key), prop.value);
 	}
 	return steps;
 }
@@ -45072,7 +45712,7 @@ function readConcurrency(token) {
 	}
 	const out = {};
 	for (const prop of token) {
-		const key = keyOf$1(prop.key);
+		const key = keyOf$2(prop.key);
 		if (key === "group") {
 			const group = scalarText(prop.value);
 			if (group !== void 0) out.group = group;
@@ -45095,7 +45735,7 @@ function readNumber(context, token, key) {
 	if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) return Number(value);
 	context.error(token, `'${key}' must be a number or an expression`);
 }
-const keyOf$1 = (token) => isString(token) ? token.value : void 0;
+const keyOf$2 = (token) => isString(token) ? token.value : void 0;
 const isExpression = (value) => typeof value === "object" && value !== null && "expression" in value;
 /** A scalar's value: the literal, or the expression it is. */
 function literal(token) {
@@ -47293,7 +47933,8 @@ function jobLabel(job) {
 	const verdict = job.runs.verdict === "yes" ? "" : job.runs.verdict === "no" ? " (skipped)" : " (maybe)";
 	return `${job.jobId}${legs}${verdict}`;
 }
-const escapeLabel = (s) => s.replace(/"/g, "#quot;");
+/** A quoted label: quotes and tags as Mermaid's entity codes, line breaks and control characters as spaces. */
+const escapeLabel = (s) => s.replace(/#/g, "#35;").replace(/"/g, "#quot;").replace(/</g, "#lt;").replace(/>/g, "#gt;").replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, " ");
 //#endregion
 //#region ../engine/src/render/reason.ts
 /** A value for a line of text: the value, or `?` with what it depends on. */
@@ -47976,7 +48617,7 @@ function select(ctx, unit, path) {
 			const problem = declaredBelow(ctx, unit);
 			if (problem) return {
 				ok: false,
-				failure: failure(ctx, path, `${keyOf(path)}: ${problem}`, [], "T204")
+				failure: failure(ctx, path, `${keyOf$1(path)}: ${problem}`, [], "T204")
 			};
 		}
 		return {
@@ -47987,11 +48628,11 @@ function select(ctx, unit, path) {
 		if (!(e instanceof SelectionError)) throw e;
 		return {
 			ok: false,
-			failure: failure(ctx, path, `${keyOf(path)}: ${e.message}`, [], e.code)
+			failure: failure(ctx, path, `${keyOf$1(path)}: ${e.message}`, [], e.code)
 		};
 	}
 }
-const keyOf = (path) => path.map((p, i) => typeof p === "number" ? `[${p}]` : i === 0 ? p : `.${p}`).join("");
+const keyOf$1 = (path) => path.map((p, i) => typeof p === "number" ? `[${p}]` : i === 0 ? p : `.${p}`).join("");
 /** A name under an unexpanded boundary, checked against the project's declarations: a typo is still an error. */
 function declaredBelow(ctx, unit) {
 	const { segments } = parseUnitPath(unit);
@@ -48161,7 +48802,7 @@ function renderTextReport(result) {
 	const lines = [];
 	for (const file of result.files) {
 		lines.push(`${file.path}${file.workflow ? ` → ${file.workflow.replace(/^.*\//, "")}` : ""}`);
-		for (const f of file.failures) lines.push(...failureLines(f, "  "));
+		for (const f of file.failures) lines.push(...failureLines$1(f, "  "));
 		for (const note of file.notes) lines.push(`  · ${note}`);
 		for (const c of file.cases) lines.push(...caseLines(c));
 	}
@@ -48172,11 +48813,11 @@ function renderTextReport(result) {
 function caseLines(c) {
 	const reason = c.status === "skipped" && c.reason ? ` (${c.reason})` : "";
 	const lines = [`  ${MARK[c.status]} ${c.name}${reason}`];
-	for (const f of c.failures) lines.push(...failureLines(f, "      "));
+	for (const f of c.failures) lines.push(...failureLines$1(f, "      "));
 	for (const note of c.notes) lines.push(`      · ${note}`);
 	return lines;
 }
-function failureLines(f, pad) {
+function failureLines$1(f, pad) {
 	const lines = [`${pad}${f.headline}`, ...f.detail.map((d) => `${pad}    ${d}`)];
 	if (f.at.line > 0) lines.push(`${pad}  at ${f.at.line}:${f.at.col}`);
 	return lines;
@@ -48245,17 +48886,22 @@ function renderMarkdownReport(result, opts = {}) {
 	}))]);
 	const max = opts.maxFailures ?? 50;
 	for (const item of failed.slice(0, max)) {
-		lines.push("", `<details><summary>${EMOJI.failed} ${inline(item.name)} — ${inline(item.failures[0].headline)}</summary>`, "", "```");
-		for (const f of item.failures) lines.push(...failureLines(f, ""), "");
-		lines.push("```", "", "</details>");
+		const body = item.failures.flatMap((f) => [...failureLines$1(f, ""), ""]);
+		const fence = fenceFor(body.join("\n"));
+		lines.push("", `<details><summary>${EMOJI.failed} ${inline(item.name)} — ${inline(item.failures[0].headline)}</summary>`, "", fence, ...body, fence, "", "</details>");
 	}
 	if (failed.length > max) lines.push("", `${failed.length - max} more failed cases are in the log.`);
 	return `${lines.join("\n")}\n`;
 }
-/** A table cell: backslashes and pipes escaped, newlines flattened. */
-const md = (s) => html(s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ");
+/**
+* A table cell: tags and entities escaped, then every character with inline meaning (`\\`, `|`, emphasis, code, and
+* the brackets of links and images), newlines flattened. Names reach it from other repositories' workflows.
+*/
+const md = (s) => html(s).replace(/[\\|`*_~[\]!]/g, "\\$&").replace(/\r?\n|\r/g, " ");
+/** A code fence no line of `text` can close: longer than any run of backticks in it. */
+const fenceFor = (text) => "`".repeat(Math.max(3, 1 + Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))));
 /** Text inside the raw HTML of a summary line: tags and entities escaped, newlines flattened. */
-const inline = (s) => html(s).replace(/\n/g, " ");
+const inline = (s) => html(s).replace(/\r?\n|\r/g, " ");
 const html = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function renderJUnit(result) {
 	const suites = result.files.map(suite);
@@ -48897,6 +49543,310 @@ const isFile = (p) => {
 	}
 };
 //#endregion
+//#region ../node/src/remotes.ts
+/** `remotes.lock.yml` of a checkout: none when there is no such file, else the lockfile or why it cannot be used. */
+function readRemotesLockAt(root) {
+	let text;
+	try {
+		text = readFileSync(join(root, REMOTES_LOCK_FILE), "utf8");
+	} catch (e) {
+		if (e.code === "ENOENT") return {};
+		return { error: `${REMOTES_LOCK_FILE}: ${e.message}` };
+	}
+	const read = parseRemotesLock(text);
+	return "lock" in read ? { lock: read.lock } : { error: `${REMOTES_LOCK_FILE}: ${read.error}` };
+}
+/**
+* The remotes `files` (a checkout's workflow and action files, as `readWorkflowFiles` gives them) reach, read as the
+* mode says. `off` reads nothing. `lock` reads only pinned bodies (rows 1–4) and resolves nothing, so with a warm cache
+* it makes no request; a locked body it cannot read, or whose digest differs, is in `remotes.failed`. `fetch` also
+* resolves what nothing pins. Without a lockfile, `lock` reads rows 1–3 only.
+*/
+async function loadRemotes(root, files, host) {
+	if (host.mode === "off") return {
+		remotes: { sources: [] },
+		lockErrors: [],
+		issues: []
+	};
+	const read = readRemotesLockAt(root);
+	const lockErrors = read.error === void 0 ? [] : [printable$1(read.error)];
+	for (const error of lockErrors) host.log?.(`not used: ${error}`);
+	const run = await closureOf(root, files, host, {
+		mode: host.mode,
+		lock: read.lock,
+		lockErrors
+	});
+	return {
+		remotes: inputsOf(run, host),
+		...read.lock ? { lock: read.lock } : {},
+		lockErrors,
+		issues: [...run.issues.values()].sort((a, b) => compare(a.message, b.message))
+	};
+}
+/** The GitHub CLI's token for a host, or undefined; never printed. */
+function ghAuthToken(host) {
+	const r = spawnSync("gh", [
+		"auth",
+		"token",
+		"--hostname",
+		host
+	], {
+		encoding: "utf8",
+		timeout: 1e4
+	});
+	return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : void 0;
+}
+/**
+* The variables whose token may go to `apiUrl`, as the GitHub CLI reads them: `GH_TOKEN` and `GITHUB_TOKEN` are
+* github.com's (and GHE.com's); a GitHub Enterprise Server's are `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`,
+* and `GITHUB_TOKEN` too when `apiUrl` is the runner's own `GITHUB_API_URL`. So a github.com token never goes to
+* another host because a URL option named one.
+*/
+function tokenVariables(env, apiUrl) {
+	const host = apiHost(apiUrl);
+	if (host === "github.com" || host.endsWith(".ghe.com")) return ["GH_TOKEN", "GITHUB_TOKEN"];
+	return [
+		"GH_ENTERPRISE_TOKEN",
+		"GITHUB_ENTERPRISE_TOKEN",
+		...env.GITHUB_API_URL !== void 0 && sameUrl(env.GITHUB_API_URL, apiUrl) ? ["GITHUB_TOKEN"] : []
+	];
+}
+const sameUrl = (a, b) => withoutTrailingSlashes(a) === withoutTrailingSlashes(b);
+/** A loop, not `/\/+$/`: a regex anchored after a repeat backtracks quadratically on a long run of `/` (CodeQL). */
+function withoutTrailingSlashes(url) {
+	let end = url.length;
+	while (end > 0 && url[end - 1] === "/") end--;
+	return url.slice(0, end);
+}
+/**
+* The API at `apiUrl` and its token: `given`, else the first set of the variables for its host (`GH_TOKEN`, then
+* `GITHUB_TOKEN`, for github.com; see `tokenVariables`), else the GitHub CLI's for the API's host (`gh auth token
+* --hostname`), else none (public repositories only).
+*/
+function githubAccess(env, apiUrl, given, gh = ghAuthToken) {
+	if (given) return {
+		apiUrl,
+		token: given,
+		tokenFrom: "option"
+	};
+	for (const name of tokenVariables(env, apiUrl)) {
+		const token = env[name];
+		if (token) return {
+			apiUrl,
+			token,
+			tokenFrom: name
+		};
+	}
+	const token = gh(apiHost(apiUrl));
+	return token ? {
+		apiUrl,
+		token,
+		tokenFrom: "gh"
+	} : { apiUrl };
+}
+/** github.com's API, for a GHES's runs that fall back to it: with `GITHUB_COM_TOKEN` or anonymously; none on github.com. */
+function githubComFallback(env, apiUrl) {
+	if (apiHost(apiUrl) === apiHost("https://api.github.com")) return void 0;
+	const token = env.GITHUB_COM_TOKEN;
+	return {
+		apiUrl: GITHUB_COM_API,
+		...token ? { token } : {}
+	};
+}
+async function closureOf(root, files, host, pinning) {
+	const { index } = loadFiles(Object.fromEntries(Object.entries(files).sort(([a], [b]) => compare(a, b))));
+	const actionsLock = readActionsLockOf(root, files, pinning.lockErrors, host.log);
+	const run = {
+		project: index.project,
+		sources: [],
+		failed: [],
+		limited: [],
+		pinned: /* @__PURE__ */ new Map(),
+		kinds: /* @__PURE__ */ new Map(),
+		issues: /* @__PURE__ */ new Map()
+	};
+	const local = localActionsLock(index, actionsLock);
+	const pin = (r, parent) => {
+		run.kinds.set(remoteKey(r.raw), r.kind);
+		const p = pinFor$1(r, {
+			mode: pinning.mode,
+			...pinning.lock ? { lock: pinning.lock } : {},
+			...pinContext(r, parent, local)
+		});
+		if (p.issue) run.issues.set(`${p.issue.code} ${p.issue.message}`, p.issue);
+		if (!("sha" in p)) return void 0;
+		const at = `${remoteKey(r.raw)}@${p.sha}`;
+		const before = run.pinned.get(at);
+		if (before === void 0 || RANK[p.pinned] < RANK[before]) run.pinned.set(at, p.pinned);
+		const digest = lockedDigest(pinning.lock, r.raw, p.sha);
+		return {
+			sha: p.sha,
+			...digest === void 0 ? {} : { digest }
+		};
+	};
+	const closure = await fetchRemoteClosure(index.project, pin, {
+		...fetchOptions(host),
+		resolveUnpinned: pinning.mode === "fetch"
+	});
+	return {
+		...run,
+		...closure
+	};
+}
+/** The table's order: when two pins give one commit, the one that comes first names it. */
+const RANK = {
+	"sha-ref": 1,
+	"actions-lock": 2,
+	parent: 3,
+	lockfile: 4,
+	resolved: 5
+};
+/** A ref inside a remote body: never the caller's `actions.lock`; a `./` (or `$/`) there is at its parent's commit. */
+function pinContext(r, parent, local) {
+	if (!parent) {
+		const commit = r.kind === "action" ? local.get(remoteKey(r.raw)) : void 0;
+		return commit === void 0 ? {} : { actionsLock: commit };
+	}
+	return r.ref.toLowerCase() === parent.sha && r.owner.toLowerCase() === parent.ref.owner.toLowerCase() && r.repo.toLowerCase() === parent.ref.repo.toLowerCase() ? {
+		inRemote: true,
+		parentSha: parent.sha
+	} : { inRemote: true };
+}
+/** The lockfile's digest for `raw`, when its entry records the commit about to be read. */
+function lockedDigest(lock, raw, sha) {
+	const entry = entryOf(lock, raw);
+	return entry?.sha === sha ? entry.digest : void 0;
+}
+/** A lockfile entry by the exact key, else by `remoteKey` (as the engine's `pinFor` looks it up). */
+function entryOf(lock, raw) {
+	if (!lock) return void 0;
+	if (Object.hasOwn(lock.remotes, raw)) return lock.remotes[raw];
+	const key = remoteKey(raw);
+	const found = Object.keys(lock.remotes).find((k) => remoteKey(k) === key);
+	return found === void 0 ? void 0 : lock.remotes[found];
+}
+/** Core's options for a run: the APIs, the fetch, the cache; offline, every API is unreachable from the start. */
+function fetchOptions(host) {
+	const secrets = tokensOf(host);
+	const offline = host.offline ? offlineHosts(host) : void 0;
+	return {
+		api: host.api,
+		...host.fallback ? { fallback: host.fallback } : {},
+		...offline ? {
+			unreachableHosts: offline,
+			fetch: refuse
+		} : host.fetch ? { fetch: host.fetch } : {},
+		cache: host.cache ?? memoryRemoteCache(),
+		...host.signal ? { signal: host.signal } : {},
+		userAgent: "simulci",
+		onRetry: ({ host: at, attempt, attempts, why, waitMs }) => host.log?.(redact(`${at}: trying again (${attempt}/${attempts}) in ${waitMs} ms: ${why}`, secrets))
+	};
+}
+const OFFLINE = "offline: only the cache is read";
+const refuse = () => Promise.reject(/* @__PURE__ */ new Error(OFFLINE));
+/** Each API's URL host, marked unreachable before any request, so an offline read fails at once and asks nothing. */
+function offlineHosts(host) {
+	const down = /* @__PURE__ */ new Map();
+	for (const api of [host.api, ...host.fallback ? [host.fallback] : []]) {
+		const gitHost = api.host ?? apiHost(api.apiUrl);
+		const error = new RemoteFetchError(`${gitHost} not asked (${OFFLINE})`, "unreachable", gitHost);
+		down.set(new URL(api.apiUrl).host, error);
+	}
+	return down;
+}
+/** The checkout's `actions.lock`: from `files` when a host passes it, else from disk; none when absent or unusable. */
+function readActionsLockOf(root, files, errors, log) {
+	let text = files[ACTIONS_LOCK_FILE$1];
+	try {
+		text ??= readFileSync(join(root, ACTIONS_LOCK_FILE$1), "utf8");
+	} catch (e) {
+		if (e.code === "ENOENT") return void 0;
+		return unused(`${ACTIONS_LOCK_FILE$1}: ${e.message}`, errors, log);
+	}
+	const read = readActionsLock(text);
+	return read.lock ?? unused(`.github/workflows/actions.lock: ${read.error}`, errors, log);
+}
+function unused(error, errors, log) {
+	errors.push(printable$1(error));
+	log?.(`not used: ${printable$1(error)}`);
+}
+/**
+* The `actions.lock` commit of each remote action the checkout's own files use, by `remoteKey`. A pin applies under the
+* running file's own path: a workflow's (a local reusable workflow is its own running file), and for a local action,
+* each workflow that runs it. The lock has one commit per key, so every running file that pins a ref pins it alike; the
+* engine reads one body per ref, so a running file the lock does not cover reads that body too.
+*/
+function localActionsLock(index, lock) {
+	const out = /* @__PURE__ */ new Map();
+	if (!lock) return out;
+	for (const [unit, running] of runningFiles(index)) for (const r of remoteRefsOf(index.project, [unit])) {
+		const commit = [...running].map((path) => actionsLockCommit(lock, path, r)).find((c) => c !== void 0);
+		if (commit !== void 0) out.set(remoteKey(r.raw), commit);
+	}
+	return out;
+}
+/** Each local unit and the workflow paths that run it: a workflow its own; an action, every workflow reaching it. */
+function runningFiles(index) {
+	const out = /* @__PURE__ */ new Map();
+	for (const wf of index.project.workflows.values()) {
+		out.set(wf, /* @__PURE__ */ new Set([wf.path]));
+		const queue = Object.values(wf.jobs).flatMap((j) => j.steps);
+		for (let step = queue.shift(); step !== void 0; step = queue.shift()) {
+			const action = index.actionOf(step);
+			if (!action) continue;
+			const seen = out.get(action) ?? /* @__PURE__ */ new Set();
+			if (!seen.has(wf.path)) queue.push(...action.steps);
+			out.set(action, seen.add(wf.path));
+		}
+	}
+	for (const action of index.project.actions.values()) if (!out.has(action)) out.set(action, /* @__PURE__ */ new Set());
+	return out;
+}
+/** Core's closure as the engine takes it; every message without the tokens. */
+function inputsOf(run, host) {
+	const runHost = (host.api.host ?? apiHost(host.api.apiUrl)).toLowerCase();
+	const secrets = tokensOf(host);
+	const failed = run.failed.map((f) => ({
+		ref: f.ref,
+		kind: run.kinds.get(remoteKey(f.ref)) ?? "workflow",
+		failure: f.kind,
+		message: redact(f.error, secrets)
+	}));
+	return {
+		sources: run.sources.map((s) => ({
+			ref: s.ref.raw,
+			kind: s.ref.kind,
+			sha: s.sha,
+			text: s.text,
+			pinned: pinnedOf(run, s),
+			...s.host.toLowerCase() === runHost ? {} : { host: s.host }
+		})),
+		...failed.length ? { failed } : {},
+		...run.limited.length ? { limited: run.limited } : {}
+	};
+}
+/** The pin that gave a source's commit; none means the closure took the ref's own SHA, or resolved it. */
+function pinnedOf(run, s) {
+	return run.pinned.get(`${remoteKey(s.ref.raw)}@${s.sha}`) ?? (/^[0-9a-f]{40}$/i.test(s.ref.ref) ? "sha-ref" : "resolved");
+}
+const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+const tokensOf = (host) => [host.api.token, host.fallback?.token].filter((t) => !!t);
+/** Text without any of the run's tokens. */
+/** Text without any of the run's tokens (the longest first, so one inside another leaves nothing), on one line. */
+const redact = (text, tokens) => printable$1([...tokens].sort((a, b) => b.length - a.length).reduce((out, t) => out.split(t).join("***"), text));
+/**
+* Control characters escaped: refs, lockfile keys and server text reach messages and log lines, where a newline could
+* start a workflow command (`::error::`) in the Action, and an escape sequence could rewrite a terminal.
+*/
+function printable$1(text) {
+	let out = "";
+	for (const c of text) {
+		const code = c.charCodeAt(0);
+		out += code < 32 || code >= 127 && code < 160 ? `\\u${code.toString(16).padStart(4, "0")}` : c;
+	}
+	return out;
+}
+//#endregion
 //#region ../node/src/tests.ts
 /** Where route tests live in a repository. */
 const TESTS_DIR = ".github/simulci/tests";
@@ -48955,6 +49905,177 @@ function diskSnapshotStore(root) {
 	};
 }
 //#endregion
+//#region src/remotes.ts
+/**
+* The remote workflows and actions the checkout uses, read with the `token` input, and what the action shows of
+* them: a remote's strings are another repository's text, so they are escaped before the log, an annotation or the
+* job summary, and an annotation inside a remote file moves to the `uses:` line in this repository that reaches it.
+*/
+/**
+* Events whose runs hold the base repository's token while a pull request chose the workflows: the pull request would
+* pick which repositories the token reads, and the plan would show what it read. On these nothing is read at all, not
+* even locked commits (the lockfile holds no bodies, so `lock` reads the network too).
+*/
+const UNTRUSTED_EVENTS = /* @__PURE__ */ new Set(["pull_request_target", "workflow_run"]);
+const MODES = /* @__PURE__ */ new Set([
+	"off",
+	"lock",
+	"fetch"
+]);
+const ACTIONS_LOCK_FILE = ".github/workflows/actions.lock";
+/** The `remotes` input checked: the mode, or why it is refused. `fetch` in test mode would let a moving tag decide. */
+function remotesMode(value, test) {
+	const mode = value || "lock";
+	if (!MODES.has(mode)) return { error: `remotes must be off, lock or fetch, not '${printable(value)}'` };
+	if (test && mode === "fetch") return { error: "remotes: fetch resolves refs live, so a test could pass today and fail when a tag moves; pin them with `simulci remotes update` and use lock" };
+	return mode;
+}
+/** `off` on an untrusted event, with a warning saying why; the mode asked for otherwise. */
+function effectiveMode(setup) {
+	const event = setup.env.GITHUB_EVENT_NAME ?? "";
+	if (setup.mode === "off" || !UNTRUSTED_EVENTS.has(event)) return setup.mode;
+	setup.warn(`remotes: off on ${event}: the run holds this repository's token while a pull request chose the workflows, so no remote workflow or action is read, and calls they lock show as not fetched. Run route tests on pull_request.`);
+	return "off";
+}
+/** The remotes the checkout's workflows reach, read as `mode` says, with the token sent only to `api-url`. */
+function readRemotes(root, workflows, setup) {
+	const apiUrl = setup.apiUrl || setup.env.GITHUB_API_URL || "https://api.github.com";
+	const api = githubAccess(setup.env, apiUrl, setup.token || void 0, () => void 0);
+	const fallback = setup.githubComToken ? githubComFallback({ GITHUB_COM_TOKEN: setup.githubComToken }, apiUrl) : void 0;
+	return loadRemotes(root, workflows, {
+		mode: setup.mode,
+		api: {
+			apiUrl: api.apiUrl,
+			...api.token ? { token: api.token } : {}
+		},
+		...fallback ? { fallback } : {},
+		...setup.fetch ? { fetch: setup.fetch } : {},
+		log: (line) => setup.log(`remotes: ${printable(line)}`)
+	});
+}
+/** The engine's files: the workflows and actions, and the lockfiles that pin their remotes. */
+function withLockfiles(root, workflows) {
+	const files = { ...workflows };
+	for (const path of [REMOTES_LOCK_FILE, ACTIONS_LOCK_FILE]) {
+		const abs = join(root, path);
+		if (existsSync(abs)) files[path] = readFileSync(abs, "utf8");
+	}
+	return files;
+}
+/** One line per remote that was not read; `access` says which token to pass. */
+function failureLines(failed) {
+	return failed.map((f) => {
+		const ref = printable(f.ref);
+		const repo = printable(f.ref.split("@")[0].split("/").slice(0, 2).join("/"));
+		const advice = `GITHUB_TOKEN reads only this repository and public ones. Pass a token that can read ${repo} as \`token\` (actions/create-github-app-token, or a fine-grained token).`;
+		if (f.failure === "access") return `${ref}: not read (access). ${advice}`;
+		const said = `${ref}: not read (${f.failure}): ${printable(f.message)}`;
+		return f.failure === "not-found" ? `${said}. If ${repo} is private: ${advice}` : said;
+	});
+}
+/**
+* The run with each failure's workflow line in this repository: a line inside a remote file moves to the `uses:` that
+* reaches it (the calling job's, or the step's for a remote action), and one the plan cannot place is dropped, so no
+* annotation names another repository's file.
+*/
+function inThisRepository(result, project) {
+	const local = new Set(Object.keys(project.files));
+	const uses = usesLines(project);
+	const files = result.files.map((file) => ({
+		...file,
+		cases: file.cases.map((c) => {
+			const anchors = c.plan ? remoteAnchors(c.plan, uses, local) : /* @__PURE__ */ new Map();
+			const failures = c.failures.map((f) => {
+				if (!f.workflowLoc || local.has(f.workflowLoc.file)) return f;
+				const { workflowLoc, ...rest } = f;
+				const anchor = anchors.get(workflowLoc.file);
+				return anchor ? {
+					...rest,
+					workflowLoc: anchor
+				} : rest;
+			});
+			return {
+				...c,
+				failures
+			};
+		})
+	}));
+	return {
+		...result,
+		files
+	};
+}
+/** An annotation's title and message as printable text (a remote's names reach both). */
+function printableAnnotation(a) {
+	return {
+		...a,
+		title: printable(a.title),
+		message: printable(a.message)
+	};
+}
+const keyOf = (loc) => `${loc.file}:${loc.line}:${loc.column}`;
+/** The `uses:` line of every local job and step, by where the job or step is declared. */
+function usesLines(project) {
+	const lines = /* @__PURE__ */ new Map();
+	const add = (decl) => {
+		if (decl.uses) lines.set(keyOf(decl.loc), at(decl.uses.loc));
+	};
+	for (const unit of project.index.units()) if (unit.kind === "workflow") for (const job of Object.values(unit.jobs)) {
+		add(job);
+		for (const step of job.steps) add(step);
+	}
+	else for (const step of unit.steps ?? []) add(step);
+	return lines;
+}
+const at = (loc) => ({
+	file: loc.file,
+	line: loc.line,
+	column: loc.column
+});
+/**
+* Every file the plan shows inside a remote, mapped to the local `uses:` line that reaches it: the outermost one, so a
+* remote called from a remote still lands in this repository. The first caller wins when two reach the same file.
+*/
+function remoteAnchors(plan, uses, local) {
+	const anchors = /* @__PURE__ */ new Map();
+	const remoteSteps = new Set((plan.remotes ?? []).filter((r) => r.kind === "action" && r.state === "simulated").flatMap((r) => r.at));
+	const anchorOf = (loc) => loc && (uses.get(keyOf(loc)) ?? loc);
+	const note = (node, anchor) => {
+		for (const file of filesIn(node)) if (!local.has(file) && !anchors.has(file)) anchors.set(file, anchor);
+	};
+	const step = (s) => {
+		if (!s.composite) return;
+		const anchor = remoteSteps.has(s.id) ? anchorOf(s.loc) : void 0;
+		if (anchor) note(s.composite, anchor);
+		else for (const inner of s.composite.steps) step(inner);
+	};
+	const workflow = (wf, anchor) => {
+		if (anchor) return note(wf, anchor);
+		for (const job of wf.jobs) for (const leg of job.legs) {
+			for (const s of leg.steps ?? []) step(s);
+			if (leg.call) workflow(leg.call, leg.call.remote ? anchorOf(job.loc) : void 0);
+		}
+	};
+	for (const wf of plan.workflows) workflow(wf, void 0);
+	return anchors;
+}
+/** The `file` of every location under a node of the plan. */
+function filesIn(node, out = /* @__PURE__ */ new Set()) {
+	if (Array.isArray(node)) for (const item of node) filesIn(item, out);
+	else if (node && typeof node === "object") {
+		const o = node;
+		if (typeof o.file === "string" && typeof o.line === "number") out.add(o.file);
+		for (const value of Object.values(o)) if (value && typeof value === "object") filesIn(value, out);
+	}
+	return out;
+}
+/**
+* Text as it may be shown: control characters other than tab and newline (an ESC starts a terminal sequence), and the
+* Unicode controls that reorder or break lines, written as `\uXXXX`.
+*/
+const UNPRINTABLE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]/g;
+const printable = (s) => s.replace(UNPRINTABLE, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+//#endregion
 //#region src/main.ts
 const OUTPUTS = [
 	"passed",
@@ -48962,7 +50083,8 @@ const OUTPUTS = [
 	"invalid",
 	"skipped"
 ];
-async function run(ports) {
+async function run(runner) {
+	const ports = shown(runner);
 	for (const name of OUTPUTS) ports.setOutput(name, 0);
 	ports.setOutput("exit-code", 2);
 	ports.setOutput("triggered", "");
@@ -48986,15 +50108,60 @@ async function run(ports) {
 		ports.fail(e.message);
 		return;
 	}
+	const remotes = remotesMode(ports.input("remotes"), mode === "test");
+	if (typeof remotes !== "string") {
+		ports.fail(remotes.error);
+		return;
+	}
+	const repository = ports.env.GITHUB_REPOSITORY || void 0;
 	const ctx = {
 		ports,
 		root,
 		dir,
 		workflows,
-		assume
+		assume,
+		remotes,
+		repository
 	};
 	if (mode === "plan") await plan(ctx);
 	else await test(ctx);
+}
+/** GitHub shows ten annotations of a kind per step: past five unread remotes, the log has them all. */
+const UNREAD_SHOWN = 5;
+function shownUnread(lines) {
+	if (lines.length <= UNREAD_SHOWN) return lines;
+	const rest = lines.length - 4;
+	return [...lines.slice(0, 4), `${rest} more remotes not read or lockfiles not used: see the log`];
+}
+/** The engine's files and remotes, read as the `remotes` input says (`off` on an untrusted event). */
+async function loadInputs(ctx) {
+	const { ports } = ctx;
+	const mode = effectiveMode({
+		mode: ctx.remotes,
+		env: ports.env,
+		warn: (m) => ports.warn(m)
+	});
+	const load = await readRemotes(ctx.root, ctx.workflows, {
+		mode,
+		token: ports.input("token"),
+		apiUrl: ports.input("api-url"),
+		githubComToken: ports.input("github-com-token"),
+		env: ports.env,
+		...ports.fetch ? { fetch: ports.fetch } : {},
+		log: (l) => ports.log(l)
+	});
+	const failed = failureLines(load.remotes.failed ?? []);
+	const lockErrors = load.lockErrors.map((e) => `not used: ${e}`);
+	const unread = [...failed, ...lockErrors];
+	const read = load.remotes.sources.length;
+	if (read + failed.length > 0) ports.log(`remotes: ${mode}, ${read} read, ${failed.length} not read\n`);
+	if (unread.length > UNREAD_SHOWN) ports.log(`${unread.join("\n")}\n`);
+	return {
+		files: withLockfiles(ctx.root, ctx.workflows),
+		mode,
+		remotes: load.remotes,
+		unread
+	};
 }
 async function test(ctx) {
 	const { ports, root } = ctx;
@@ -49004,20 +50171,29 @@ async function test(ctx) {
 		ports.fail(`T000 ${misplaced.join(", ")}: a test file under .github/workflows would be run by GitHub; put it under ${TESTS_DIR}`);
 		return;
 	}
+	const inputs = await loadInputs(ctx);
+	let project;
 	let result;
 	try {
-		result = runTests(loadFiles(ctx.workflows), readTests(root, files), testOptions(ctx));
+		project = loadFiles(inputs.files, {
+			...ctx.repository ? { repository: ctx.repository } : {},
+			remotes: inputs.remotes,
+			mode: inputs.mode
+		});
+		result = runTests(project, readTests(root, files), testOptions(ctx));
 	} catch (e) {
 		if (!(e instanceof MocksError || e instanceof TestsError)) throw e;
 		ports.fail(e.message);
 		return;
 	}
-	await reportTests(ctx, result);
+	await reportTests(ctx, inThisRepository(result, project));
 	for (const name of OUTPUTS) ports.setOutput(name, result.summary[name]);
-	ports.setOutput("exit-code", result.exitCode);
-	if (result.exitCode !== 0) {
+	const exitCode = inputs.unread.length ? 2 : result.exitCode;
+	ports.setOutput("exit-code", exitCode);
+	for (const line of shownUnread(inputs.unread)) ports.fail(line);
+	if (exitCode !== 0) {
 		const s = result.summary;
-		ports.fail(`simulci test: ${s.failed} failed, ${s.invalid} invalid, ${s.passed} passed (exit ${result.exitCode})`);
+		ports.fail(`simulci test: ${s.failed} failed, ${s.invalid} invalid, ${s.passed} passed (exit ${exitCode})`);
 	}
 }
 /** As `simulci test --ci`: snapshots are never written, a missing one fails. */
@@ -49048,13 +50224,19 @@ async function plan(ctx) {
 		ports.fail("scenario is required in plan mode: a YAML mapping such as { event: push, branch: main }");
 		return;
 	}
+	const inputs = await loadInputs(ctx);
+	for (const line of shownUnread(inputs.unread)) ports.warn(line);
 	let result;
 	try {
 		const scenario = (0, import_dist.parse)(text);
+		const repository = scenario?.repository === void 0 ? ctx.repository : void 0;
 		result = simulate({
-			files: ctx.workflows,
+			files: inputs.files,
 			scenario,
-			mocks: { cli: ctx.assume }
+			mocks: { cli: ctx.assume },
+			...repository ? { repository } : {},
+			remotes: inputs.remotes,
+			remotesMode: inputs.mode
 		});
 	} catch (e) {
 		if (!(e instanceof Error)) throw e;
@@ -49077,15 +50259,36 @@ function planSummary(result, title) {
 	return [
 		`## ${title}: ${result.scenario.id}`,
 		"",
-		"```",
-		text,
-		"```",
+		fenced(text),
 		"",
-		"```mermaid",
-		graph,
-		"```",
+		fenced(graph, "mermaid"),
 		""
 	].join("\n");
+}
+/** A code block no line of the text can close: its fence is longer than any run of backticks in it. */
+function fenced(text, info = "") {
+	const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((ticks) => ticks.length));
+	const fence = "`".repeat(Math.max(3, longest + 1));
+	return `${fence}${info}\n${text}\n${fence}`;
+}
+/**
+* Log text that cannot run a workflow command: the log shows other repositories' text, and between `stop-commands`
+* and its one-time token the runner reads no line as one (`::error`, `::add-mask`, `##[group]`, …).
+*/
+const withoutCommands = (text, resume) => `::stop-commands::${resume}\n${text.replace(/\n$/, "")}\n::${resume}::`;
+/**
+* The ports with every text a remote can reach made printable: the log, warnings, failures, annotations and the job
+* summary. (The log's lines are also kept from being read as workflow commands; see `index.ts`.)
+*/
+function shown(ports) {
+	return {
+		...ports,
+		log: (text) => ports.log(printable(text)),
+		warn: (message) => ports.warn(printable(message)),
+		fail: (message) => ports.fail(printable(message)),
+		annotate: (a) => ports.annotate(printableAnnotation(a)),
+		summary: (markdown) => ports.summary(printable(markdown))
+	};
 }
 /** Annotation paths are relative to the repository root; the tests' are relative to working-directory. */
 function inWorkspace(ctx, a) {
@@ -49127,6 +50330,10 @@ function bool(ports, name, fallback = false) {
 }
 //#endregion
 //#region src/index.ts
+for (const name of ["token", "github-com-token"]) {
+	const token = getInput(name).trim();
+	if (token) setSecret(token);
+}
 try {
 	await run({
 		input: (name) => getInput(name).trim(),
@@ -49145,9 +50352,11 @@ try {
 			summary.addRaw(markdown, true);
 			await summary.write();
 		},
-		log: (text) => info(text),
+		log: (text) => info(withoutCommands(text, randomUUID())),
+		warn: (message) => warning(message),
 		fail: (message) => setFailed(message),
-		workspace: process.env.GITHUB_WORKSPACE ?? process.cwd()
+		workspace: process.env.GITHUB_WORKSPACE ?? process.cwd(),
+		env: process.env
 	});
 } catch (e) {
 	setFailed(e instanceof Error ? e.message : String(e));
