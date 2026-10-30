@@ -11,7 +11,6 @@ import "child_process";
 import "timers";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { spawnSync } from "node:child_process";
 //#region \0rolldown/runtime.js
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -44602,7 +44601,7 @@ function parseFilters(ctx) {
 	if (text === void 0 || !text.includes(":")) return void 0;
 	let doc;
 	try {
-		doc = (0, import_dist.parse)(text);
+		doc = (0, import_dist.parse)(text, { logLevel: "error" });
 	} catch {
 		return;
 	}
@@ -45202,7 +45201,7 @@ const RemotesLockSchema = object({
 function parseRemotesLock(text) {
 	let data;
 	try {
-		data = (0, import_dist.parse)(text);
+		data = (0, import_dist.parse)(text, { logLevel: "error" });
 	} catch (e) {
 		return { error: `not valid YAML: ${e.message.split("\n")[0]}` };
 	}
@@ -47933,8 +47932,17 @@ function jobLabel(job) {
 	const verdict = job.runs.verdict === "yes" ? "" : job.runs.verdict === "no" ? " (skipped)" : " (maybe)";
 	return `${job.jobId}${legs}${verdict}`;
 }
-/** A quoted label: quotes and tags as Mermaid's entity codes, line breaks and control characters as spaces. */
-const escapeLabel = (s) => s.replace(/#/g, "#35;").replace(/"/g, "#quot;").replace(/</g, "#lt;").replace(/>/g, "#gt;").replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, " ");
+/**
+* A quoted label: quotes, tags and what a `%%{init}%%` directive is made of as Mermaid's entity codes, line breaks and
+* control characters as spaces.
+*/
+function escapeLabel(s) {
+	let flat = "";
+	for (const c of s) flat += breaks(c.charCodeAt(0)) ? " " : c;
+	return flat.replace(/#/g, "#35;").replace(/"/g, "#quot;").replace(/</g, "#lt;").replace(/>/g, "#gt;").replace(/%/g, "#37;").replace(/\{/g, "#123;").replace(/\}/g, "#125;");
+}
+/** A character that would end the statement it is in. */
+const breaks = (code) => code < 32 || code === 127 || code === 8232 || code === 8233;
 //#endregion
 //#region ../engine/src/render/reason.ts
 /** A value for a line of text: the value, or `?` with what it depends on. */
@@ -49583,67 +49591,6 @@ async function loadRemotes(root, files, host) {
 		issues: [...run.issues.values()].sort((a, b) => compare(a.message, b.message))
 	};
 }
-/** The GitHub CLI's token for a host, or undefined; never printed. */
-function ghAuthToken(host) {
-	const r = spawnSync("gh", [
-		"auth",
-		"token",
-		"--hostname",
-		host
-	], {
-		encoding: "utf8",
-		timeout: 1e4
-	});
-	return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : void 0;
-}
-/**
-* The variables whose token may go to `apiUrl`, as the GitHub CLI reads them: `GH_TOKEN` and `GITHUB_TOKEN` are
-* github.com's (and GHE.com's); a GitHub Enterprise Server's are `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`,
-* and `GITHUB_TOKEN` too when `apiUrl` is the runner's own `GITHUB_API_URL`. So a github.com token never goes to
-* another host because a URL option named one.
-*/
-function tokenVariables(env, apiUrl) {
-	const host = apiHost(apiUrl);
-	if (host === "github.com" || host.endsWith(".ghe.com")) return ["GH_TOKEN", "GITHUB_TOKEN"];
-	return [
-		"GH_ENTERPRISE_TOKEN",
-		"GITHUB_ENTERPRISE_TOKEN",
-		...env.GITHUB_API_URL !== void 0 && sameUrl(env.GITHUB_API_URL, apiUrl) ? ["GITHUB_TOKEN"] : []
-	];
-}
-const sameUrl = (a, b) => withoutTrailingSlashes(a) === withoutTrailingSlashes(b);
-/** A loop, not `/\/+$/`: a regex anchored after a repeat backtracks quadratically on a long run of `/` (CodeQL). */
-function withoutTrailingSlashes(url) {
-	let end = url.length;
-	while (end > 0 && url[end - 1] === "/") end--;
-	return url.slice(0, end);
-}
-/**
-* The API at `apiUrl` and its token: `given`, else the first set of the variables for its host (`GH_TOKEN`, then
-* `GITHUB_TOKEN`, for github.com; see `tokenVariables`), else the GitHub CLI's for the API's host (`gh auth token
-* --hostname`), else none (public repositories only).
-*/
-function githubAccess(env, apiUrl, given, gh = ghAuthToken) {
-	if (given) return {
-		apiUrl,
-		token: given,
-		tokenFrom: "option"
-	};
-	for (const name of tokenVariables(env, apiUrl)) {
-		const token = env[name];
-		if (token) return {
-			apiUrl,
-			token,
-			tokenFrom: name
-		};
-	}
-	const token = gh(apiHost(apiUrl));
-	return token ? {
-		apiUrl,
-		token,
-		tokenFrom: "gh"
-	} : { apiUrl };
-}
 /** github.com's API, for a GHES's runs that fall back to it: with `GITHUB_COM_TOKEN` or anonymously; none on github.com. */
 function githubComFallback(env, apiUrl) {
 	if (apiHost(apiUrl) === apiHost("https://api.github.com")) return void 0;
@@ -49912,11 +49859,16 @@ function diskSnapshotStore(root) {
 * job summary, and an annotation inside a remote file moves to the `uses:` line in this repository that reaches it.
 */
 /**
-* Events whose runs hold the base repository's token while a pull request chose the workflows: the pull request would
-* pick which repositories the token reads, and the plan would show what it read. On these nothing is read at all, not
-* even locked commits (the lockfile holds no bodies, so `lock` reads the network too).
+* Events whose runs hold the base repository's token while a pull request may have chosen the workflows: the pull
+* request would pick which repositories the token reads, and the plan would show what it read. On these nothing is read
+* at all, not even locked commits (the lockfile holds no bodies, so `lock` reads the network too). `issue_comment` is
+* here because anyone can comment on a public repository's pull request, and such runs often check its head out.
 */
-const UNTRUSTED_EVENTS = /* @__PURE__ */ new Set(["pull_request_target", "workflow_run"]);
+const UNTRUSTED_EVENTS = /* @__PURE__ */ new Set([
+	"pull_request_target",
+	"workflow_run",
+	"issue_comment"
+]);
 const MODES = /* @__PURE__ */ new Set([
 	"off",
 	"lock",
@@ -49939,19 +49891,27 @@ function effectiveMode(setup) {
 }
 /** The remotes the checkout's workflows reach, read as `mode` says, with the token sent only to `api-url`. */
 function readRemotes(root, workflows, setup) {
-	const apiUrl = setup.apiUrl || setup.env.GITHUB_API_URL || "https://api.github.com";
-	const api = githubAccess(setup.env, apiUrl, setup.token || void 0, () => void 0);
+	const apiUrl = apiUrlOf(setup);
+	const api = {
+		apiUrl,
+		...setup.token ? { token: setup.token } : {}
+	};
 	const fallback = setup.githubComToken ? githubComFallback({ GITHUB_COM_TOKEN: setup.githubComToken }, apiUrl) : void 0;
 	return loadRemotes(root, workflows, {
 		mode: setup.mode,
-		api: {
-			apiUrl: api.apiUrl,
-			...api.token ? { token: api.token } : {}
-		},
+		api,
 		...fallback ? { fallback } : {},
 		...setup.fetch ? { fetch: setup.fetch } : {},
 		log: (line) => setup.log(`remotes: ${printable(line)}`)
 	});
+}
+/** The API remotes are read from: `api-url`, else the runner's. */
+const apiUrlOf = (setup) => setup.apiUrl || setup.env.GITHUB_API_URL || "https://api.github.com";
+/** Why the token cannot go to `api-url`: over `http:` it would cross the network in the clear. */
+function insecureApi(setup) {
+	const apiUrl = apiUrlOf(setup);
+	if (!setup.token || apiUrl.toLowerCase().startsWith("https://")) return void 0;
+	return `api-url must be https:// when a token is set, not '${printable(apiUrl)}'`;
 }
 /** The engine's files: the workflows and actions, and the lockfiles that pin their remotes. */
 function withLockfiles(root, workflows) {
@@ -50061,20 +50021,38 @@ function remoteAnchors(plan, uses, local) {
 }
 /** The `file` of every location under a node of the plan. */
 function filesIn(node, out = /* @__PURE__ */ new Set()) {
-	if (Array.isArray(node)) for (const item of node) filesIn(item, out);
-	else if (node && typeof node === "object") {
-		const o = node;
-		if (typeof o.file === "string" && typeof o.line === "number") out.add(o.file);
-		for (const value of Object.values(o)) if (value && typeof value === "object") filesIn(value, out);
-	}
+	if (!node || typeof node !== "object") return out;
+	const o = node;
+	if (typeof o.file === "string" && typeof o.line === "number") out.add(o.file);
+	for (const value of Object.values(o)) filesIn(value, out);
 	return out;
 }
 /**
-* Text as it may be shown: control characters other than tab and newline (an ESC starts a terminal sequence), and the
-* Unicode controls that reorder or break lines, written as `\uXXXX`.
+* Text as it may be shown, in a log, a summary or an XML report: control characters other than tab and newline (an ESC
+* starts a terminal sequence, a CR rewrites a line), the Unicode controls that reorder or break lines, and what XML
+* refuses (U+FFFE, U+FFFF, a lone surrogate), written as `\uXXXX`.
 */
-const UNPRINTABLE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]/g;
-const printable = (s) => s.replace(UNPRINTABLE, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+function printable(s) {
+	let out = "";
+	for (const c of s) {
+		const code = c.codePointAt(0);
+		out += unprintable(code) ? `\\u${code.toString(16).padStart(4, "0")}` : c;
+	}
+	return out;
+}
+/** The code points shown escaped, as inclusive ranges. */
+const UNPRINTABLE = [
+	[0, 8],
+	[11, 31],
+	[127, 159],
+	[1564, 1564],
+	[8206, 8207],
+	[8232, 8238],
+	[8294, 8297],
+	[55296, 57343],
+	[65534, 65535]
+];
+const unprintable = (code) => UNPRINTABLE.some(([from, to]) => code >= from && code <= to);
 //#endregion
 //#region src/main.ts
 const OUTPUTS = [
@@ -50113,6 +50091,15 @@ async function run(runner) {
 		ports.fail(remotes.error);
 		return;
 	}
+	const insecure = insecureApi({
+		apiUrl: ports.input("api-url"),
+		env: ports.env,
+		token: ports.input("token")
+	});
+	if (insecure) {
+		ports.fail(insecure);
+		return;
+	}
 	const repository = ports.env.GITHUB_REPOSITORY || void 0;
 	const ctx = {
 		ports,
@@ -50133,7 +50120,6 @@ function shownUnread(lines) {
 	const rest = lines.length - 4;
 	return [...lines.slice(0, 4), `${rest} more remotes not read or lockfiles not used: see the log`];
 }
-/** The engine's files and remotes, read as the `remotes` input says (`off` on an untrusted event). */
 async function loadInputs(ctx) {
 	const { ports } = ctx;
 	const mode = effectiveMode({
@@ -50172,21 +50158,10 @@ async function test(ctx) {
 		return;
 	}
 	const inputs = await loadInputs(ctx);
-	let project;
-	let result;
-	try {
-		project = loadFiles(inputs.files, {
-			...ctx.repository ? { repository: ctx.repository } : {},
-			remotes: inputs.remotes,
-			mode: inputs.mode
-		});
-		result = runTests(project, readTests(root, files), testOptions(ctx));
-	} catch (e) {
-		if (!(e instanceof MocksError || e instanceof TestsError)) throw e;
-		ports.fail(e.message);
-		return;
-	}
-	await reportTests(ctx, inThisRepository(result, project));
+	const ran = runCases(ctx, inputs, files);
+	if (!ran) return;
+	const { result } = ran;
+	await reportTests(ctx, inThisRepository(result, ran.project));
 	for (const name of OUTPUTS) ports.setOutput(name, result.summary[name]);
 	const exitCode = inputs.unread.length ? 2 : result.exitCode;
 	ports.setOutput("exit-code", exitCode);
@@ -50194,6 +50169,24 @@ async function test(ctx) {
 	if (exitCode !== 0) {
 		const s = result.summary;
 		ports.fail(`simulci test: ${s.failed} failed, ${s.invalid} invalid, ${s.passed} passed (exit ${exitCode})`);
+	}
+}
+/** The project as the engine loads it, with its remotes, and the run of the test files; none when a file is refused. */
+function runCases(ctx, inputs, files) {
+	try {
+		const project = loadFiles(inputs.files, {
+			...ctx.repository ? { repository: ctx.repository } : {},
+			remotes: inputs.remotes,
+			mode: inputs.mode
+		});
+		return {
+			project,
+			result: runTests(project, readTests(ctx.root, files), testOptions(ctx))
+		};
+	} catch (e) {
+		if (!(e instanceof MocksError || e instanceof TestsError)) throw e;
+		ctx.ports.fail(e.message);
+		return;
 	}
 }
 /** As `simulci test --ci`: snapshots are never written, a missing one fails. */
@@ -50226,11 +50219,19 @@ async function plan(ctx) {
 	}
 	const inputs = await loadInputs(ctx);
 	for (const line of shownUnread(inputs.unread)) ports.warn(line);
-	let result;
+	const result = planOf(ctx, inputs, text);
+	if (!result) return;
+	ports.log(renderPlan(result, ports.input("format") || "text"));
+	if (bool(ports, "summary", true)) await ports.summary(planSummary(result, ports.input("title") || "simulci plan"));
+	ports.setOutput("triggered", result.workflows.filter((w) => w.triggered.verdict !== "no").length);
+	ports.setOutput("exit-code", 0);
+}
+/** The scenario's plan; none when the scenario is refused. */
+function planOf(ctx, inputs, text) {
 	try {
 		const scenario = (0, import_dist.parse)(text);
 		const repository = scenario?.repository === void 0 ? ctx.repository : void 0;
-		result = simulate({
+		return simulate({
 			files: inputs.files,
 			scenario,
 			mocks: { cli: ctx.assume },
@@ -50240,13 +50241,9 @@ async function plan(ctx) {
 		});
 	} catch (e) {
 		if (!(e instanceof Error)) throw e;
-		ports.fail(`scenario: ${e.message}`);
+		ctx.ports.fail(`scenario: ${e.message}`);
 		return;
 	}
-	ports.log(renderPlan(result, ports.input("format") || "text"));
-	if (bool(ports, "summary", true)) await ports.summary(planSummary(result, ports.input("title") || "simulci plan"));
-	ports.setOutput("triggered", result.workflows.filter((w) => w.triggered.verdict !== "no").length);
-	ports.setOutput("exit-code", 0);
 }
 function renderPlan(result, format) {
 	if (format === "json") return `${JSON.stringify(result, null, 2)}\n`;
@@ -50307,7 +50304,7 @@ function writeReport(ctx, path, content) {
 		return;
 	}
 	mkdirSync(dirname(file), { recursive: true });
-	writeFileSync(file, content);
+	writeFileSync(file, printable(content));
 	ctx.ports.setOutput("junit", file);
 }
 /** By real paths, so a symbolic link in the checkout cannot point the report elsewhere. */
@@ -50334,6 +50331,7 @@ for (const name of ["token", "github-com-token"]) {
 	const token = getInput(name).trim();
 	if (token) setSecret(token);
 }
+process.emitWarning = (warning) => info(withoutCommands(printable(String(warning)), randomUUID()));
 try {
 	await run({
 		input: (name) => getInput(name).trim(),
