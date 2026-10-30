@@ -190,7 +190,7 @@ describe('a remote action the host could not read', () => {
       {
         severity: 'warning',
         code: 'remote-fetch-failed',
-        message: `${NODE}: not read (not-found): HTTP 404`,
+        message: `${NODE}: not read (not-found)`,
         node: `${CI}#x/steps.a`,
       },
     ]);

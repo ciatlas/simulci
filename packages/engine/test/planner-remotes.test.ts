@@ -471,7 +471,7 @@ describe('a remote reusable workflow the plan cannot simulate', () => {
       {
         severity: 'warning',
         code: 'remote-fetch-failed',
-        message: `${DEPLOY}: not read (access): HTTP 404`,
+        message: `${DEPLOY}: not read (access)`,
         node: CALL,
       },
     ]);
@@ -696,6 +696,174 @@ dependencies:
     expect(p.remotes!.map((r) => r.ref)).toEqual([DEPLOY]);
     const off = simulate({ files, scenario: SCENARIO });
     expect(codes(off)).toEqual(['unsupported']);
+  });
+});
+
+describe('one row per remote, with the use that says most about its pin', () => {
+  const LOCK = '.github/simulci/remotes.lock.yml';
+  const BUILD = 'octo/ship/.github/workflows/build.yml@v1';
+  const leaf = 'on: workflow_call\njobs:\n  leaf:\n    runs-on: x\n    steps: [{ run: echo }]\n';
+  const actionsLock = (paths: string[]) =>
+    `version: v0.0.3\nworkflows:\n${paths.map((p) => `  ${p}:\n    - octo/act@v1\n`).join('')}dependencies:\n  octo/act@v1:\n    commit: sha1-${SHA_B}\n`;
+  const usingAct = 'on: push\njobs:\n  x:\n    runs-on: x\n    steps: [{ uses: octo/act@v1 }]\n';
+
+  it('keeps a ./ inside a remote apart from a direct ref shown alike', () => {
+    const files = {
+      [CI]: `on: push\njobs:\n  call:\n    uses: ${DEPLOY}\n  build:\n    uses: ${BUILD}\n`,
+      [LOCK]: `version: 1\nremotes:\n  octo/ship/.github/workflows/build.yml@${SHA}:\n    sha: ${'c'.repeat(40)}\n    kind: workflow\n    file: x\n    digest: sha256-${'A'.repeat(43)}=\n`,
+    };
+    const outer = 'on: workflow_call\njobs:\n  inner:\n    uses: ./.github/workflows/build.yml\n';
+    const p = planWith({ sources: [source(DEPLOY, outer), source(BUILD, leaf, SHA_B)] }, files);
+    expect(p.remotes!.map((r) => [r.ref, r.state, r.sha, r.at])).toEqual([
+      [BUILD, 'simulated', SHA_B, [`${CI}#build`]],
+      [BUILD, 'not-fetched', undefined, [`${CALL}>${DEPLOY}#inner`]],
+      [DEPLOY, 'simulated', SHA, [CALL]],
+    ]);
+    expect(p.diagnostics.filter((d) => d.code === 'remote-pin-mismatch')).toEqual([
+      expect.objectContaining({
+        node: `${CALL}>${DEPLOY}#inner`,
+        message: expect.stringContaining('(its parent)'),
+      }),
+    ]);
+  });
+
+  it('lists case variants of one remote once', () => {
+    const files = {
+      [CI]: `on: push\njobs:\n  a:\n    uses: Octo/Ship/.github/workflows/deploy.yml@v1\n  b:\n    uses: ${DEPLOY}\n`,
+    };
+    expect(planWith({ sources: [] }, files).remotes!.map((r) => r.at)).toEqual([[`${CI}#a`, `${CI}#b`]]);
+  });
+
+  it('pins an action a covered workflow uses although an uncovered one uses it first', () => {
+    const files = {
+      '.github/workflows/a.yml': usingAct,
+      [CI]: usingAct,
+      '.github/workflows/actions.lock': actionsLock([CI]),
+    };
+    expect(remotesNeeded(loadFiles(files), 'lock')).toEqual([
+      { ref: 'octo/act@v1', kind: 'action', depth: 1, pin: { sha: SHA_B, pinned: 'actions-lock' } },
+    ]);
+  });
+
+  it('pins an action of a local composite under the workflow that runs it', () => {
+    const files = {
+      [CI]: 'on: push\njobs:\n  x:\n    runs-on: x\n    steps: [{ uses: ./.github/actions/a }]\n',
+      '.github/actions/a/action.yml': 'runs:\n  using: composite\n  steps: [{ uses: octo/act@v1 }]\n',
+      '.github/workflows/actions.lock': actionsLock([CI]),
+      [LOCK]: `version: 1\nremotes:\n  octo/act@v1:\n    sha: ${SHA}\n    kind: action\n    file: action.yml\n    digest: sha256-${'A'.repeat(43)}=\n`,
+    };
+    expect(remotesNeeded(loadFiles(files), 'lock').map((r) => r.pin)).toEqual([
+      { sha: SHA_B, pinned: 'actions-lock' },
+    ]);
+    const p = planWith({ sources: [] }, files);
+    expect(p.diagnostics.map((d) => [d.code, d.node])).toEqual([
+      ['remote-pin-mismatch', `${CI}#x/~github-actions-a>.github/actions/a/~octo-act`],
+    ]);
+  });
+
+  it('says a fetch-mode plan resolved a ref live, and that a lockfile it cannot read pins nothing', () => {
+    const files = { [CI]: caller, [LOCK]: 'version: 1\nremotes: {}\n' };
+    const resolved = [{ ...source(DEPLOY, deploy), pinned: 'resolved' as const }];
+    const fetched = simulate({
+      files,
+      scenario: SCENARIO,
+      remotes: { sources: resolved },
+      remotesMode: 'fetch',
+    });
+    expect(codes(fetched)).toEqual(['remote-unpinned']);
+    const broken = simulate({
+      files: { [CI]: caller, [LOCK]: 'version: 2\n' },
+      scenario: SCENARIO,
+      remotes: { sources: resolved },
+    });
+    expect(broken.diagnostics).toEqual([
+      expect.objectContaining({ code: 'remotes-lock-invalid', severity: 'warning' }),
+    ]);
+  });
+});
+
+describe('a remote’s own full refs, mocks by the shown ref, and no commit in a snapshot', () => {
+  const AT_PARENT = `octo/ship/.github/workflows/build.yml@${SHA}`;
+  const leaf =
+    'on: workflow_call\njobs:\n  leaf:\n    runs-on: x\n    outputs:\n      w: ${{ github.workflow }}\n    steps: [{ run: echo }]\n';
+  const outer = 'on: workflow_call\njobs:\n  inner:\n    uses: ./.github/workflows/build.yml\n';
+  const files = { [CI]: `on: push\njobs:\n  call:\n    uses: ${DEPLOY}\n` };
+
+  it('runs a full ref to the remote’s own repository at its own ref (lab R10)', () => {
+    const own = 'octo/ship/.github/workflows/c.yml@v2';
+    const body = `on: workflow_call\njobs:\n  inner:\n    uses: ${own}\n  step:\n    runs-on: x\n    steps: [{ uses: octo/ship/.github/actions/a@v2 }]\n`;
+    const loaded = loadFiles(files, { remotes: { sources: [source(DEPLOY, body)] } });
+    expect(remotesNeeded(loaded, 'fetch').map((r) => [r.ref, r.pin])).toEqual([
+      ['octo/ship/.github/actions/a@v2', undefined],
+      [own, undefined],
+    ]);
+    const p = planWith({ sources: [source(DEPLOY, body), source(own, leaf, SHA_B)] }, files);
+    expect(callee(p)!.jobs[0]!.legs[0]!.call).toMatchObject({
+      id: `${CALL}>${DEPLOY}#inner>${own}`,
+      remote: { ref: own, sha: SHA_B },
+    });
+  });
+
+  it('matches a uses: mock on a remote’s ./ by the ref the plan shows, never by its text', () => {
+    const remotes = {
+      sources: [source(DEPLOY, outer), { ...source(AT_PARENT, leaf), pinned: 'parent' as const }],
+    };
+    const local = {
+      ...files,
+      [CI]: `${files[CI]}  mine:\n    uses: ./.github/workflows/build.yml\n`,
+      '.github/workflows/build.yml': leaf,
+    };
+    const results = (assume: AssumeEntry[]) => {
+      const p = simulate({ files: local, scenario: SCENARIO, remotes, assume });
+      return [callee(p)!.jobs[0]!.result, job(p, 'mine').result, codes(p)];
+    };
+    const failure = { known: true, value: 'failure' };
+    const success = { known: true, value: 'success' };
+    expect(results([{ uses: 'octo/ship/.github/workflows/build.yml', outcome: 'failure' }])).toEqual([
+      failure,
+      success,
+      [],
+    ]);
+    expect(results([{ uses: './.github/workflows/build.yml', outcome: 'failure' }])).toEqual([
+      success,
+      failure,
+      [],
+    ]);
+  });
+
+  it('keeps the parent’s commit out of github.workflow and out of a failure', () => {
+    const at = (sha: string) =>
+      canonicalize(
+        planWith(
+          {
+            sources: [
+              source(DEPLOY, outer, sha),
+              { ...source(AT_PARENT.replace(SHA, sha), leaf, sha), pinned: 'parent' },
+            ],
+          },
+          files,
+        ),
+        'snapshot',
+      );
+    expect(JSON.stringify(at(SHA))).not.toContain(SHA);
+    expect(at(SHA)).toEqual(at(SHA_B));
+    const failed = (message: string) =>
+      canonicalize(
+        planWith(
+          { sources: [], failed: [{ ref: DEPLOY, kind: 'workflow', failure: 'not-found', message }] },
+          files,
+        ),
+        'snapshot',
+      );
+    expect(failed(`not found at ${SHA.slice(0, 7)}`)).toEqual(failed(`not found at ${SHA_B.slice(0, 7)}`));
+  });
+
+  it('keeps the same failure whatever order the host gave two of one remote in', () => {
+    const a = { ref: DEPLOY, kind: 'workflow' as const, failure: 'access' as const, message: '' };
+    const b = { ...a, ref: DEPLOY.replace('octo/ship', 'Octo/Ship'), failure: 'timeout' as const };
+    expect(planWith({ sources: [], failed: [a, b] }, files)).toEqual(
+      planWith({ sources: [], failed: [b, a] }, files),
+    );
   });
 });
 
