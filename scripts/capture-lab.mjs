@@ -212,8 +212,8 @@ async function capture(run) {
 
 /**
  * The repository's pushes, oldest first: branch pushes and creations from the activity API (which lists no tags),
- * then each tag at its commit. `workflows` are the files whose `push` runs started for that ref and commit; an empty
- * list is a push that started nothing.
+ * then each tag at its commit. `present` are the workflow files of the pushed commit, `workflows` those whose `push`
+ * runs it started for that ref and commit; a present file that is not in `workflows` did not trigger.
  */
 async function pushes(runs) {
   const activity = (await paginate('/activity'))
@@ -242,7 +242,11 @@ async function pushes(runs) {
       ),
     ].sort((a, b) => a.localeCompare(b));
     const message = (await api(`/commits/${e.sha}`)).commit.message;
-    out.push({ kind: e.kind, ref: e.ref, sha: e.sha, message, changed: files, workflows });
+    const present = (await api(`/git/trees/${e.sha}?recursive=1`)).tree
+      .map((t) => t.path)
+      .filter((path) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(path))
+      .sort((a, b) => a.localeCompare(b));
+    out.push({ kind: e.kind, ref: e.ref, sha: e.sha, message, changed: files, present, workflows });
   }
   return out;
 }

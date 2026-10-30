@@ -13,9 +13,11 @@ The engine is only tested on what the oracle observed: a run means "this input p
 
 ## The workflows
 
-`repo/` is the lab repository's `.github/` tree and README at the last run-starting commit
-(`e623802ba524a344c2033c94c438a38fe0e8c07f`), so the engine can simulate exactly what the runs executed. Workflows
-under `fixtures/` are inert for GitHub; the one true copy is the lab repository.
+`repo/` is the lab repository's `.github/` tree and README at `main`'s head
+(`40610550821392d10214c8dd5a72dc780ec106d5`). The runs in `expected.json` executed the same status-case files at
+`e623802…` (later commits only added files), so the engine can simulate exactly what they ran; the branch
+`probe/r10` differs from it in one line of `callee-r10.yml` (`branch` for `main`). Workflows under `fixtures/` are
+inert for GitHub; the one true copy is the lab repository.
 
 ## Re-capturing
 
@@ -28,7 +30,7 @@ node scripts/capture-lab.mjs --repo ciatlas/simulci-lab --only case-remote- --re
 
 The second form is the remote cases (below). Uses `GITHUB_TOKEN` or `GH_TOKEN`, else the `gh` CLI's token; without
 `--out` the JSON goes to stdout; `--run <id>` (repeatable) captures only those runs; `--only` and `--except` select
-runs by a pattern on the workflow path; `--remotes` adds, per run, the commit each called workflow resolved to
+runs by a substring of the workflow path; `--remotes` adds, per run, the commit each called workflow resolved to
 (`referenced`, from the run's `referenced_workflows`) and, per job, the commit of each action it downloaded
 (`actions`, from the log's `Download action repository` lines); requests answered with a 5xx are retried twice.
 Runs are ordered by id, jobs and checks by name, steps by number and probes by label, and the file carries no
@@ -46,8 +48,9 @@ same data as prose.
 
 ## The lab's state behind this capture
 
-`main` is at `5e594693380fa34235983969abd581e7523d7cb8` (a README-only commit with `[skip ci]`, which started no run;
-the last commit that did is `e623802…`). The pushes, in order, and what each one exercised:
+`main` is at `40610550821392d10214c8dd5a72dc780ec106d5`; the last push that started a run was the branch `probe/pr`
+(`0ca8d4f…`), and every later one carries `[skip ci]`. `pushes.json` holds the same pushes as data. In order, and what
+each one exercised:
 
 | Commit | Push | Exercised |
 |---|---|---|
@@ -57,8 +60,12 @@ the last commit that did is `e623802…`). The pushes, in order, and what each o
 | `37e44101431bc8c46dc3ba1631d9dcf92cda5ea3` | tag `v0.0.1` (on the same commit) | `tags: v*` runs, `branches: [main]` + `paths` does not; path filters are ignored for tags; bare `on: push` runs again |
 | `e623802ba524a344c2033c94c438a38fe0e8c07f` | `main`, `docs/skip.md`, message with `[skip ci]` | no push run at all; `workflow_dispatch` of `case-skip-ci` and `case-unknown-or-true` on this commit |
 | `0ca8d4f44a28f6d4444d9fc36f355dcd476f8f48` | branch `probe/pr`, `docs/pr.md` only; then pull request #1, then the label `probe` | bare `on: push` runs for the branch, `branches: [main]` does not; `pull_request` runs on `opened`, `types: [labeled]` on `labeled` |
+| `5e594693380fa34235983969abd581e7523d7cb8` | `main`, README only, `[skip ci]` | nothing |
+| `203597779b990c61f6150bb92b814055eb0241f8` | `main`, two `[skip ci]` commits: the remote cases R1-R10 and the R9 lock | nothing; round 1 of the remote cases dispatched on it |
+| `17ffb5026c98fd5c4f89afaca363a83510acfb8f` | branch `probe/r10`, `callee-r10.yml` only, `[skip ci]` | nothing; the R10 callers dispatched on it |
+| `40610550821392d10214c8dd5a72dc780ec106d5` | `main`, the R7 depth 12-21 callers, `[skip ci]` | nothing; round 2 dispatched on it |
 
-Every status case therefore ran five times (three `main` pushes that start workflows, the tag, the branch): 115
+The remote cases' runs are in `expected-remote.json`, not `expected.json`. Every status case ran five times (three `main` pushes that start workflows, the tag, the branch): 115
 runs. Job conclusions and probe values were identical across the five runs of every case, with two artifacts of
 timing that `cases.md` names where they occur: the step conclusion inside a leg that fail-fast cancelled, and the
 key order of a `toJSON(needs.<id>.outputs)` string.
@@ -90,3 +97,9 @@ commits for them all carry `[skip ci]`, and the callers run on `workflow_dispatc
 5. Move: push `b` to `main` and force `v1` to `b` in both remote repositories.
 6. Round 2: dispatch R2 (`relative-workflow`, `self`), R5 and the four R9 callers on `main`.
 7. Capture with the second command above; the `referenced` and `actions` SHAs say which round a run was.
+
+It ran so on 2026-10-30, with one addition: `remote-nesting-11` ran, so the R7 callers for depths 12 to 21, with
+local links (`callee-r7-wrap-*.yml`) in front of the remote chain, were pushed (`4061055…`) and dispatched before the
+move. GitHub refused 14 dispatches outright (depths 12-21, `total-51`, and `actions-lock-missing` in both rounds);
+a refused dispatch leaves no run, so `refused.json` records each answer as the dispatch API gave it, the one file
+here written from a response rather than by the capture.

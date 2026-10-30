@@ -1,0 +1,3808 @@
+{
+  "source": "https://github.com/ciatlas/simulci-lab (private)",
+  "how": "node scripts/capture-lab.mjs --repo ciatlas/simulci-lab --only case-remote- --remotes --out fixtures/routes-lab/expected-remote.json",
+  "runs": [
+    {
+      "runId": 41018309046,
+      "workflow": ".github/workflows/case-remote-actions-lock-local-callee.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab/.github/workflows/callee-r9-steps.yml@203597779b990c61f6150bb92b814055eb0241f8",
+          "ref": "refs/heads/main",
+          "sha": "203597779b990c61f6150bb92b814055eb0241f8"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "call / a",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "remote action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r9-action": "a"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@v1": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "call / a",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018314841,
+      "workflow": ".github/workflows/case-remote-actions-lock-uncovered.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [],
+      "jobs": [
+        {
+          "name": "a",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "remote action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r9-action": "a"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@v1": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "a",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018317647,
+      "workflow": ".github/workflows/case-remote-actions-lock.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [],
+      "jobs": [
+        {
+          "name": "a",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "remote action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r9-action": "a"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@v1": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "a",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018320628,
+      "workflow": ".github/workflows/case-remote-composite-outputs.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [],
+      "jobs": [
+        {
+          "name": "a",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "composite action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r8-inner": "ran",
+            "steps.c.outputs": "{\"o\":\"x\"}",
+            "steps.c.outputs.extra": "",
+            "steps.c.outputs.o": "x"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@d19def8c3562ef6c1be3f12443345575530f1ac4": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "a",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018330213,
+      "workflow": ".github/workflows/case-remote-nesting-10.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-10.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-2.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-3.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-4.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-5.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-6.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-7.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-8.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-9.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "call / next / next / next / next / next / next / next / next / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-chain-leaf": "ran"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "call / next / next / next / next / next / next / next / next / leaf",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018339798,
+      "workflow": ".github/workflows/case-remote-nesting-11.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-1.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-10.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-2.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-3.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-4.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-5.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-6.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-7.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-8.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-9.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "call / next / next / next / next / next / next / next / next / next / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-chain-leaf": "ran"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "call / next / next / next / next / next / next / next / next / next / leaf",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018342420,
+      "workflow": ".github/workflows/case-remote-node-undeclared-output.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [],
+      "jobs": [
+        {
+          "name": "a",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "node action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r4-node": "ran",
+            "steps.n.outputs": "{\"declared\":\"d\",\"undeclared\":\"u\"}",
+            "steps.n.outputs.declared": "d",
+            "steps.n.outputs.undeclared": "u"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@d19def8c3562ef6c1be3f12443345575530f1ac4": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "a",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018346633,
+      "workflow": ".github/workflows/case-remote-relative-workflow.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-inner.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-outer.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-outer.yml@v1",
+          "ref": "refs/tags/v1",
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "b",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "needs.by-sha.outputs.inner": "remote-a",
+            "needs.by-sha.result": "success",
+            "needs.by-tag.outputs.inner": "remote-a",
+            "needs.by-tag.result": "success"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-sha / inner / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-inner": "remote-a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-sha / outer",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-outer": "remote-a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-tag / inner / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-inner": "remote-a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-tag / outer",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-outer": "remote-a"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "b",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-sha / inner / m",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-sha / outer",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-tag / inner / m",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-tag / outer",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018350602,
+      "workflow": ".github/workflows/case-remote-reusable-outputs.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r1-echo.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r1-skipped.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "b",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "needs.echo.outputs": "{\"o\":\"hello\"}",
+            "needs.echo.outputs.o": "hello",
+            "needs.echo.result": "success",
+            "needs.not-called.result": "skipped",
+            "needs.skipped.outputs": "{\"o\":\"\"}",
+            "needs.skipped.outputs.o": "",
+            "needs.skipped.result": "skipped"
+          },
+          "actions": {}
+        },
+        {
+          "name": "c",
+          "conclusion": "skipped",
+          "steps": [],
+          "probes": {},
+          "actions": {}
+        },
+        {
+          "name": "echo / x",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "write",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r1-echo-x": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "not-called",
+          "conclusion": "skipped",
+          "steps": [],
+          "probes": {},
+          "actions": {}
+        },
+        {
+          "name": "skipped / x",
+          "conclusion": "skipped",
+          "steps": [],
+          "probes": {},
+          "actions": {}
+        },
+        {
+          "name": "skipped / y",
+          "conclusion": "skipped",
+          "steps": [],
+          "probes": {},
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "b",
+          "conclusion": "success"
+        },
+        {
+          "name": "c",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "echo / x",
+          "conclusion": "success"
+        },
+        {
+          "name": "not-called",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "skipped / x",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "skipped / y",
+          "conclusion": "skipped"
+        }
+      ]
+    },
+    {
+      "runId": 41018353770,
+      "workflow": ".github/workflows/case-remote-same-repo-ref.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab/.github/workflows/callee-r10.yml@203597779b990c61f6150bb92b814055eb0241f8",
+          "ref": "refs/heads/main",
+          "sha": "203597779b990c61f6150bb92b814055eb0241f8"
+        },
+        {
+          "path": "ciatlas/simulci-lab/.github/workflows/callee-r10.yml@main",
+          "ref": "refs/heads/main",
+          "sha": "203597779b990c61f6150bb92b814055eb0241f8"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "full-ref / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r10-copy": "main"
+          },
+          "actions": {}
+        },
+        {
+          "name": "relative / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r10-copy": "main"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "full-ref / m",
+          "conclusion": "success"
+        },
+        {
+          "name": "relative / m",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018356570,
+      "workflow": ".github/workflows/case-remote-same-repo-self.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab/.github/workflows/callee-r10.yml@203597779b990c61f6150bb92b814055eb0241f8",
+          "ref": "refs/heads/main",
+          "sha": "203597779b990c61f6150bb92b814055eb0241f8"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "self / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r10-copy": "main"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "self / m",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018360806,
+      "workflow": ".github/workflows/case-remote-secrets-inherit.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r6-secrets.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "rumankazi/simulci-lab-remote/.github/workflows/callee-r6-secrets.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "b",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "needs.other-owner.result": "success",
+            "needs.same-owner.result": "success"
+          },
+          "actions": {}
+        },
+        {
+          "name": "other-owner / s",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "github-token": "true",
+            "lab-secret": "false",
+            "owner": "ciatlas"
+          },
+          "actions": {}
+        },
+        {
+          "name": "same-owner / s",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "github-token": "true",
+            "lab-secret": "true",
+            "owner": "ciatlas"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "b",
+          "conclusion": "success"
+        },
+        {
+          "name": "other-owner / s",
+          "conclusion": "success"
+        },
+        {
+          "name": "same-owner / s",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018365143,
+      "workflow": ".github/workflows/case-remote-self.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-inner.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-self.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "b",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "needs.call.result": "success"
+          },
+          "actions": {}
+        },
+        {
+          "name": "call / inner / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-inner": "remote-a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "call / step",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "self action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-self-action": "remote-a"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@d19def8c3562ef6c1be3f12443345575530f1ac4": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "b",
+          "conclusion": "success"
+        },
+        {
+          "name": "call / inner / m",
+          "conclusion": "success"
+        },
+        {
+          "name": "call / step",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018369193,
+      "workflow": ".github/workflows/case-remote-tag-vs-sha.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@main",
+          "ref": "refs/heads/main",
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@v1",
+          "ref": "refs/tags/v1",
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "by-branch / v",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r5-version": "a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-sha / v",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r5-version": "a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-tag / v",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r5-version": "a"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "by-branch / v",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-sha / v",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-tag / v",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018373125,
+      "workflow": ".github/workflows/case-remote-total-50.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-01.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-02.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-03.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-04.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-05.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-06.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-07.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-08.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-09.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-10.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-11.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-12.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-13.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-14.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-15.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-16.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-17.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-18.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-19.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-20.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-21.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-22.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-23.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-24.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-25.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-26.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-27.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-28.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-29.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-30.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-31.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-32.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-33.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-34.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-35.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-36.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-37.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-38.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-39.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-40.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-41.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-42.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-43.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-44.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-45.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-46.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-47.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-48.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-49.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-50.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "f01 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-01": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f02 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-02": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f03 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-03": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f04 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-04": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f05 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-05": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f06 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-06": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f07 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-07": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f08 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-08": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f09 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-09": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f10 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-10": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f11 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-11": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f12 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-12": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f13 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-13": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f14 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-14": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f15 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-15": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f16 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-16": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f17 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-17": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f18 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-18": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f19 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-19": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f20 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-20": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f21 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-21": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f22 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-22": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f23 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-23": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f24 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-24": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f25 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-25": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f26 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-26": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f27 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-27": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f28 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-28": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f29 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-29": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f30 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-30": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f31 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-31": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f32 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-32": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f33 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-33": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f34 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-34": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f35 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-35": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f36 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-36": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f37 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-37": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f38 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-38": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f39 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-39": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f40 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-40": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f41 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-41": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f42 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-42": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f43 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-43": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f44 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-44": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f45 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-45": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f46 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-46": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f47 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-47": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f48 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-48": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f49 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-49": "ran"
+          },
+          "actions": {}
+        },
+        {
+          "name": "f50 / leaf",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r7-fan-50": "ran"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "f01 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f02 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f03 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f04 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f05 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f06 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f07 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f08 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f09 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f10 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f11 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f12 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f13 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f14 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f15 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f16 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f17 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f18 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f19 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f20 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f21 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f22 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f23 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f24 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f25 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f26 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f27 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f28 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f29 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f30 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f31 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f32 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f33 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f34 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f35 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f36 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f37 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f38 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f39 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f40 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f41 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f42 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f43 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f44 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f45 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f46 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f47 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f48 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f49 / leaf",
+          "conclusion": "success"
+        },
+        {
+          "name": "f50 / leaf",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018379525,
+      "workflow": ".github/workflows/case-remote-workspace-action.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "test(lab): lock the R9 workflows, then add a step the lock lacks [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r3-workspace.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "b",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "needs.call.result": "success"
+          },
+          "actions": {}
+        },
+        {
+          "name": "call / bare",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "local action, no checkout",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "bare.outcome": "failure"
+          },
+          "actions": {}
+        },
+        {
+          "name": "call / checkout",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "checkout",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "local action after checkout",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 8,
+              "name": "Post checkout",
+              "conclusion": "success"
+            },
+            {
+              "number": 9,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "checkout.outcome": "success",
+            "checkout.repository": "ciatlas/simulci-lab",
+            "r3-action": "caller"
+          },
+          "actions": {
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "3d3c42e5aac5ba805825da76410c181273ba90b1"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "b",
+          "conclusion": "success"
+        },
+        {
+          "name": "call / bare",
+          "conclusion": "success"
+        },
+        {
+          "name": "call / checkout",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018382553,
+      "workflow": ".github/workflows/case-remote-same-repo-ref.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/probe/r10",
+      "sha": "17ffb5026c98fd5c4f89afaca363a83510acfb8f",
+      "message": "test(lab): the branch copy of callee-r10 says branch [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab/.github/workflows/callee-r10.yml@17ffb5026c98fd5c4f89afaca363a83510acfb8f",
+          "ref": "refs/heads/probe/r10",
+          "sha": "17ffb5026c98fd5c4f89afaca363a83510acfb8f"
+        },
+        {
+          "path": "ciatlas/simulci-lab/.github/workflows/callee-r10.yml@main",
+          "ref": "refs/heads/main",
+          "sha": "203597779b990c61f6150bb92b814055eb0241f8"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "full-ref / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r10-copy": "main"
+          },
+          "actions": {}
+        },
+        {
+          "name": "relative / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r10-copy": "branch"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "full-ref / m",
+          "conclusion": "success"
+        },
+        {
+          "name": "relative / m",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018386125,
+      "workflow": ".github/workflows/case-remote-same-repo-self.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/probe/r10",
+      "sha": "17ffb5026c98fd5c4f89afaca363a83510acfb8f",
+      "message": "test(lab): the branch copy of callee-r10 says branch [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab/.github/workflows/callee-r10.yml@17ffb5026c98fd5c4f89afaca363a83510acfb8f",
+          "ref": "refs/heads/probe/r10",
+          "sha": "17ffb5026c98fd5c4f89afaca363a83510acfb8f"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "self / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r10-copy": "branch"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "self / m",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018675143,
+      "workflow": ".github/workflows/case-remote-relative-workflow.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "test(lab): deeper trees for case R7 [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-inner.yml@38a93ff01695fd104bfe8bc8b79ceeae91206ddc",
+          "ref": "refs/tags/v1",
+          "sha": "38a93ff01695fd104bfe8bc8b79ceeae91206ddc"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-inner.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-outer.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-outer.yml@v1",
+          "ref": "refs/tags/v1",
+          "sha": "38a93ff01695fd104bfe8bc8b79ceeae91206ddc"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "b",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "needs.by-sha.outputs.inner": "remote-a",
+            "needs.by-sha.result": "success",
+            "needs.by-tag.outputs.inner": "remote-b",
+            "needs.by-tag.result": "success"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-sha / inner / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-inner": "remote-a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-sha / outer",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-outer": "remote-a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-tag / inner / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-inner": "remote-b"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-tag / outer",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-outer": "remote-b"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "b",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-sha / inner / m",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-sha / outer",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-tag / inner / m",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-tag / outer",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018679619,
+      "workflow": ".github/workflows/case-remote-self.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "test(lab): deeper trees for case R7 [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-inner.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r2-self.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "b",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "needs.call.result": "success"
+          },
+          "actions": {}
+        },
+        {
+          "name": "call / inner / m",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-inner": "remote-a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "call / step",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "self action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r2-self-action": "remote-a"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@d19def8c3562ef6c1be3f12443345575530f1ac4": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "b",
+          "conclusion": "success"
+        },
+        {
+          "name": "call / inner / m",
+          "conclusion": "success"
+        },
+        {
+          "name": "call / step",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018683511,
+      "workflow": ".github/workflows/case-remote-tag-vs-sha.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "test(lab): deeper trees for case R7 [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@d19def8c3562ef6c1be3f12443345575530f1ac4",
+          "ref": null,
+          "sha": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@main",
+          "ref": "refs/heads/main",
+          "sha": "38a93ff01695fd104bfe8bc8b79ceeae91206ddc"
+        },
+        {
+          "path": "ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@v1",
+          "ref": "refs/tags/v1",
+          "sha": "38a93ff01695fd104bfe8bc8b79ceeae91206ddc"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "by-branch / v",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r5-version": "b"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-sha / v",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r5-version": "a"
+          },
+          "actions": {}
+        },
+        {
+          "name": "by-tag / v",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "probe",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r5-version": "b"
+          },
+          "actions": {}
+        }
+      ],
+      "checks": [
+        {
+          "name": "by-branch / v",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-sha / v",
+          "conclusion": "success"
+        },
+        {
+          "name": "by-tag / v",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018686667,
+      "workflow": ".github/workflows/case-remote-actions-lock.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "test(lab): deeper trees for case R7 [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [],
+      "jobs": [
+        {
+          "name": "a",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "remote action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r9-action": "a"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@v1": "d19def8c3562ef6c1be3f12443345575530f1ac4"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "a",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018689681,
+      "workflow": ".github/workflows/case-remote-actions-lock-uncovered.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "test(lab): deeper trees for case R7 [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [],
+      "jobs": [
+        {
+          "name": "a",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "remote action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r9-action": "b"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@v1": "38a93ff01695fd104bfe8bc8b79ceeae91206ddc"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "a",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "runId": 41018692595,
+      "workflow": ".github/workflows/case-remote-actions-lock-local-callee.yml",
+      "event": "workflow_dispatch",
+      "action": null,
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "test(lab): deeper trees for case R7 [skip ci]",
+      "changed": null,
+      "conclusion": "success",
+      "referenced": [
+        {
+          "path": "ciatlas/simulci-lab/.github/workflows/callee-r9-steps.yml@40610550821392d10214c8dd5a72dc780ec106d5",
+          "ref": "refs/heads/main",
+          "sha": "40610550821392d10214c8dd5a72dc780ec106d5"
+        }
+      ],
+      "jobs": [
+        {
+          "name": "call / a",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "remote action",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "probes": {
+            "r9-action": "b"
+          },
+          "actions": {
+            "ciatlas/simulci-lab-remote@v1": "38a93ff01695fd104bfe8bc8b79ceeae91206ddc"
+          }
+        }
+      ],
+      "checks": [
+        {
+          "name": "call / a",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}
