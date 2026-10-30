@@ -11,6 +11,8 @@ export interface ModelContext {
   with: Record<string, Value<string>>;
   /** The `@ref` of the `uses:`, when written. */
   ref?: string;
+  /** The commit a host read the action at, when it read it. */
+  sha?: string;
   node: NodeId;
 }
 
