@@ -3,7 +3,7 @@
 // for every completed workflow run, the run itself, its jobs and steps with their conclusions, the check runs
 // GitHub reported for it, and the `probe: <label>=<value>` lines its jobs echoed (pulled from the job logs).
 //
-//   node scripts/capture-lab.mjs --repo ciatlas/simulci-lab [--run <id>]... [--only <regex>] [--except <regex>]
+//   node scripts/capture-lab.mjs --repo ciatlas/simulci-lab [--run <id>]... [--only <substring>] [--except <substring>]
 //     [--remotes] [--out fixtures/routes-lab/expected.json] [--pushes fixtures/routes-lab/pushes.json]
 //
 // Without --run, every completed run of the repository (paginated). --only and --except select runs by workflow
@@ -20,7 +20,7 @@ import { dirname } from 'node:path';
 const args = parseArgs(process.argv.slice(2));
 if (!args.repo) {
   console.error(
-    'usage: capture-lab.mjs --repo <owner/name> [--run <id>]... [--only <re>] [--except <re>] [--remotes] [--out <file>] [--pushes <file>]',
+    'usage: capture-lab.mjs --repo <owner/name> [--run <id>]... [--only <substring>] [--except <substring>] [--remotes] [--out <file>] [--pushes <file>]',
   );
   process.exit(2);
 }
@@ -43,8 +43,8 @@ function parseArgs(argv) {
     if (a === '--repo') out.repo = argv[++i];
     else if (a === '--run') out.runs.push(Number(argv[++i]));
     else if (a === '--out') out.out = argv[++i];
-    else if (a === '--only') out.only = new RegExp(argv[++i]);
-    else if (a === '--except') out.except = new RegExp(argv[++i]);
+    else if (a === '--only') out.only = argv[++i];
+    else if (a === '--except') out.except = argv[++i];
     else if (a === '--remotes') out.remotes = true;
     else if (a === '--pushes') out.pushes = argv[++i];
     else {
@@ -258,7 +258,9 @@ async function main() {
     const table = { source: `https://github.com/${args.repo}`, pushes: await pushes(runs) };
     write(args.pushes, `${JSON.stringify(table, null, 2)}\n`, `${table.pushes.length} pushes`);
   }
-  runs = runs.filter((r) => (!args.only || args.only.test(r.path)) && !args.except?.test(r.path));
+  runs = runs.filter(
+    (r) => (!args.only || r.path.includes(args.only)) && (!args.except || !r.path.includes(args.except)),
+  );
   runs.sort((a, b) => a.id - b.id);
   const captured = [];
   for (const run of runs) {
