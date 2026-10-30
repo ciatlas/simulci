@@ -83,10 +83,11 @@ that file at the commit `.github/simulci/remotes.lock.yml` or `actions.lock` pin
 not fetched. `remotes.lock.yml` is written by `simulci remotes update`.
 
 - `GITHUB_TOKEN` reads this repository and public ones. For a private one, pass a token that can read it as `token`,
-  from `actions/create-github-app-token` or a fine-grained token. It is sent only to `api-url`.
+  from `actions/create-github-app-token` or a fine-grained token. It is sent only to `api-url`, which must be
+  `https://`; an empty `token` reads anonymously.
 - A locked remote that cannot be read fails test mode with exit code `2`; plan mode warns. `remotes: fetch`, which
   resolves refs live, is refused in test mode, as `simulci test --ci` refuses it.
-- On `pull_request_target` and `workflow_run` nothing is read: those runs hold this repository's token while a pull
-  request chose the workflows. Locked calls then show as not fetched, so plans and snapshots differ from other
+- On `pull_request_target`, `workflow_run` and `issue_comment` nothing is read: those runs hold this repository's
+  token while a pull request may have chosen the workflows. Locked calls then show as not fetched, so plans and snapshots differ from other
   events. Run route tests on `pull_request`.
 - A failure decided inside a remote file is annotated on the `uses:` line that reaches it.

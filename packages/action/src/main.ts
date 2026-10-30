@@ -35,6 +35,7 @@ import { parse } from 'yaml';
 import {
   effectiveMode,
   failureLines,
+  insecureApi,
   inThisRepository,
   printable,
   printableAnnotation,
@@ -99,6 +100,15 @@ export async function run(runner: Ports): Promise<void> {
     ports.fail(remotes.error);
     return;
   }
+  const insecure = insecureApi({
+    apiUrl: ports.input('api-url'),
+    env: ports.env,
+    token: ports.input('token'),
+  });
+  if (insecure) {
+    ports.fail(insecure);
+    return;
+  }
   const repository = ports.env.GITHUB_REPOSITORY || undefined;
   const ctx: Context = { ports, root, dir, workflows, assume, remotes, repository };
   if (mode === 'plan') await plan(ctx);
@@ -128,6 +138,8 @@ function shownUnread(lines: string[]): string[] {
 }
 
 /** The engine's files and remotes, read as the `remotes` input says (`off` on an untrusted event). */
+type Inputs = Awaited<ReturnType<typeof loadInputs>>;
+
 async function loadInputs(ctx: Context) {
   const { ports } = ctx;
   const mode = effectiveMode({ mode: ctx.remotes, env: ports.env, warn: (m) => ports.warn(m) });
@@ -161,21 +173,10 @@ async function test(ctx: Context): Promise<void> {
     return;
   }
   const inputs = await loadInputs(ctx);
-  let project: LoadedProject;
-  let result: RunResult;
-  try {
-    project = loadFiles(inputs.files, {
-      ...(ctx.repository ? { repository: ctx.repository } : {}),
-      remotes: inputs.remotes,
-      mode: inputs.mode,
-    });
-    result = runTests(project, readTests(root, files), testOptions(ctx));
-  } catch (e) {
-    if (!(e instanceof MocksError || e instanceof TestsError)) throw e;
-    ports.fail(e.message);
-    return;
-  }
-  await reportTests(ctx, inThisRepository(result, project));
+  const ran = runCases(ctx, inputs, files);
+  if (!ran) return;
+  const { result } = ran;
+  await reportTests(ctx, inThisRepository(result, ran.project));
   for (const name of OUTPUTS) ports.setOutput(name, result.summary[name]);
   // A locked remote that cannot be read never gives a verdict: as `simulci test`, exit 2.
   const exitCode = inputs.unread.length ? 2 : result.exitCode;
@@ -186,6 +187,26 @@ async function test(ctx: Context): Promise<void> {
     ports.fail(
       `simulci test: ${s.failed} failed, ${s.invalid} invalid, ${s.passed} passed (exit ${exitCode})`,
     );
+  }
+}
+
+/** The project as the engine loads it, with its remotes, and the run of the test files; none when a file is refused. */
+function runCases(
+  ctx: Context,
+  inputs: Inputs,
+  files: string[],
+): { project: LoadedProject; result: RunResult } | undefined {
+  try {
+    const project = loadFiles(inputs.files, {
+      ...(ctx.repository ? { repository: ctx.repository } : {}),
+      remotes: inputs.remotes,
+      mode: inputs.mode,
+    });
+    return { project, result: runTests(project, readTests(ctx.root, files), testOptions(ctx)) };
+  } catch (e) {
+    if (!(e instanceof MocksError || e instanceof TestsError)) throw e;
+    ctx.ports.fail(e.message);
+    return undefined;
   }
 }
 
@@ -224,12 +245,22 @@ async function plan(ctx: Context): Promise<void> {
   }
   const inputs = await loadInputs(ctx);
   for (const line of shownUnread(inputs.unread)) ports.warn(line);
-  let result: RunPlan;
+  const result = planOf(ctx, inputs, text);
+  if (!result) return;
+  ports.log(renderPlan(result, ports.input('format') || 'text'));
+  if (bool(ports, 'summary', true))
+    await ports.summary(planSummary(result, ports.input('title') || 'simulci plan'));
+  ports.setOutput('triggered', result.workflows.filter((w) => w.triggered.verdict !== 'no').length);
+  ports.setOutput('exit-code', 0);
+}
+
+/** The scenario's plan; none when the scenario is refused. */
+function planOf(ctx: Context, inputs: Inputs, text: string): RunPlan | undefined {
   try {
     const scenario = parse(text) as ScenarioInput;
     // The scenario's own `repository` wins: it may plan the workflows as another repository runs them.
     const repository = scenario?.repository === undefined ? ctx.repository : undefined;
-    result = simulate({
+    return simulate({
       files: inputs.files,
       scenario,
       mocks: { cli: ctx.assume },
@@ -239,14 +270,9 @@ async function plan(ctx: Context): Promise<void> {
     });
   } catch (e) {
     if (!(e instanceof Error)) throw e;
-    ports.fail(`scenario: ${e.message}`);
-    return;
+    ctx.ports.fail(`scenario: ${e.message}`);
+    return undefined;
   }
-  ports.log(renderPlan(result, ports.input('format') || 'text'));
-  if (bool(ports, 'summary', true))
-    await ports.summary(planSummary(result, ports.input('title') || 'simulci plan'));
-  ports.setOutput('triggered', result.workflows.filter((w) => w.triggered.verdict !== 'no').length);
-  ports.setOutput('exit-code', 0);
 }
 
 function renderPlan(result: RunPlan, format: string): string {
@@ -307,7 +333,8 @@ function writeReport(ctx: Context, path: string, content: string): void {
     return;
   }
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, content);
+  // XML 1.0 refuses most control characters, and a remote's names reach the report.
+  writeFileSync(file, printable(content));
   ctx.ports.setOutput('junit', file);
 }
 

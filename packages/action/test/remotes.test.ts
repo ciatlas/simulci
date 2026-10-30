@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { Annotation } from '@simulci/engine';
 import { describe, expect, it } from 'vitest';
 import { type Ports, run, withoutCommands } from '../src/main';
+import { printable } from '../src/remotes';
 
 const SHA = 'a'.repeat(40);
 const TOKEN = 'ghs_actionTOKEN0123456789';
@@ -131,7 +132,7 @@ describe('remotes in the action', () => {
       'sub/.github/workflows/ci.yml': callerOf(DEPLOY),
       'sub/.github/simulci/tests/ci.test.yml': SHIPS,
     });
-    const p = fake(ws, { 'working-directory': 'sub', token: TOKEN }, RUNNER, gh.fetch);
+    const p = fake(ws, { 'working-directory': 'sub', token: TOKEN, junit: 'junit.xml' }, RUNNER, gh.fetch);
     await run(p);
     expect(gh.calls.map((c) => [c.url.split('?')[0], c.authorization])).toEqual([
       ['https://api.github.com/repos/octo/ship/contents/.github/workflows/deploy.yml', `Bearer ${TOKEN}`],
@@ -143,6 +144,10 @@ describe('remotes in the action', () => {
       ['error', 'sub/.github/simulci/tests/ci.test.yml', 5, expect.any(Number)],
       ['notice', 'sub/.github/workflows/ci.yml', 4, 11],
     ]);
+    // The remote's `if:` holds an ESC, which XML 1.0 refuses: the report shows it escaped.
+    const junit = readFileSync(join(ws, 'junit.xml'), 'utf8');
+    expect(junit).toContain("vars.X == '\\u001b[1m");
+    expect(junit).not.toContain(String.fromCharCode(0x1b));
   });
 
   it('escapes what a remote names in the log, the annotations and the job summary', async () => {
@@ -151,6 +156,9 @@ describe('remotes in the action', () => {
     await run(p);
     expect(p.failures).toEqual([]);
     const all = [...p.logs, ...p.summaries, ...p.warnings].join('\n');
+    expect(printable(`a${String.fromCharCode(0xd800)}b${String.fromCharCode(0xfffe)}\r\t\n😀`)).toBe(
+      'a\\ud800b\\ufffe\\u000d\t\n😀',
+    );
     // The workflow's name is in the graph (an ESC is a space there), its `if:` in the text.
     expect(all).toContain('#lt;img src=x#gt;  [31mred \\u202eevil');
     expect(all).toContain("vars.X == '\\u001b[1m ``````");
@@ -165,7 +173,7 @@ describe('remotes in the action', () => {
   });
 
   it('reads nothing on pull_request_target and workflow_run, and says why', async () => {
-    for (const event of ['pull_request_target', 'workflow_run']) {
+    for (const event of ['pull_request_target', 'workflow_run', 'issue_comment']) {
       const gh = fakeGitHub(REMOTE);
       const ws = checkout({
         '.github/workflows/ci.yml': callerOf(DEPLOY),
@@ -292,6 +300,22 @@ describe('remotes in the action', () => {
     const alone = fakeGitHub({}, ghesApi, both);
     await run(fake(ws, { ...PLAN, 'api-url': ghesApi }, RUNNER, alone.fetch));
     expect(alone.calls.every((c) => new URL(c.url).host === 'ghes.example')).toBe(true);
+  });
+
+  it('reads with the token input only: never one from the environment, and never over http', async () => {
+    const gh = fakeGitHub(REMOTE);
+    const ws = checkout({ '.github/workflows/ci.yml': callerOf(DEPLOY) });
+    const env = { ...RUNNER, GH_TOKEN: 'ghp_env', GITHUB_TOKEN: 'ghs_env', GH_ENTERPRISE_TOKEN: 'ghe_env' };
+    const anonymous = fake(ws, { ...PLAN, token: '' }, env, gh.fetch);
+    await run(anonymous);
+    expect(anonymous.failures).toEqual([]);
+    expect(gh.calls.map((c) => c.authorization)).toEqual([undefined]);
+    const http = fake(ws, { ...PLAN, 'api-url': 'http://ghes.example/api/v3' }, RUNNER, gh.fetch);
+    await run(http);
+    expect(http.failures).toEqual([
+      "api-url must be https:// when a token is set, not 'http://ghes.example/api/v3'",
+    ]);
+    expect(gh.calls).toHaveLength(1);
   });
 
   it('refuses fetch in test mode and an unknown mode', async () => {

@@ -12,13 +12,7 @@ import {
   type StepPlan,
   type WorkflowPlan,
 } from '@simulci/engine';
-import {
-  githubAccess,
-  githubComFallback,
-  loadRemotes,
-  type RemotesHost,
-  type RemotesLoad,
-} from '@simulci/node';
+import { githubComFallback, loadRemotes, type RemotesHost, type RemotesLoad } from '@simulci/node';
 
 /**
  * The remote workflows and actions the checkout uses, read with the `token` input, and what the action shows of
@@ -27,11 +21,12 @@ import {
  */
 
 /**
- * Events whose runs hold the base repository's token while a pull request chose the workflows: the pull request would
- * pick which repositories the token reads, and the plan would show what it read. On these nothing is read at all, not
- * even locked commits (the lockfile holds no bodies, so `lock` reads the network too).
+ * Events whose runs hold the base repository's token while a pull request may have chosen the workflows: the pull
+ * request would pick which repositories the token reads, and the plan would show what it read. On these nothing is read
+ * at all, not even locked commits (the lockfile holds no bodies, so `lock` reads the network too). `issue_comment` is
+ * here because anyone can comment on a public repository's pull request, and such runs often check its head out.
  */
-const UNTRUSTED_EVENTS = new Set(['pull_request_target', 'workflow_run']);
+const UNTRUSTED_EVENTS = new Set(['pull_request_target', 'workflow_run', 'issue_comment']);
 
 const MODES = new Set<string>(['off', 'lock', 'fetch']);
 
@@ -77,19 +72,30 @@ export function readRemotes(
   workflows: Record<string, string>,
   setup: RemotesSetup & { log(line: string): void },
 ): Promise<RemotesLoad> {
-  const apiUrl = setup.apiUrl || setup.env.GITHUB_API_URL || 'https://api.github.com';
-  // No `gh auth token`: on a runner the token is the input, and nothing else is asked for one.
-  const api = githubAccess(setup.env, apiUrl, setup.token || undefined, () => undefined);
+  const apiUrl = apiUrlOf(setup);
+  // The token is the input's and no other: an empty one reads anonymously, never with a token from the environment.
+  const api = { apiUrl, ...(setup.token ? { token: setup.token } : {}) };
   const fallback = setup.githubComToken
     ? githubComFallback({ GITHUB_COM_TOKEN: setup.githubComToken }, apiUrl)
     : undefined;
   return loadRemotes(root, workflows, {
     mode: setup.mode,
-    api: { apiUrl: api.apiUrl, ...(api.token ? { token: api.token } : {}) },
+    api,
     ...(fallback ? { fallback } : {}),
     ...(setup.fetch ? { fetch: setup.fetch } : {}),
     log: (line) => setup.log(`remotes: ${printable(line)}`),
   });
+}
+
+/** The API remotes are read from: `api-url`, else the runner's. */
+const apiUrlOf = (setup: Pick<RemotesSetup, 'apiUrl' | 'env'>): string =>
+  setup.apiUrl || setup.env.GITHUB_API_URL || 'https://api.github.com';
+
+/** Why the token cannot go to `api-url`: over `http:` it would cross the network in the clear. */
+export function insecureApi(setup: Pick<RemotesSetup, 'apiUrl' | 'env' | 'token'>): string | undefined {
+  const apiUrl = apiUrlOf(setup);
+  if (!setup.token || apiUrl.toLowerCase().startsWith('https://')) return undefined;
+  return `api-url must be https:// when a token is set, not '${printable(apiUrl)}'`;
 }
 
 /** The engine's files: the workflows and actions, and the lockfiles that pin their remotes. */
@@ -202,12 +208,10 @@ function remoteAnchors(plan: RunPlan, uses: Map<string, Loc>, local: Set<string>
 
 /** The `file` of every location under a node of the plan. */
 function filesIn(node: unknown, out = new Set<string>()): Set<string> {
-  if (Array.isArray(node)) for (const item of node) filesIn(item, out);
-  else if (node && typeof node === 'object') {
-    const o = node as Record<string, unknown>;
-    if (typeof o.file === 'string' && typeof o.line === 'number') out.add(o.file);
-    for (const value of Object.values(o)) if (value && typeof value === 'object') filesIn(value, out);
-  }
+  if (!node || typeof node !== 'object') return out;
+  const o = node as Record<string, unknown>;
+  if (typeof o.file === 'string' && typeof o.line === 'number') out.add(o.file);
+  for (const value of Object.values(o)) filesIn(value, out);
   return out;
 }
 
@@ -216,11 +220,30 @@ function filesIn(node: unknown, out = new Set<string>()): Set<string> {
 // ---------------------------------------------------------------------------
 
 /**
- * Text as it may be shown: control characters other than tab and newline (an ESC starts a terminal sequence), and the
- * Unicode controls that reorder or break lines, written as `\uXXXX`.
+ * Text as it may be shown, in a log, a summary or an XML report: control characters other than tab and newline (an ESC
+ * starts a terminal sequence, a CR rewrites a line), the Unicode controls that reorder or break lines, and what XML
+ * refuses (U+FFFE, U+FFFF, a lone surrogate), written as `\uXXXX`.
  */
-// oxlint-disable-next-line no-control-regex -- matching control characters is the point
-const UNPRINTABLE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]/g;
+export function printable(s: string): string {
+  let out = '';
+  for (const c of s) {
+    const code = c.codePointAt(0)!;
+    out += unprintable(code) ? `\\u${code.toString(16).padStart(4, '0')}` : c;
+  }
+  return out;
+}
 
-export const printable = (s: string): string =>
-  s.replace(UNPRINTABLE, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+/** The code points shown escaped, as inclusive ranges. */
+const UNPRINTABLE: readonly (readonly [number, number])[] = [
+  [0x00, 0x08],
+  [0x0b, 0x1f],
+  [0x7f, 0x9f],
+  [0x61c, 0x61c],
+  [0x200e, 0x200f],
+  [0x2028, 0x202e],
+  [0x2066, 0x2069],
+  [0xd800, 0xdfff],
+  [0xfffe, 0xffff],
+];
+
+const unprintable = (code: number): boolean => UNPRINTABLE.some(([from, to]) => code >= from && code <= to);
