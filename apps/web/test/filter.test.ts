@@ -6,13 +6,14 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   filterFiles,
   isKeptFile,
+  isLockFile,
   isProjectFile,
   isReadFile,
   isSnapshotFile,
   isTestFile,
   mayHoldProjectFiles,
   normalizePath,
-  snapshotFiles,
+  readOnlyFiles,
 } from '../src/input/filter';
 import { snapshotPath } from '../src/lib/snapshot-path';
 import { LIMITS, overLimit } from '../src/input/limits';
@@ -141,7 +142,7 @@ describe('the browser file filter', () => {
   });
 
   it('reads the snapshots simulci test keeps beside the tests, and no other', () => {
-    const snapshots = Object.keys(snapshotFiles(everyFile(tmp))).sort();
+    const snapshots = Object.keys(readOnlyFiles(everyFile(tmp))).sort();
     expect(snapshots).toEqual([
       '.github/simulci/tests/__snapshots__/ci.test.snap.json',
       '.github/simulci/tests/nested/deep/__snapshots__/release.test.snap.json',
@@ -152,6 +153,18 @@ describe('the browser file filter', () => {
     // Read, never kept: they are not the project's or the tests'.
     expect(snapshots.every((p) => isReadFile(p) && !isKeptFile(p))).toBe(true);
     expect(isSnapshotFile('./.github\\simulci\\tests\\__snapshots__\\ci.test.snap.json')).toBe(true);
+  });
+
+  it('reads the two lock files the worker pins remotes with, read-only, at their exact paths', () => {
+    const lockfile = '.github/simulci/remotes.lock.yml';
+    const actions = '.github/workflows/actions.lock';
+    const read = readOnlyFiles({ [lockfile]: 'l', [`./${actions}`]: 'a', '.github/workflows/ci.yml': 'c' });
+    expect(read).toEqual({ [lockfile]: 'l', [actions]: 'a' });
+    expect([lockfile, actions].every((p) => isLockFile(p) && isReadFile(p) && !isKeptFile(p))).toBe(true);
+    expect(isLockFile('.github/simulci/tests/remotes.lock.yml')).toBe(false);
+    expect(isLockFile('.github/workflows/Actions.lock')).toBe(false);
+    // A walk enters both directories already.
+    expect(['.github/simulci', '.github/workflows'].every(mayHoldProjectFiles)).toBe(true);
   });
 
   it('refuses sources over the limits with the reason', () => {

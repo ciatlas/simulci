@@ -7,7 +7,9 @@
  * Tests never reach the engine's project; the page keeps them beside it, to add cases to and save. A test proves the
  * filter and the two agree over the routes lab, this repository and a synthetic tree. The tests' snapshots, every
  * `*.snap.json` directly in a `__snapshots__` directory under `.github/simulci/tests`, are read too, but kept apart and
- * read-only (`files.readonly`): the Tests tab checks the plans against them as `simulci test --ci` does.
+ * read-only (`files.readonly`): the Tests tab checks the plans against them as `simulci test --ci` does. So are the two
+ * lock files, `.github/simulci/remotes.lock.yml` and `.github/workflows/actions.lock`: the worker pins the remote
+ * workflows and actions with them as `simulci test` does (M4 synthesis § 5.3), and the page never edits them.
  */
 
 const WORKFLOW = /^\.github\/workflows\/[^/]+\.ya?ml$/i;
@@ -17,6 +19,8 @@ const TESTS_DIR = '.github/simulci/tests';
 const TEST = /^\.github\/simulci\/tests\/(?:[^/]+\/)*[^/]*\.test\.ya?ml$/;
 const SNAPSHOTS = /(?:^|\/)__snapshots__(?:\/|$)/;
 const SNAPSHOT = /^\.github\/simulci\/tests\/(?:[^/]+\/)*__snapshots__\/[^/]+\.snap\.json$/;
+/** The engine's `REMOTES_LOCK_FILE` and core's `ACTIONS_LOCK_FILE`, exact case: the page does not import either. */
+const LOCK_FILES = ['.github/simulci/remotes.lock.yml', '.github/workflows/actions.lock'] as const;
 
 /** A repository-relative path with forward slashes and no leading `./`. */
 export function normalizePath(path: string): string {
@@ -46,15 +50,22 @@ export function isSnapshotFile(path: string): boolean {
   return SNAPSHOT.test(p) && p.indexOf('/__snapshots__/') === p.lastIndexOf('/__snapshots__/');
 }
 
-/** A file a walk reads: one the page keeps, or a snapshot. */
-export const isReadFile = (path: string): boolean => isKeptFile(path) || isSnapshotFile(path);
+/** One of the two lock files the worker pins remotes with. */
+export const isLockFile = (path: string): boolean =>
+  (LOCK_FILES as readonly string[]).includes(normalizePath(path));
 
-/** Keeps the snapshot files, by normalized path. */
-export function snapshotFiles(files: Record<string, string>): Record<string, string> {
+/** A file the page reads and never writes: a snapshot or a lock file. */
+const isReadOnlyFile = (path: string): boolean => isSnapshotFile(path) || isLockFile(path);
+
+/** A file a walk reads: one the page keeps, a snapshot or a lock file. */
+export const isReadFile = (path: string): boolean => isKeptFile(path) || isReadOnlyFile(path);
+
+/** Keeps the read-only files (the snapshots and the lock files), by normalized path. */
+export function readOnlyFiles(files: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [path, text] of Object.entries(files)) {
     const p = normalizePath(path);
-    if (isSnapshotFile(p)) out[p] = text;
+    if (isReadOnlyFile(p)) out[p] = text;
   }
   return out;
 }

@@ -1,4 +1,11 @@
-import type { AssumeEntry, NodeId, RunPlan, ScenarioInput, UnknownId } from '@simulci/engine';
+import type {
+  AssumeEntry,
+  NodeId,
+  RemoteSourceInput,
+  RunPlan,
+  ScenarioInput,
+  UnknownId,
+} from '@simulci/engine';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { regionEdit, type TextEdit, touched } from '@simulci/document/edits';
 import type { PendingSel, Refused } from '../edit/types';
@@ -10,7 +17,16 @@ import { classifyEol, type FileMeta, textMeta } from '../input/read';
 import type { DiskConflict, DiskFile, FileOutcome } from '../input/save';
 import { type ChangeRow, changeRows, changeSentence } from '../plan/change-rows';
 import { diffOf, pinSentence, verdictChanges } from '../plan/changes';
-import type { Derived, ModelInfo, Outline, ReadyResponse, TestedResponse } from '../worker/protocol';
+import type {
+  Derived,
+  ModelInfo,
+  Outline,
+  ReadyResponse,
+  RemoteNeed,
+  RemotePool,
+  RemotePoolFailure,
+  TestedResponse,
+} from '../worker/protocol';
 import * as history from './history';
 import { carried, changeRenames, inverse, type Renames, renamedBeside } from './renames';
 import { DEFAULT_PREFS, type PanelTab, type Prefs } from './prefs';
@@ -292,12 +308,42 @@ export interface SessionState {
   generated?: Record<string, string>;
   /** The Tests tab: the route tests run in the worker after each plan of new files (synthesis § 5.1). */
   tests: TestsState;
+  /** The remote workflows and actions the files call, as the page read them (M4 synthesis § 5.3). */
+  remotes: RemotesState;
   /**
    * A repository a link names (`gh=`) that is not the source: the page offers to open it and asks GitHub for nothing
    * until the author clicks (M4 synthesis § 5.5, failure mode 15). Opening it, or Dismiss, lets it go.
    */
   githubOffer?: RepoTarget;
 }
+
+/**
+ * The remotes read from GitHub, beside the files and not among them: no pane tab, no dirty state, no save. A file at a
+ * commit never changes, so what was read holds across edits and sources; the worker takes what the pins of the files
+ * loaded ask for. Nothing is read before the author lets the page (`consent`): opening a GitHub repository, or Fetch.
+ */
+export interface RemotesState {
+  /** What was read, by `remotePoolKey`. */
+  byKey: Record<string, RemoteSourceInput>;
+  /** What could not be read, by `remotePoolKey` (a failed resolve has no commit). */
+  failed: Record<string, RemotePoolFailure>;
+  /** What the project shown needs and nothing above holds: the next reads, or the chip's count. */
+  needed: RemoteNeed[];
+  /** `fetching` while a read is out; `done` once one came back. */
+  status: 'idle' | 'fetching' | 'done';
+  /**
+   * Whether the author let the page read them from GitHub: `page` by the chip's Fetch, for the page's life; `source` by
+   * opening a GitHub repository, for that source only (another source's refs are not the repository's to ask about).
+   */
+  consent: 'none' | 'source' | 'page';
+}
+
+/** A read's place in the pool: its ref as written and the commit it was read at, or asked for. */
+export const remotePoolKey = (ref: string, sha: string | undefined): string => `${ref}\n${sha ?? ''}`;
+
+/** What every load sends of the remotes (`LoadRequest.remotes`): nothing until the author lets the page read them. */
+export const remotePool = ({ consent, byKey, failed }: RemotesState): RemotePool | undefined =>
+  consent === 'none' ? undefined : { sources: Object.values(byKey), failed: Object.values(failed) };
 
 /** What the Tests tab shows: the last run of the route tests, the one under way, and how they run. */
 export interface TestsState {
@@ -400,6 +446,13 @@ export interface SessionActions {
   /** The snapshots of `epoch` read again (Reload): they replace the ones held, unless they are the same. */
   setReadonly: (epoch: number, readonly: Record<string, string>) => void;
   /** The "As CI" switch. */
+  /** What the project of the newest files needs of the remotes, from its load. */
+  setRemotesNeeded: (needed: RemoteNeed[]) => void;
+  /** The author lets the page read remotes from GitHub: for the page's life (the chip), or for the source shown. */
+  consentRemotes: (scope?: 'source' | 'page') => void;
+  remotesFetching: () => void;
+  /** Remotes read, or not; `done` when no other read is out. */
+  remotesRead: (read: { sources: RemoteSourceInput[]; failed: RemotePoolFailure[] }, done: boolean) => void;
   setTestsCi: (ci: boolean) => void;
   testsRunning: () => void;
   testsReceived: (run: TestRun) => void;
@@ -575,8 +628,15 @@ export function initialSessionState(prefs: Prefs = DEFAULT_PREFS): SessionState 
     notices: [],
     edit: { ...history.emptyHistory(), on: false, unlocked: [] },
     tests: { ci: true, status: 'idle' },
+    remotes: { byKey: {}, failed: {}, needed: [], status: 'idle', consent: 'none' },
   };
 }
+
+/** The remotes of new files: what was read stays, what the old files needed goes, and so does a source's consent. */
+const unneeded = (remotes: RemotesState): RemotesState =>
+  remotes.needed.length || remotes.consent === 'source'
+    ? { ...remotes, needed: [], consent: remotes.consent === 'source' ? 'none' : remotes.consent }
+    : remotes;
 
 /** The Tests tab of new files: nothing ran yet, the switch as the author left it. */
 const untested = (tests: TestsState): TestsState => ({ ci: tests.ci, status: 'idle' });
@@ -824,6 +884,7 @@ export function createSessionStore(initial: SessionState = initialSessionState()
           files: withReadonly(sourceFiles(s.files, byPath, metaOf(byPath, meta), base), readonly),
           ...UNLOADED,
           tests: untested(s.tests),
+          remotes: unneeded(s.remotes),
           edit: freshEdit(s.edit),
           error: s.error?.kind === 'source' ? undefined : s.error,
         })),
@@ -833,6 +894,7 @@ export function createSessionStore(initial: SessionState = initialSessionState()
           files: sourceFiles(s.files, {}, {}),
           ...UNLOADED,
           tests: untested(s.tests),
+          remotes: unneeded(s.remotes),
           edit: freshEdit(s.edit),
           focus: undefined,
           sel: undefined,
@@ -855,6 +917,32 @@ export function createSessionStore(initial: SessionState = initialSessionState()
             ? s
             : { files: withReadonly(s.files, readonly) },
         ),
+      setRemotesNeeded: (needed) =>
+        set((s) =>
+          needed.length === 0 && s.remotes.needed.length === 0 ? s : { remotes: { ...s.remotes, needed } },
+        ),
+      consentRemotes: (scope = 'page') =>
+        set((s) =>
+          s.remotes.consent === 'page' || s.remotes.consent === scope
+            ? s
+            : { remotes: { ...s.remotes, consent: scope } },
+        ),
+      remotesFetching: () =>
+        set((s) => (s.remotes.status === 'fetching' ? s : { remotes: { ...s.remotes, status: 'fetching' } })),
+      remotesRead: (read, done) =>
+        set((s) => {
+          const byKey = { ...s.remotes.byKey };
+          const failed = { ...s.remotes.failed };
+          for (const source of read.sources) {
+            const key = remotePoolKey(source.ref, source.sha);
+            byKey[key] = source;
+            delete failed[key];
+            if (source.pinned === 'resolved') delete failed[remotePoolKey(source.ref, undefined)];
+          }
+          for (const f of read.failed) failed[remotePoolKey(f.ref, f.sha)] = f;
+          const status = done ? 'done' : s.remotes.status;
+          return { remotes: { ...s.remotes, byKey, failed, status } };
+        }),
       setTestsCi: (ci) => set((s) => (s.tests.ci === ci ? s : { tests: { ...s.tests, ci } })),
       testsRunning: () => set((s) => ({ tests: { ...s.tests, status: 'running', error: undefined } })),
       testsReceived: (run) => set((s) => ({ tests: { ci: s.tests.ci, status: 'done', run } })),

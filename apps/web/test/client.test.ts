@@ -167,6 +167,35 @@ describe('the engine client', () => {
     expect((await sim).type).toBe('plan');
   });
 
+  it('replays a load with every remote it carried, so a restarted worker loses none (M4 failure mode 18)', async () => {
+    const client = createEngineClient({ spawn });
+    workers[0]!.ready();
+    await client.ready;
+    const remotes = {
+      sources: [
+        {
+          ref: 'octo/act@v2',
+          kind: 'action' as const,
+          sha: 'a'.repeat(40),
+          text: 'name: act',
+          pinned: 'resolved' as const,
+        },
+      ],
+      failed: [
+        { ref: 'octo/gone@v1', kind: 'action' as const, failure: 'not-found' as const, message: 'gone' },
+      ],
+    };
+    const readonly = { '.github/simulci/remotes.lock.yml': 'version: 1\nremotes: {}\n' };
+    const load = client.load({ files: { a: '' }, readonly, remotes });
+    await vi.advanceTimersByTimeAsync(3001);
+    workers[1]!.ready();
+    await client.ready;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(workers[1]!.sent).toEqual([{ id: 2, type: 'load', files: { a: '' }, readonly, remotes }]);
+    workers[1]!.reply({ id: 2, type: 'loaded', project: 1, outline: {}, ms: 1 });
+    expect((await load).type).toBe('loaded');
+  });
+
   it('replays the newest load after a restart and answers the one it replaced as superseded', async () => {
     const client = createEngineClient({ spawn });
     workers[0]!.ready();
