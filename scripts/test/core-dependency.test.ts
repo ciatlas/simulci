@@ -11,9 +11,11 @@ const read = (path: string) => readFileSync(join(root, path), 'utf8');
 
 const manifests = [
   'package.json',
-  ...readdirSync(join(root, 'packages'))
-    .map((p) => `packages/${p}/package.json`)
-    .filter((file) => existsSync(join(root, file))),
+  ...['packages', 'apps'].flatMap((dir) =>
+    readdirSync(join(root, dir))
+      .map((p) => `${dir}/${p}/package.json`)
+      .filter((file) => existsSync(join(root, file))),
+  ),
 ];
 
 /** Every manifest that depends on @ciatlas/core, with the specifier it uses. */
