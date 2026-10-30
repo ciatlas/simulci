@@ -112,27 +112,38 @@ export function SimulateView() {
 
 /**
  * The scenario and the outline on the left, the plan in the middle with the YAML pane docked under it (closed, a bar
- * that opens it), the panel on the right. `[`, `]` and `\` close and open them (app/shortcuts.ts, which reads
- * `data-pane`); the choice is a preference, and edit mode opens the YAML pane. Below 1024 px the right panel goes under the plan, with the scenario column beside both; below 768 px
- * everything stacks at its own height and the page scrolls.
+ * that opens it), the panel on the right (each closed, a rail that opens it). `[`, `]` and `\` close and open them
+ * (app/shortcuts.ts, which reads `data-pane`); the choice is a preference, and edit mode opens the YAML pane. Below
+ * 1024 px the right panel goes under the plan, with the scenario column beside both; below 768 px everything stacks
+ * at its own height and the page scrolls.
  */
 function Panes() {
   const { store } = useApp();
   const collapsed = useSession((s) => s.ui.prefs.collapsed);
   const columns = {
-    '--left': collapsed.left ? '0px' : '320px',
-    '--right': collapsed.right ? '0px' : '360px',
+    '--left': collapsed.left ? RAIL : '320px',
+    '--right': collapsed.right ? RAIL : '360px',
   } as CSSProperties;
+  // From 768 to 1023 px the closed panel's rail is a bar under the plan, which keeps the height.
+  const rows = collapsed.right ? 'md:grid-rows-[minmax(0,1fr)_auto] lg:grid-rows-[minmax(0,1fr)]' : '';
   return (
     <main
       style={columns}
-      className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 overflow-y-auto md:auto-rows-auto md:grid-cols-[var(--left)_minmax(0,1fr)] md:overflow-hidden lg:grid-cols-[var(--left)_minmax(0,1fr)_var(--right)]"
+      className={`grid min-h-0 flex-1 auto-rows-max grid-cols-1 overflow-y-auto md:auto-rows-auto md:grid-cols-[var(--left)_minmax(0,1fr)] md:overflow-hidden lg:grid-cols-[var(--left)_minmax(0,1fr)_var(--right)] ${rows}`}
     >
+      {collapsed.left && (
+        <Rail
+          pane="left"
+          name="scenario and outline"
+          className="border-b md:row-span-2 md:border-r md:border-b-0 lg:row-span-1"
+          column="md:[writing-mode:vertical-rl]"
+        />
+      )}
       <aside
         hidden={collapsed.left}
         data-pane="left"
         aria-label="Scenario and outline"
-        className={`relative flex min-h-0 flex-col gap-6 overflow-y-auto border-border border-b bg-chrome p-4 md:border-r md:border-b-0 ${collapsed.right ? '' : 'md:row-span-2 lg:row-span-1'}`}
+        className="relative flex min-h-0 flex-col gap-6 overflow-y-auto border-border border-b bg-chrome p-4 md:row-span-2 md:border-r md:border-b-0 lg:row-span-1"
       >
         <ScenarioForm />
         <OutlineTree />
@@ -156,6 +167,14 @@ function Panes() {
           </section>
         )}
       </div>
+      {collapsed.right && (
+        <Rail
+          pane="right"
+          name="plan details"
+          className="border-t md:col-start-2 lg:col-start-3 lg:row-start-1 lg:border-t-0 lg:border-l"
+          column="lg:[writing-mode:vertical-rl]"
+        />
+      )}
       <aside
         hidden={collapsed.right}
         data-pane="right"
@@ -165,6 +184,53 @@ function Panes() {
         <Panels />
       </aside>
     </main>
+  );
+}
+
+/** A closed column's width: its rail's. */
+const RAIL = '2rem';
+
+/** The key that opens and closes each pane beside its rail (app/shortcuts.ts). */
+const PANE_KEYS = { left: '[', right: ']' } as const;
+
+/**
+ * In place of the closed scenario column or right panel: a rail that names it and its key while the page keys are on,
+ * and opens it, putting the focus inside (app/panes.ts). Where the pane is a column (from 768 px for the scenario,
+ * from 1024 px for the panel), the rail is a column as wide as `RAIL` and its words run down it; where the pane is a
+ * row, the rail is a bar, its words in line with the closed YAML pane's. The button fills the rail, so its ring is
+ * drawn inside it, where the screen's edge and the plan beside it cannot hide it.
+ */
+function Rail({
+  pane,
+  name,
+  className,
+  column,
+}: {
+  pane: keyof typeof PANE_KEYS;
+  name: string;
+  /** Where the rail sits and its border, as the pane's own. */
+  className: string;
+  /** Where the rail is a column, its words run down it; `px` and `py` are logical, so they turn with them. */
+  column: string;
+}) {
+  const { store } = useApp();
+  const keys = useSession((s) => s.ui.prefs.keys);
+  return (
+    <div data-rail={pane} className={`flex min-h-0 min-w-0 border-border bg-chrome text-xs ${className}`}>
+      <button
+        type="button"
+        className={`focus-inset flex flex-1 items-center gap-2 px-4.5 py-1 text-text hover:bg-surface ${column}`}
+        aria-keyshortcuts={keys ? PANE_KEYS[pane] : undefined}
+        onClick={() => togglePaneKeepingFocus(store.getState(), pane)}
+      >
+        Open the {name}
+        {keys && (
+          <span aria-hidden="true" className="font-mono text-muted">
+            {PANE_KEYS[pane]}
+          </span>
+        )}
+      </button>
+    </div>
   );
 }
 
