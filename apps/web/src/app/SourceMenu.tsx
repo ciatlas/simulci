@@ -71,7 +71,10 @@ export function SourceMenu() {
       {pasting && <PasteDialog onClose={() => setPasting(false)} />}
       {opening && (
         <Suspense fallback={null}>
-          <OpenRepoDialog open={sources.openGitHub} onClose={() => setOpening(false)} />
+          <OpenRepoDialog
+            open={(target, options) => sources.openGitHub(target, options)}
+            onClose={() => setOpening(false)}
+          />
         </Suspense>
       )}
     </nav>

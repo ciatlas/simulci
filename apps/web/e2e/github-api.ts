@@ -13,7 +13,7 @@ import type { Page, Route } from '@playwright/test';
 
 const here = import.meta.dirname;
 const fixture = (name: string): string => readFileSync(join(here, 'fixtures/github', name), 'utf8');
-const json = <T>(name: string): T => JSON.parse(fixture(name)) as T;
+const json = (name: string): unknown => JSON.parse(fixture(name));
 
 export const OWNER = 'ciatlas';
 export const REPO = 'flowpact';
@@ -50,9 +50,9 @@ export interface FakeGitHub {
 }
 
 export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
-  const headers = json<Record<string, string>>('headers.json');
-  const root = json<{ tree: Entry[] }>('root-tree.json');
-  const recorded = json<{ tree: Entry[] }>('github-tree.json');
+  const headers = json('headers.json') as Record<string, string>;
+  const root = json('root-tree.json') as { tree: Entry[] };
+  const recorded = json('github-tree.json') as { tree: Entry[] };
   const blobs = new Map<string, Buffer>();
   const add = (text: string | Buffer): string => {
     const bytes = Buffer.from(text);

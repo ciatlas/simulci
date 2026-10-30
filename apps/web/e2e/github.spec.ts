@@ -117,7 +117,7 @@ test('keeps an edit through a reload without a request, asks before leaving, and
   await changes.getByRole('button', { name: 'Download patch' }).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe(patch);
-  const text = readFileSync((await file.path())!, 'utf8');
+  const text = readFileSync(await file.path(), 'utf8');
   expect(text.split('\n').slice(0, 3)).toEqual([
     `simulci: changes against ${NAME}@${short(github)} (main)`,
     `diff --git a/${CI} b/${CI}`,

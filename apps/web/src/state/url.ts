@@ -156,6 +156,12 @@ export function writeSearch(state: UrlState): Record<string, unknown> {
   if (state.assume?.length && JSON.stringify(state.assume).length <= ASSUME_URL_LIMIT) out.a = state.assume;
   if (state.wf) out.wf = state.wf;
   if (state.sel) out.sel = state.sel;
+  return { ...out, ...viewOf(state) };
+}
+
+/** The view's keys and the repository, as the URL spells them. */
+function viewOf(state: UrlState): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
   if (state.d === 'legs') out.d = 'legs';
   if (state.view === 'text') out.view = 'text';
   if (state.hide) out.hide = 1;

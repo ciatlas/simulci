@@ -306,14 +306,17 @@ describe('the web app as it builds', () => {
     expect(code).not.toMatch(new RegExp(`from\\s*["'\`]\\./${tests.replace('.', '\\.')}`));
   });
 
-  it("puts the GitHub source's reader, client and cache with core's fetcher in a chunk of their own, which the page loads only on demand", () => {
+  it("puts the GitHub source's reader, client, cache and dialog with core's fetcher in a chunk of their own, which the page loads only on demand", () => {
     const github = chunks.find((f) => f.startsWith('github-'))!;
     const page = chunks.find((f) => f.startsWith('index-'))!;
+    // github.ts, the chunk's door, only re-exports: the map names what it re-exports.
     const lazy = [
-      'src/github/github.ts',
+      'src/github/read.ts',
       'src/github/repo.ts',
       'src/github/client.ts',
       'src/github/cache.ts',
+      'src/github/target.ts',
+      'src/github/OpenRepo.tsx',
     ];
     const holds = (chunk: string, modules: string[]) =>
       modules.filter((m) => sourcesOf(chunk).some((s) => s.endsWith(m)));

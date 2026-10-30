@@ -2,7 +2,8 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useModal } from '../app/modal';
 import type { GitHubOpened } from '../input/sources';
 import { type RepoTarget, repoName } from '../lib/repo-words';
-import { describeRepository, type ReadOptions, type RepoInfo } from './github';
+import { describeRepository, type ReadOptions } from './read';
+import type { RepoInfo } from './repo';
 import { parseRepoInput } from './target';
 
 /**
