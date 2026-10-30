@@ -23175,6 +23175,89 @@ var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
 })))();
+const ACTIONS_LOCK_FILE = ".github/workflows/actions.lock";
+/** The schema versions read: v0.0.1 to v0.0.3 so far, which differ in keys this reader does not use. */
+const KNOWN_VERSION = /^v0\.0\.\d+$/;
+/** A pin as `actions.lock` keys it: owner and repository in any case, then the ref, without a path. */
+const actionsLockKey = (owner, repo, ref) => `${owner.toLowerCase()}/${repo.toLowerCase()}@${ref}`;
+/**
+* A pin's key from the file. `gh actions-lock` writes `owner/repo@ref`; an `owner/repo/path@ref` is keyed by its
+* repository too, because the commit belongs to the repository. Undefined for anything else.
+*/
+function keyOf$2(pin) {
+	const m = /^([^/@:]+)\/([^/@:]+)(?:\/[^@:]*)?@([^:]+)$/.exec(pin);
+	return m ? actionsLockKey(m[1], m[2], m[3]) : void 0;
+}
+/** A dependency's commit without its algorithm (`sha1-<40 hex>`); undefined for another form. */
+const commitOf = (commit) => typeof commit === "string" ? /^sha1-([0-9a-f]{40})$/i.exec(commit)?.[1]?.toLowerCase() : void 0;
+const workflowPathOf$1 = (path) => path.replace(/^\.\//, "");
+const isRecord$1 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+/** Reads `actions.lock`'s text. The caller reads the file (`ACTIONS_LOCK_FILE`), so this runs in a browser too. */
+function readActionsLock(text) {
+	let data;
+	try {
+		data = (0, import_dist.parse)(text);
+	} catch (e) {
+		return { error: `not valid YAML: ${e.message.split("\n")[0]}` };
+	}
+	if (!isRecord$1(data) || typeof data.version !== "string") return { error: "not a workflow dependency lockfile: it has no version" };
+	if (!KNOWN_VERSION.test(data.version)) return { error: `version ${data.version} is not one this reader knows (v0.0.x)` };
+	const workflows = workflowsOf(data.workflows ?? {});
+	if (!workflows) return { error: "`workflows` is not a map of workflow files to lists of pins" };
+	const commits = commitsOf(data.dependencies ?? {});
+	if (!commits) return { error: "`dependencies` is not a map of pins to their commits" };
+	return { lock: {
+		version: data.version,
+		workflows,
+		commits
+	} };
+}
+function workflowsOf(value) {
+	if (!isRecord$1(value)) return void 0;
+	const workflows = /* @__PURE__ */ new Map();
+	for (const [path, pins] of Object.entries(value)) {
+		if (!Array.isArray(pins) || !pins.every((p) => typeof p === "string")) return void 0;
+		const keys = pins.map(keyOf$2).filter((k) => k !== void 0);
+		workflows.set(workflowPathOf$1(path), new Set(keys));
+	}
+	return workflows;
+}
+function commitsOf(value) {
+	if (!isRecord$1(value)) return void 0;
+	const commits = /* @__PURE__ */ new Map();
+	for (const [pin, dependency] of Object.entries(value)) {
+		if (!isRecord$1(dependency)) return void 0;
+		const key = keyOf$2(pin);
+		const commit = commitOf(dependency.commit);
+		if (key && commit) commits.set(key, commit);
+	}
+	return commits;
+}
+/**
+* Whether GitHub runs the lock's pin for a reference of this kind and key, used in the workflow at `workflowPath`. The
+* rule lives here alone, so that what the lab finds changes one function.
+*
+* - Documented: the lock pins actions only, the actions they use included. It "doesn't pin calls to reusable
+*   workflows (`jobs.<job_id>.uses`)", and a reusable workflow's own actions are pinned by the lockfile of the
+*   repository that defines it, not by the caller's.
+* - **Assumed, UNVERIFIED** (simulci lab case R9): the pin applies only where `workflowPath` is a covered workflow
+*   whose own list names it. The docs onboard workflows one at a time, but that an uncovered workflow using the same
+*   `owner/repo@ref` resolves the ref as usual, rather than running the pinned commit, has not been observed. A covered
+*   workflow that uses an action its list lacks fails on GitHub; here it simply has no pin.
+*/
+function pinApplies(lock, workflowPath, kind, key) {
+	return kind === "action" && (lock.workflows.get(workflowPathOf$1(workflowPath))?.has(key) ?? false);
+}
+/**
+* The commit GitHub runs for `ref` where the workflow at `workflowPath` (repository-relative, `.github/workflows/ci.yml`)
+* uses it, directly or through its actions; undefined when the lock pins none there (see `pinApplies`). A reference with
+* a path (`actions/cache/restore@v4`) is pinned by its repository's key (`actions/cache@v4`).
+*/
+function actionsLockCommit(lock, workflowPath, ref) {
+	if (!lock) return void 0;
+	const key = actionsLockKey(ref.owner, ref.repo, ref.ref);
+	return pinApplies(lock, workflowPath, ref.kind, key) ? lock.commits.get(key) : void 0;
+}
 //#endregion
 //#region ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/ast.js
 var Expr = class {};
@@ -25235,6 +25318,19 @@ function* refsOf(unit) {
 const BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
 //#endregion
 //#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote-ref.ts
+/** A `uses:` value of another repository, or undefined for one that is not (`docker://…`, `./…`, a malformed one). */
+function parseRemoteRef(raw, kind) {
+	const m = /^([^/@\s]+)\/([^/@\s]+)((?:\/[^@\s]+)?)@([^@\s]+)$/.exec(raw.trim());
+	if (!m) return void 0;
+	return {
+		raw: raw.trim(),
+		kind,
+		owner: m[1],
+		repo: m[2],
+		path: m[3].replace(/^\//, ""),
+		ref: m[4]
+	};
+}
 /**
 * The key of a remote `uses:` reference (`owner/repo/path@ref`): GitHub matches the owner and repository in any letter
 * case, and the path and ref as written.
@@ -35246,6 +35342,30 @@ const nodeHost = {
 function loadProject(opts) {
 	return loadProjectWith(opts, nodeHost);
 }
+//#endregion
+//#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote.ts
+/** GitHub calls only workflows directly inside `.github/workflows`, matching the directory's case exactly. */
+const CALLABLE = /^\.github\/workflows\/[^/]+\.[yY][aA]?[mM][lL]$/;
+/**
+* The remote reference a `uses:` names, or undefined when it names none: a remote `uses:` as written; and inside an
+* external unit, whose `./` and same-repository references name its own repository, a same-repository reference as
+* written, and a job's `./path` or a `$/path` as `<owner>/<repo>/<path>@<origin.sha ?? origin.ref>` (the commit of the
+* unit that names it). A step's `./path` is the runner's workspace, usually the caller's checkout, so it names none; nor
+* does anything local in a local unit, nor anything in an external unit without an `origin`.
+*/
+function remoteRefOfUses(unit, uses) {
+	const kind = uses.kind.endsWith("workflow") ? "workflow" : "action";
+	if (uses.kind === "remote-workflow" || uses.kind === "remote-action") return parseRemoteRef(uses.raw, kind);
+	if (uses.kind !== "local-workflow" && uses.kind !== "local-action") return void 0;
+	if (!unit.external || !unit.origin || uses.workspacePath !== void 0) return void 0;
+	if (uses.self || kind === "workflow" && uses.raw.trim().startsWith("./")) return uses.selfRef === void 0 && uses.target ? atOrigin(unit.origin, uses.target, kind) : void 0;
+	return parseRemoteRef(uses.raw, kind);
+}
+/** A path of an external unit's repository, at the unit's commit; undefined for one GitHub would not run. */
+function atOrigin(o, target, kind) {
+	if (kind === "workflow" ? !CALLABLE.test(target) : target === ".." || target.startsWith("../")) return void 0;
+	return parseRemoteRef(`${o.owner}/${o.repo}${target === "." ? "" : `/${target}`}@${o.sha ?? o.ref}`, kind);
+}
 new Set(CONTEXT_FUNCTIONS.map((f) => f.name.toLowerCase()));
 //#endregion
 //#region ../engine/src/plan/values.ts
@@ -40815,7 +40935,7 @@ const initializer = (inst, issues) => {
 const ZodRealError = /*@__PURE__*/ $constructor("ZodError", initializer, void 0, { Parent: Error });
 //#endregion
 //#region ../../node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js
-const parse$3 = /* @__PURE__ */ _parse(ZodRealError);
+const parse$4 = /* @__PURE__ */ _parse(ZodRealError);
 const parseAsync = /* @__PURE__ */ _parseAsync(ZodRealError);
 const safeParse = /* @__PURE__ */ _safeParse(ZodRealError);
 const safeParseAsync = /* @__PURE__ */ _safeParseAsync(ZodRealError);
@@ -40947,7 +41067,7 @@ const ZodType = /*@__PURE__*/ $constructor("ZodType", (inst, def) => {
 		own(this, "~standard", value);
 	},
 	parse: function _parse(data, params) {
-		return parse$3(this, data, params, { callee: _parse });
+		return parse$4(this, data, params, { callee: _parse });
 	},
 	parseAsync: async function _parseAsync(data, params) {
 		return await parseAsync(this, data, params, { callee: _parseAsync });
@@ -41423,6 +41543,14 @@ const ZodObject = /*@__PURE__*/ $constructor("ZodObject", (inst, def) => {
 		return required(ZodNonOptional, this, args[0]);
 	}
 });
+function object(shape, params) {
+	const def = {
+		type: "object",
+		shape: shape ?? {},
+		...normalizeParams(params)
+	};
+	return new ZodObject(def);
+}
 function strictObject(shape, params) {
 	return new ZodObject({
 		type: "object",
@@ -43906,6 +44034,12 @@ const modelFor = (uses, models = SHIPPED_MODELS) => models.find((m) => m.matches
 //#region ../engine/src/plan/canonicalize.ts
 const DROP_AT_ROOT = /* @__PURE__ */ new Set(["engine", "$schema"]);
 const DROP_EVERYWHERE = /* @__PURE__ */ new Set(["loc", "reads"]);
+/** In the snapshot profile: of each `remotes[]` entry, and of a called remote workflow's `remote`. */
+const SNAPSHOT_DROPS = /* @__PURE__ */ new Map([["remotes", /* @__PURE__ */ new Set([
+	"sha",
+	"pinned",
+	"host"
+])], ["remote", /* @__PURE__ */ new Set(["sha"])]]);
 function canonicalize(plan, profile) {
 	const root = plan;
 	const out = {};
@@ -43920,11 +44054,13 @@ function walk$2(value, key, profile) {
 	if (value === null || typeof value !== "object") return value;
 	const out = {};
 	for (const k of Object.keys(value).sort()) {
-		if (DROP_EVERYWHERE.has(k) || key === "pin" && k === "flag") continue;
+		if (dropped(key, k, profile)) continue;
 		out[k] = walk$2(value[k], k, profile);
 	}
 	return out;
 }
+/** Whether the canonical form leaves out field `k` of an object under `key`. */
+const dropped = (key, k, profile) => DROP_EVERYWHERE.has(k) || key === "pin" && k === "flag" || profile === "snapshot" && SNAPSHOT_DROPS.get(key)?.has(k) === true;
 function walkArray(value, key, profile) {
 	let items = value.map((v) => walk$2(v, key, profile));
 	if (key === "jobs") items = sortBy(items, "jobId");
@@ -44044,6 +44180,40 @@ const callNodeId = (leg, path) => `${leg}>${path}`;
 const compositeNodeId = (step, path) => `${step}>${path}`;
 //#endregion
 //#region ../engine/src/plan/select.ts
+const REMOTE_REASONS = {
+	"not-fetched": "not-fetched",
+	failed: "fetch-failed",
+	limit: "limit",
+	invalid: "invalid"
+};
+/** Why a leg that runs has no callee: its remote's state, or not loaded. */
+function callBoundary(leg, path, remotes) {
+	const base = {
+		at: leg.id,
+		verdict: leg.runs.verdict,
+		path
+	};
+	if (leg.runs.verdict === "no") return {
+		...base,
+		reason: "skipped"
+	};
+	const remote = remotes.get(leg.id);
+	const reason = remote && remote.state !== "simulated" ? REMOTE_REASONS[remote.state] : "not-loaded";
+	return remote ? {
+		...base,
+		reason,
+		remote
+	} : {
+		...base,
+		reason
+	};
+}
+/** The remote workflow each calling leg names, by leg id. */
+function remotesByLeg(plan) {
+	const out = /* @__PURE__ */ new Map();
+	for (const r of plan.remotes ?? []) if (r.kind === "workflow") for (const at of r.at) out.set(at, r);
+	return out;
+}
 var SelectionError = class extends Error {
 	code;
 	name = "SelectionError";
@@ -44063,10 +44233,10 @@ function selectNodes(plan, path, defaultWorkflow) {
 		throw new SelectionError("T201", `no workflow '${name ?? ""}' in the plan (workflows: ${known})`);
 	}
 	const out = { nodes: [] };
-	selectIn(wf, unit.segments, 0, "", out);
+	selectIn(wf, unit.segments, 0, "", out, remotesByLeg(plan));
 	return out;
 }
-function selectIn(wf, segments, i, prefix, out) {
+function selectIn(wf, segments, i, prefix, out, remotes) {
 	const seg = segments[i];
 	if (wf.jobs.length === 0) {
 		const path = prefix.replace(/\/$/, "");
@@ -44086,7 +44256,7 @@ function selectIn(wf, segments, i, prefix, out) {
 		return;
 	}
 	if (i === segments.length - 1) selectUnit(wf, job, legs, seg, prefix, out);
-	else selectCalled(job, legs, segments, i, prefix, out);
+	else selectCalled(job, legs, segments, i, prefix, out, remotes);
 }
 /** The last segment without a step: the job itself, or the legs its `[…]` picks. */
 function selectUnit(wf, job, legs, seg, prefix, out) {
@@ -44103,21 +44273,13 @@ function selectUnit(wf, job, legs, seg, prefix, out) {
 	for (const leg of legs) out.nodes.push(selected("leg", wf, job, leg, `${prefix}${job.jobId}${legSuffix(leg)}`));
 }
 /** `a/x`: a job of the workflow `a` calls, per selected leg. */
-function selectCalled(job, legs, segments, i, prefix, out) {
+function selectCalled(job, legs, segments, i, prefix, out, remotes) {
 	const name = `${prefix}${job.jobId}`;
 	if (!job.uses) throw new SelectionError("T204", `'${name}' does not call a reusable workflow; / descends into a called workflow (write ${name}.x for a step)`);
 	for (const leg of legs) {
 		const path = `${name}${legSuffix(leg)}`;
-		if (leg.call) selectIn(leg.call, segments, i + 1, `${path}/`, out);
-		else {
-			const reason = leg.runs.verdict === "no" ? "skipped" : "not-loaded";
-			out.unexpanded ??= {
-				at: leg.id,
-				verdict: leg.runs.verdict,
-				path,
-				reason
-			};
-		}
+		if (leg.call) selectIn(leg.call, segments, i + 1, `${path}/`, out, remotes);
+		else out.unexpanded ??= callBoundary(leg, path, remotes);
 	}
 }
 function selectStep(wf, job, leg, segments, i, prefix, out) {
@@ -44350,6 +44512,251 @@ function sharesJobId(plan, node, location) {
 	const first = location.chain[0];
 	if (first?.kind !== "job") return false;
 	return plan.workflows.some((w) => w.depth === 0 && w.triggered.verdict !== "no" && !node.startsWith(`${w.id}#`) && w.jobs.some((j) => j.jobId === first.id));
+}
+//#endregion
+//#region ../engine/src/remotes/lock.ts
+/**
+* The remotes lockfile (`.github/simulci/remotes.lock.yml`): the commit each remote reusable workflow and action a
+* repository uses resolved to, and a digest of the file read there. `simulci remotes update` writes it; every host
+* reads it through these pure functions, and does its own disk and network I/O.
+*/
+const REMOTES_LOCK_FILE = ".github/simulci/remotes.lock.yml";
+/** Why a remote could not be read: core's `RemoteFailureKind`, as a list the lockfile's schema reads (a test keeps them alike). */
+const REMOTE_FAILURE_KINDS = [
+	"unreachable",
+	"timeout",
+	"token",
+	"access",
+	"rate-limit",
+	"server",
+	"not-found",
+	"too-large",
+	"digest",
+	"other"
+];
+const FULL_SHA = /^[0-9a-f]{40}$/i;
+const LOCKED_SHA = /^[0-9a-f]{40}$/;
+const RemoteRefKeySchema = string().regex(/^[^/@\s]+\/[^/@\s]+(?:\/[^@\s]+)?@[^@\s]+$/, "a remote ref such as actions/cache@v4 or octo/ship/.github/workflows/deploy.yml@v1");
+const RemotesLockEntrySchema = object({
+	sha: string().regex(LOCKED_SHA, "a commit SHA: 40 lower-case hex digits"),
+	kind: _enum(["workflow", "action"]),
+	/** The file read at `sha`: the workflow's path, or the action's `action.yml` or `action.yaml`. */
+	file: string().min(1),
+	/** `sha256-` and the base64 of the SHA-256 of the file's bytes. */
+	digest: string().regex(/^sha256-[A-Za-z0-9+/]{43}=$/, "sha256- and a base64 SHA-256"),
+	/** The host that served the file, written only when it is not the run's. */
+	host: string().min(1).optional(),
+	/** The remote refs inside the file, so the closure is checkable offline. */
+	calls: array(RemoteRefKeySchema).optional()
+});
+/**
+* Unknown keys are ignored rather than refused, so an older simulci reads what a newer one adds to version 1.
+*/
+const RemotesLockSchema = object({
+	version: literal$1(1),
+	remotes: record(RemoteRefKeySchema, RemotesLockEntrySchema),
+	/** The refs the last update could not read, with why. */
+	unreadable: record(RemoteRefKeySchema, _enum(REMOTE_FAILURE_KINDS)).optional()
+});
+/** The lockfile from its text, or why it cannot be used. */
+function parseRemotesLock(text) {
+	let data;
+	try {
+		data = (0, import_dist.parse)(text);
+	} catch (e) {
+		return { error: `not valid YAML: ${e.message.split("\n")[0]}` };
+	}
+	const parsed = RemotesLockSchema.safeParse(data);
+	if (parsed.success) return { lock: parsed.data };
+	return { error: parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${issueMessage(i)}`).join("; ") };
+}
+/** A bad record key's own message, not zod's "Invalid key in record". */
+const issueMessage = (i) => i.code === "invalid_key" ? i.issues[0]?.message ?? i.message : i.message;
+/** The key of `ref` in a lockfile record: the exact key first, else one GitHub reads as the same (`remoteKey`). */
+function keyIn(rec, ref) {
+	if (!rec) return void 0;
+	if (Object.hasOwn(rec, ref)) return ref;
+	const key = remoteKey(ref);
+	return Object.keys(rec).find((k) => remoteKey(k) === key);
+}
+/**
+* The commit a remote runs at, first match wins: a full-SHA ref; the calling workflow's `actions.lock`, for an action
+* used outside a remote unit; a `./` inside a remote unit, at its parent's commit; the lockfile (`lock` and `fetch`);
+* live (`fetch` only). A pin before the lockfile that disagrees with the lockfile's entry wins, with
+* `remote-pin-mismatch`.
+*/
+function pinFor$1(ref, ctx) {
+	const early = earlyPin(ref, ctx);
+	if (early) return withMismatch(ref, ctx, early);
+	if (ctx.mode === "off") return {};
+	const locked = keyIn(ctx.lock?.remotes, ref.raw);
+	if (locked !== void 0) return {
+		pinned: "lockfile",
+		sha: ctx.lock.remotes[locked].sha
+	};
+	if (ctx.mode === "fetch") return {
+		pinned: "resolved",
+		issue: {
+			code: "remote-unpinned",
+			severity: "info",
+			message: `${ref.raw} is not in ${REMOTES_LOCK_FILE}: resolved live`
+		}
+	};
+	return ctx.lock ? { issue: notLocked(ref.raw, ctx.lock) } : {};
+}
+/** Rows 1–3: the pins that hold in every mode. A `./` has no ref of its own, so its parent is asked first. */
+function earlyPin(ref, ctx) {
+	if (ctx.parentSha !== void 0) return {
+		pinned: "parent",
+		sha: ctx.parentSha.toLowerCase()
+	};
+	if (FULL_SHA.test(ref.ref)) return {
+		pinned: "sha-ref",
+		sha: ref.ref.toLowerCase()
+	};
+	if (ref.kind === "action" && !ctx.inRemote && ctx.actionsLock !== void 0) return {
+		pinned: "actions-lock",
+		sha: ctx.actionsLock.toLowerCase()
+	};
+}
+function withMismatch(ref, ctx, pin) {
+	if (ctx.mode === "off") return pin;
+	const key = keyIn(ctx.lock?.remotes, ref.raw);
+	const locked = key === void 0 ? void 0 : ctx.lock.remotes[key].sha;
+	if (locked === void 0 || locked === pin.sha) return pin;
+	const by = pin.pinned === "sha-ref" ? "its ref" : pin.pinned === "parent" ? "its parent" : "actions.lock";
+	const message = `${ref.raw} runs ${pin.sha} (${by}), but ${REMOTES_LOCK_FILE} records ${locked}`;
+	return {
+		...pin,
+		issue: {
+			code: "remote-pin-mismatch",
+			severity: "warning",
+			message
+		}
+	};
+}
+function notLocked(raw, lock) {
+	const key = keyIn(lock.unreadable, raw);
+	const why = key === void 0 ? "" : ` (the last update could not read it: ${lock.unreadable[key]})`;
+	return {
+		code: "remote-not-locked",
+		severity: "warning",
+		message: `${raw} is not in ${REMOTES_LOCK_FILE}${why}`
+	};
+}
+//#endregion
+//#region ../engine/src/remotes/state.ts
+/** By code unit, not locale, so every host loads in the same order. */
+const byCodeUnit$1 = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+/** Failures in one order, so the one kept for a key does not depend on the order a host gave them in. */
+const sortFailures = (failed) => failed.map((f) => ({
+	f,
+	key: `${remoteKey(f.ref)}\n${f.ref}\n${f.failure}\n${f.message}`
+})).sort((a, b) => byCodeUnit$1(a.key, b.key)).map(({ f }) => f);
+/** Sources in one order whatever order a host read them in: site ids are numbered in load order. */
+const sortSources = (sources) => sources.map((s) => ({
+	s,
+	key: remoteKey(s.ref)
+})).sort((a, b) => byCodeUnit$1(a.key, b.key) || byCodeUnit$1(a.s.ref, b.s.ref) || byCodeUnit$1(a.s.sha, b.s.sha)).map(({ s }) => s);
+/**
+* Loads the workflows and local actions of a repository snapshot (files by repository-relative path), with the remote
+* files a host read as external units. A string is the `repository`.
+*/
+function loadFiles(files, opts = {}) {
+	const o = typeof opts === "string" ? { repository: opts } : opts;
+	const sources = sortSources(o.remotes?.sources ?? []);
+	return {
+		index: new ProjectIndex(loadProject({
+			root: ".",
+			fs: memoryFileSystem(files),
+			...o.repository === void 0 ? {} : { repository: o.repository },
+			validateSchema: false,
+			...sources.length ? { remotes: sources.map((s) => ({
+				ref: s.ref,
+				kind: s.kind,
+				text: s.text,
+				sha: s.sha
+			})) } : {}
+		})),
+		files,
+		settings: /* @__PURE__ */ new Map(),
+		remotes: remotesState(files, o, sources)
+	};
+}
+function remotesState(files, o, sources) {
+	return {
+		mode: o.mode ?? (o.remotes ? "lock" : "off"),
+		sources: new Map(sources.map((s) => [remoteKey(s.ref), s])),
+		failed: new Map(sortFailures(o.remotes?.failed ?? []).map((f) => [remoteKey(f.ref), f])),
+		limited: new Set((o.remotes?.limited ?? []).map(remoteKey)),
+		...locksOf(files)
+	};
+}
+/** The lockfiles among the files, those that read; one that does not is as none (`simulci remotes check` says why). */
+function locksOf(files) {
+	const lockText = files[REMOTES_LOCK_FILE];
+	const lock = lockText === void 0 ? void 0 : parseRemotesLock(lockText);
+	const actionsText = files[ACTIONS_LOCK_FILE];
+	const actions = actionsText === void 0 ? void 0 : readActionsLock(actionsText);
+	return {
+		...lock && "lock" in lock ? { lock: lock.lock } : {},
+		...lock && "error" in lock ? { lockError: lock.error } : {},
+		...actions?.lock ? { actionsLock: actions.lock } : {}
+	};
+}
+const kindOfUses = (uses) => uses.kind.endsWith("workflow") ? "workflow" : "action";
+/**
+* The remote ref a `uses:` names where it is written (core's `remoteRefOfUses`), and in a unit of this repository a
+* full ref to this repository too: GitHub runs it at its ref, never the working copy (lab R10).
+*/
+function remoteRefOf(unit, uses) {
+	if (!unit.external && uses.sameRepoRef !== void 0) return parseRemoteRef(uses.raw, kindOfUses(uses));
+	return remoteRefOfUses(unit, uses);
+}
+/**
+* Whether `uses:` names its remote through the unit's own repository (`./`, `$/`) rather than as written. A full ref to
+* the remote's own repository is parsed as local there too (`sameRepoRef`), but runs at its own ref (lab R10).
+*/
+const namedByOrigin = (unit, uses) => unit.external === true && uses.sameRepoRef === void 0 && (uses.kind === "local-workflow" || uses.kind === "local-action");
+/** A remote ref's state in a loaded project. */
+function lookupRemote(loaded, ref) {
+	const key = remoteKey(ref.raw);
+	const { sources, failed, limited } = loaded.remotes;
+	const unit = loaded.index.project.external?.get(key);
+	const source = sources.get(key);
+	if (unit && source) return {
+		key,
+		state: unit.parseErrors.length ? "invalid" : "simulated",
+		source,
+		unit
+	};
+	const failure = failed.get(key);
+	if (failure) return {
+		key,
+		state: "failed",
+		failure
+	};
+	return {
+		key,
+		state: limited.has(key) ? "limit" : "not-fetched"
+	};
+}
+/**
+* The pin context of a remote `uses:` in `unit`. `running` are the workflows of this repository that run the unit
+* (itself, or those that use a local action directly or through other local actions); the caller's `actions.lock`
+* pins an action under the first of them it covers (K4, lab R9), and never inside a remote unit.
+*/
+function pinContextOf(loaded, unit, uses, ref, running) {
+	const { mode, lock, actionsLock } = loaded.remotes;
+	const lockCommit = unit.external || ref.kind !== "action" ? void 0 : running.map((path) => actionsLockCommit(actionsLock, path, ref)).find((c) => c !== void 0);
+	const parentSha = namedByOrigin(unit, uses) ? unit.origin?.sha : void 0;
+	return {
+		mode,
+		...lock ? { lock } : {},
+		...lockCommit === void 0 ? {} : { actionsLock: lockCommit },
+		...unit.external ? { inRemote: true } : {},
+		...parentSha === void 0 ? {} : { parentSha }
+	};
 }
 //#endregion
 //#region ../engine/src/scenario.ts
@@ -45361,22 +45768,14 @@ const schemaUrl = (name) => `https://ciatlas.github.io/simulci/schemas/${name}/v
 var MocksError = class extends Error {
 	name = "MocksError";
 };
-/** Loads the workflows and local actions of a repository snapshot (files by repository-relative path). */
-function loadFiles(files, repository) {
-	return {
-		index: new ProjectIndex(loadProject({
-			root: ".",
-			fs: memoryFileSystem(files),
-			...repository === void 0 ? {} : { repository },
-			validateSchema: false
-		})),
-		files,
-		settings: /* @__PURE__ */ new Map()
-	};
-}
 function simulate(opts) {
 	const scenario = parseScenario(opts.scenario);
-	const loaded = opts.project ?? loadFiles(opts.files ?? {}, opts.repository ?? scenario.repository);
+	const repository = opts.repository ?? scenario.repository;
+	const loaded = opts.project ?? loadFiles(opts.files ?? {}, {
+		...repository === void 0 ? {} : { repository },
+		...opts.remotes ? { remotes: opts.remotes } : {},
+		...opts.remotesMode ? { mode: opts.remotesMode } : {}
+	});
 	const layers = { ...opts.mocks };
 	if (opts.assume) layers.case = [...layers.case ?? [], ...opts.assume];
 	for (const layer of [
@@ -45406,6 +45805,8 @@ var Planner = class {
 	units = /* @__PURE__ */ new Map();
 	/** The legs that call a workflow the plan does not load (by object: a dynamic matrix renames its leg). */
 	openCalls = /* @__PURE__ */ new WeakSet();
+	/** The remote workflows and actions the plan uses, by the ref it shows. */
+	remoteUses = /* @__PURE__ */ new Map();
 	index;
 	constructor(loaded, scenario, detail, maxDepth, mocks, shipped, untriggered) {
 		this.loaded = loaded;
@@ -45422,6 +45823,7 @@ var Planner = class {
 			depth: 0,
 			checkPrefix: ""
 		}));
+		const remotes = this.finishRemotes();
 		const plan = {
 			$schema: schemaUrl("runPlan"),
 			schemaVersion: 1,
@@ -45438,6 +45840,7 @@ var Planner = class {
 				id,
 				version
 			})).sort((a, b) => a.id.localeCompare(b.id)),
+			...remotes.length ? { remotes } : {},
 			diagnostics: this.finishDiagnostics()
 		};
 		assumePins(plan, this.units);
@@ -45489,6 +45892,7 @@ var Planner = class {
 		const planned = /* @__PURE__ */ new Map();
 		const jobCtx = {
 			wf,
+			wfPath: shownPath(wf, ctx),
 			wfNode: id,
 			wfName,
 			triggered,
@@ -45498,7 +45902,14 @@ var Planner = class {
 			planned,
 			depth: ctx.depth,
 			checkPrefix: ctx.checkPrefix,
-			chain: ctx.chain ?? []
+			chain: ctx.chain ?? [],
+			scope: wf.external ? {
+				unit: wf,
+				...ctx.remote ? { refName: ctx.remote.refName } : {}
+			} : {
+				unit: wf,
+				running: wf.path
+			}
 		};
 		for (const jobId of topoOrder(wf)) {
 			const settingsOfJob = settings.jobs[jobId] ?? {
@@ -45522,7 +45933,8 @@ var Planner = class {
 	/** The workflow's settings, node id, scenario (a callee sees the secrets it is given), trigger decision and inputs. */
 	setupWorkflow(wf, ctx) {
 		const settings = this.settingsOf(wf);
-		const id = ctx.caller === void 0 ? wf.path : callNodeId(ctx.caller, wf.path);
+		const shown = shownPath(wf, ctx);
+		const id = ctx.caller === void 0 ? wf.path : callNodeId(ctx.caller, shown);
 		this.settingsDiagnostics(settings, wf.path, id);
 		const scenario = ctx.secrets === void 0 ? this.scenario : {
 			...this.scenario,
@@ -45532,9 +45944,9 @@ var Planner = class {
 			settings,
 			id,
 			scenario,
-			triggered: ctx.triggered ?? this.triggerDecision(settings, id),
+			triggered: ctx.triggered ?? this.refusal(wf, id, this.triggerDecision(settings, id)),
 			inputs: ctx.inputs ?? dispatchInputs(wf, scenario),
-			wfName: wf.name ?? wf.path
+			wfName: wf.name ?? shown
 		};
 	}
 	settingsOf(wf) {
@@ -45565,6 +45977,58 @@ var Planner = class {
 		const m = matchTrigger(settings.events, this.scenario);
 		for (const u of m.unknowns) this.register(u, m.decision.verdict === "maybe" ? node : void 0);
 		return m.decision;
+	}
+	/**
+	* GitHub refuses to start a run whose reusable workflows nest more than `maxDepth` deep or that names more than 50 of
+	* them, whatever its `if:`s say (lab R7): the workflow does not start, no job fails.
+	*/
+	refusal(wf, id, triggered) {
+		if (triggered.verdict === "no") return triggered;
+		const keys = /* @__PURE__ */ new Set();
+		const depth = this.callDepth(wf, /* @__PURE__ */ new Map(), /* @__PURE__ */ new Set(), keys);
+		let limit;
+		let why;
+		if (depth > this.maxDepth) {
+			limit = "nesting";
+			why = Number.isFinite(depth) ? `its reusable workflows nest ${depth} deep, more than ${this.maxDepth}` : "its reusable workflows call each other in a cycle";
+		} else if (keys.size > MAX_CALLED_WORKFLOWS) {
+			limit = "workflows";
+			why = `it names ${keys.size} reusable workflows, more than ${MAX_CALLED_WORKFLOWS}`;
+		} else return triggered;
+		this.diagnostics.push({
+			severity: "warning",
+			code: "refused",
+			message: `GitHub does not start ${wf.path}: ${why}`,
+			node: id
+		});
+		return {
+			verdict: "no",
+			chain: [...triggered.chain, {
+				kind: "limit",
+				limit
+			}]
+		};
+	}
+	/**
+	* How deep the calls under a workflow nest (1 for a call to a workflow that calls none), whatever their `if:`s, and
+	* the key of every workflow called (a remote not read counts, with nothing under it). A cycle is infinitely deep.
+	*/
+	callDepth(wf, done, open, keys) {
+		const memo = done.get(wf);
+		if (memo !== void 0) return memo;
+		if (open.has(wf)) return Number.POSITIVE_INFINITY;
+		open.add(wf);
+		let deepest = 0;
+		for (const job of Object.values(wf.jobs)) {
+			const { callee, remote } = this.resolveCallee(job, { unit: wf });
+			const key = remote?.key ?? callee?.path;
+			if (key === void 0) continue;
+			keys.add(key);
+			deepest = Math.max(deepest, 1 + (callee ? this.callDepth(callee, done, open, keys) : 0));
+		}
+		open.delete(wf);
+		done.set(wf, deepest);
+		return deepest;
 	}
 	/** The outputs a reusable workflow declares, read from its jobs. */
 	callOutputs(wf, plan, base) {
@@ -45607,17 +46071,18 @@ var Planner = class {
 			failFast: plan.matrix?.failFast ?? known$1(true),
 			total: exp.combos.length || 1
 		};
+		const shownUses = this.shownUses(job, ctx.scope);
 		plan.legs = this.legsOf(job, exp, segments, legCtx);
 		for (const leg of plan.legs) {
 			const location = {
-				workflow: ctx.wf.path,
+				workflow: ctx.wfPath,
 				chain: [...ctx.chain, legLinkOf(job, leg)]
 			};
 			this.units.set(leg.id, {
 				location,
 				kind: "job"
 			});
-			this.applyLegFacts(job, leg, jobNode, location);
+			this.applyLegFacts(job, leg, jobNode, location, shownUses);
 		}
 		this.failFast(plan);
 		plan.result = this.jobResultOf(runs, cond, continueOnError, plan.legs);
@@ -45628,8 +46093,8 @@ var Planner = class {
 	* A mock on the job or one of its legs (`test[node=22]`, or `test` with `matrix:`): its outcome is the leg's result
 	* (the steps stay planned), its outputs overlay the leg's. The job's result and outputs are then read from its legs.
 	*/
-	applyLegFacts(job, leg, jobNode, location) {
-		const facts = this.mocks.factsFor(location, leg.id, job.uses?.raw);
+	applyLegFacts(job, leg, jobNode, location, uses) {
+		const facts = this.mocks.factsFor(location, leg.id, uses);
 		if (facts.outcome) {
 			leg.result = facts.outcome.value;
 			this.record(facts.outcome.by, leg.id, "outcome");
@@ -45647,6 +46112,10 @@ var Planner = class {
 			names: declared,
 			what: `job ${job.id}`
 		});
+	}
+	/** The `uses:` that `uses:` mocks match: a remote's as the plan shows it (a remote's `./` is its own repository's). */
+	shownUses(job, scope) {
+		return job.uses && (this.remoteTarget(scope, job.uses)?.display ?? job.uses.raw);
 	}
 	/** A diagnostic said once: every leg of a matrix that meets the same mock says the same thing. */
 	diagnoseOnce(d) {
@@ -45708,23 +46177,11 @@ var Planner = class {
 			node: ctx.wfNode,
 			verdict: ctx.triggered.verdict
 		};
-		const runs = this.nestingLimit(job, ctx, decide(ctx.triggered, cond.value, [parent, ifReason]));
+		const runs = decide(ctx.triggered, cond.value, [parent, ifReason]);
 		if (runs.verdict === "maybe") this.noteValue(cond.value, jobNode);
 		return {
 			runs,
 			cond
-		};
-	}
-	/** A call past the nesting limit does not run, whatever its `if:` says: the job stops, not only its legs. */
-	nestingLimit(job, ctx, runs) {
-		if (runs.verdict === "no" || !job.uses || ctx.depth + 1 < this.maxDepth) return runs;
-		if (!this.index.calleeOf(job)) return runs;
-		return {
-			verdict: "no",
-			chain: [...runs.chain, {
-				kind: "limit",
-				limit: "nesting"
-			}]
 		};
 	}
 	matrixPlan(job, exp, ctx, jobNode) {
@@ -45832,7 +46289,7 @@ var Planner = class {
 		if (job.runsOn) leg.runsOn = this.runsOn(job, ctx.wf, state, legId);
 		if (job.environment) leg.environment = this.environment(job, ctx.wf, state, legId);
 		const location = {
-			workflow: ctx.wf.path,
+			workflow: ctx.wfPath,
 			chain: [...ctx.chain, legLinkOf(job, leg)]
 		};
 		if (job.uses) {
@@ -45843,7 +46300,7 @@ var Planner = class {
 			name: `${ctx.checkPrefix}${seg.name}`,
 			certain: seg.certain
 		};
-		const steps = this.planSteps(job.steps, ctx.settings.steps, legId, runs, state, void 0, location);
+		const steps = this.planSteps(job.steps, ctx.settings.steps, legId, runs, state, void 0, location, ctx.scope);
 		if (this.detail === "steps") leg.steps = steps.plans;
 		leg.result = legResult(steps.conclusions);
 		leg.outputs = this.outputsOf(job.outputs, {
@@ -45899,9 +46356,10 @@ var Planner = class {
 	/** A reusable workflow called by the leg: nested with the caller's inputs and secrets, its result from its jobs. */
 	planCall(leg, state, seg, ctx, location) {
 		const { job } = ctx;
-		const callee = this.index.calleeOf(job);
+		const { callee, remote } = this.resolveCallee(job, ctx.scope);
+		if (remote) this.useRemote(remote, leg, ctx.scope, job.uses);
 		if (!callee) {
-			this.unsupportedCall(leg, job);
+			this.unsupportedCall(leg, job, remote);
 			return;
 		}
 		const inputs = callInputs(job, callee, state);
@@ -45919,8 +46377,13 @@ var Planner = class {
 				}]
 			},
 			inputs,
-			secrets: job.secretsInherit ? ctx.scenario.secrets : Object.keys(job.secrets),
-			checkPrefix: `${ctx.checkPrefix}${seg.name} / `
+			secrets: job.secretsInherit ? this.inherited(ctx, remote) : Object.keys(job.secrets),
+			checkPrefix: `${ctx.checkPrefix}${seg.name} / `,
+			...remote?.source ? { remote: {
+				display: remote.display,
+				refName: refNameOf(remote.display),
+				sha: remote.source.sha
+			} } : {}
 		});
 		const legResults = leg.call.jobs.map((j) => j.result);
 		leg.result = jobResult({
@@ -45930,20 +46393,101 @@ var Planner = class {
 		});
 		leg.outputs = { ...leg.call.outputs };
 	}
-	unsupportedCall(leg, job) {
-		const why = job.uses?.kind === "remote-workflow" ? "a remote reusable workflow is not loaded" : "the called workflow was not found or cannot be called";
-		this.diagnostics.push({
-			severity: "warning",
-			code: "unsupported",
-			message: `${job.uses?.raw}: ${why}`,
-			node: leg.id
+	/**
+	* The workflow a job calls: in this repository's units a local one through the index, else the remote unit its ref
+	* names (`./` and `$/` inside a remote name that remote's files at its commit; lab R2), with the remote's state.
+	*/
+	resolveCallee(job, scope) {
+		if (!job.uses) return {};
+		const remote = this.remoteTarget(scope, job.uses);
+		if (!remote) return scope.unit.external ? {} : { callee: this.index.calleeOf(job) };
+		const unit = remote.state === "simulated" ? remote.unit : void 0;
+		return unit?.kind === "workflow" && unit.call ? {
+			callee: unit,
+			remote
+		} : { remote };
+	}
+	remoteTarget(scope, uses) {
+		const ref = remoteRefOf(scope.unit, uses);
+		if (!ref) return void 0;
+		const display = namedByOrigin(scope.unit, uses) ? atRefName(ref, scope.refName) : ref.raw;
+		return {
+			...lookupRemote(this.loaded, ref),
+			ref,
+			display
+		};
+	}
+	/** The secrets `secrets: inherit` passes: all of them, but only `GITHUB_TOKEN` to another owner's workflow (lab R6). */
+	inherited(ctx, remote) {
+		const owner = ctx.scope.unit.origin?.owner ?? (this.index.project.repository ?? this.scenario.repository)?.split("/")[0];
+		return remote && owner !== void 0 && remote.ref.owner.toLowerCase() !== owner.toLowerCase() ? [] : ctx.scenario.secrets;
+	}
+	/**
+	* Records a use. Uses are one row per fetch key and shown ref: a `./` inside a remote is shown like a direct ref to
+	* the same file at the parent's ref name, but is another remote. The pin context kept is the one that says most: an
+	* `actions.lock` pin, else a use in this repository, else one in a remote.
+	*/
+	useRemote(target, at, scope, uses) {
+		const row = `${target.key}\n${remoteKey(target.display)}`;
+		const context = pinContextOf(this.loaded, scope.unit, uses, target.ref, scope.running ? [scope.running] : []);
+		const site = this.remoteUses.get(row);
+		if (!site) this.remoteUses.set(row, {
+			target,
+			at: [at],
+			context
 		});
+		else {
+			site.at.push(at);
+			if (contextRank(context) > contextRank(site.context)) site.context = context;
+		}
+	}
+	/**
+	* The remotes the plan lists (every workflow it calls, and the actions a host read or tried to), sorted by ref; and
+	* the lockfile's word on each remote it uses, said at the first node that uses it.
+	*/
+	finishRemotes() {
+		const out = [];
+		for (const site of this.remoteUses.values()) {
+			const at = [...new Set(site.at.map((a) => typeof a === "string" ? a : a.id))].sort(byCodeUnit);
+			const { issue } = pinFor$1(site.target.ref, site.context);
+			if (issue) this.diagnostics.push({
+				...issue,
+				node: at[0]
+			});
+			if (site.target.ref.kind === "workflow" || site.target.state !== "not-fetched") out.push(remoteUseOf(site.target, at));
+		}
+		const { lockError, mode } = this.loaded.remotes;
+		if (lockError !== void 0 && mode !== "off") {
+			const message = `${REMOTES_LOCK_FILE} cannot be read, so no remote is pinned by it: ${lockError}`;
+			this.diagnostics.push({
+				severity: "warning",
+				code: "remotes-lock-invalid",
+				message
+			});
+		}
+		return out.sort((a, b) => byCodeUnit(a.ref, b.ref) || byCodeUnit(a.at[0], b.at[0]));
+	}
+	unsupportedCall(leg, job, remote) {
+		this.callDiagnostics(leg.id, job, remote);
 		leg.result = leg.runs.verdict === "no" ? known$1("skipped") : unknown$1([`${leg.id}.call`], [
 			"success",
 			"failure",
 			"skipped"
 		]);
 		if (leg.runs.verdict !== "no") this.openCalls.add(leg);
+	}
+	/** Why a call is not planned: not fetched (`unsupported`), not read, past a cap, a parse error, or not callable. */
+	callDiagnostics(node, job, remote) {
+		const shown = remote?.display ?? job.uses?.raw ?? "";
+		if (remote?.state !== "invalid") {
+			this.diagnostics.push({
+				severity: "warning",
+				...callProblem(shown, job, remote),
+				node
+			});
+			return;
+		}
+		for (const e of remote.unit.parseErrors) this.diagnoseOnce(parseDiagnostic(shown, e, node));
 	}
 	/** An output a leg does not list: empty, unless the leg calls a workflow the plan does not load. */
 	unsetOutput(leg, name) {
@@ -45970,7 +46514,7 @@ var Planner = class {
 			outputs: p.outputs
 		};
 	}
-	planSteps(steps, settings, parentId, parentRuns, state, inputs, parent) {
+	planSteps(steps, settings, parentId, parentRuns, state, inputs, parent, scope) {
 		const taken = /* @__PURE__ */ new Set();
 		const stepsState = {};
 		const out = {
@@ -46003,7 +46547,7 @@ var Planner = class {
 				}
 			};
 			if (inputs) stepState.inputs = inputs;
-			const { plan, open, envWrites } = this.planStep(step, settings[step.index], sid, parentId, parentRuns, stepState, status, location);
+			const { plan, open, envWrites } = this.planStep(step, settings[step.index], sid, parentId, parentRuns, stepState, status, location, scope);
 			Object.assign(written, envWrites);
 			out.plans.push(plan);
 			if (step.id !== void 0) stepsState[step.id] = {
@@ -46018,7 +46562,7 @@ var Planner = class {
 		}
 		return out;
 	}
-	planStep(step, st, sid, parentId, parentRuns, state, status, location) {
+	planStep(step, st, sid, parentId, parentRuns, state, status, location, scope) {
 		this.units.set(sid, {
 			location,
 			kind: "step"
@@ -46035,7 +46579,7 @@ var Planner = class {
 		if (runs.verdict === "maybe") this.noteValue(cond.value, sid);
 		const continueOnError = this.setting(st?.continueOnError, false, `${sid}.continue-on-error`);
 		const withValues = this.bindings(step.with, state);
-		const target = this.stepTarget(step, sid, withValues);
+		const target = this.stepTarget(step, sid, withValues, scope);
 		const { outcome, outputs, open, composite, envWrites } = this.stepOutcome(step, target, sid, runs, cond, state, location);
 		const plan = stepShell(step, sid, parentId, runs, outcome, continueOnError, outputs);
 		plan.with = withValues;
@@ -46047,12 +46591,34 @@ var Planner = class {
 			envWrites
 		};
 	}
-	/** A `uses:` step's local action, or the shipped model of a remote one with what it sees (scenario, `with:`, `@ref`). */
-	stepTarget(step, sid, withValues) {
+	/**
+	* A `uses:` step's local action, or the shipped model of a remote one with what it sees (scenario, `with:`, `@ref`).
+	* Inside a remote unit the index resolves nothing: its `./` is the job's workspace (lab R3), its `$/` the remote.
+	*/
+	stepTarget(step, sid, withValues, scope) {
 		if (!step.uses) return {};
-		const action = this.index.actionOf(step);
-		if (action) return { action };
-		const model = modelFor(step.uses.raw, this.shipped);
+		const remote = this.remoteTarget(scope, step.uses);
+		if (!remote) return this.localStep(step, sid, withValues, scope);
+		this.useRemote(remote, sid, scope, step.uses);
+		return {
+			...this.modelTarget(remote.display, sid, withValues),
+			shown: remote.display
+		};
+	}
+	/** A step whose `uses:` names no remote: this repository's action, else a model or nothing (a remote's `./`, docker). */
+	localStep(step, sid, withValues, scope) {
+		const action = scope.unit.external ? void 0 : this.index.actionOf(step);
+		if (!action) return this.modelTarget(step.uses.raw, sid, withValues);
+		return {
+			action,
+			scope: {
+				unit: action,
+				...scope.running ? { running: scope.running } : {}
+			}
+		};
+	}
+	modelTarget(uses, sid, withValues) {
+		const model = modelFor(uses, this.shipped);
 		if (!model) return {};
 		this.models.set(model.id, model.version);
 		const ctx = {
@@ -46060,8 +46626,8 @@ var Planner = class {
 			with: withValues,
 			node: sid
 		};
-		const at = step.uses.raw.indexOf("@");
-		if (at !== -1) ctx.ref = step.uses.raw.slice(at + 1);
+		const at = uses.indexOf("@");
+		if (at !== -1) ctx.ref = uses.slice(at + 1);
 		return { model: {
 			model,
 			ctx
@@ -46075,11 +46641,11 @@ var Planner = class {
 			open: false,
 			envWrites: {}
 		};
-		const facts = this.mocks.factsFor(location, sid, step.uses?.raw, target.model);
+		const facts = this.mocks.factsFor(location, sid, target.shown ?? step.uses?.raw, target.model);
 		const envWrites = this.envWrites(step, sid, state, facts);
 		const { produced, base } = this.producedOutcome(facts, runs, cond, sid);
 		if (target.action?.using === "composite") return {
-			...this.compositeProduct(target.action, step, sid, state, runs, location, facts, produced, base),
+			...this.compositeProduct(target, step, sid, state, runs, location, facts, produced, base),
 			envWrites
 		};
 		const opaque = this.opaqueOutputs(step, target, sid, state);
@@ -46133,8 +46699,9 @@ var Planner = class {
 		};
 	}
 	/** A composite action under its step: a mocked outcome makes it opaque, otherwise its inner steps decide. */
-	compositeProduct(action, step, sid, state, runs, location, facts, produced, base) {
-		const composite = this.planComposite(action, step, sid, state, runs, location);
+	compositeProduct(target, step, sid, state, runs, location, facts, produced, base) {
+		const action = target.action;
+		const composite = this.planComposite(action, step, sid, state, runs, location, target.scope);
 		const outcome = combine([base, facts.outcome ? produced : legResult(composite.steps.map((s) => s.conclusion))], ([o, i]) => o === "skipped" ? "skipped" : i);
 		const outputs = { ...composite.outputs };
 		this.overlayOutputs(outputs, facts, sid, {
@@ -46196,7 +46763,7 @@ var Planner = class {
 			unknownId: (n) => `${sid}.env.${n}`
 		});
 	}
-	planComposite(action, step, stepNode, state, runs, location) {
+	planComposite(action, step, stepNode, state, runs, location, scope) {
 		const id = compositeNodeId(stepNode, action.path);
 		const given = this.bindings(step.with, state);
 		const inputs = {};
@@ -46206,7 +46773,7 @@ var Planner = class {
 			...state,
 			steps: {},
 			status: known$1("success")
-		}, inputs, location);
+		}, inputs, location, scope);
 		const steps = Object.fromEntries(inner.plans.filter((p) => p.stepId !== void 0).map((p) => [p.stepId, {
 			id: p.id,
 			outcome: p.outcome,
@@ -46300,7 +46867,7 @@ var Planner = class {
 function workflowShell(wf, id, settings, triggered, inputs, ctx) {
 	const plan = {
 		id,
-		path: wf.path,
+		path: shownPath(wf, ctx),
 		on: Object.keys(settings.events),
 		triggered,
 		conclusion: known$1("skipped"),
@@ -46311,13 +46878,19 @@ function workflowShell(wf, id, settings, triggered, inputs, ctx) {
 	};
 	if (wf.name !== void 0) plan.name = wf.name;
 	if (ctx.caller !== void 0) plan.caller = ctx.caller;
-	if (settings.concurrency) {
-		plan.concurrency = {};
-		if (settings.concurrency.group !== void 0) plan.concurrency.group = settings.concurrency.group;
-		const cip = settings.concurrency.cancelInProgress;
-		if (cip !== void 0) plan.concurrency.cancelInProgress = typeof cip === "boolean" ? known$1(cip) : unknown$1([`${id}.concurrency`]);
-	}
+	if (ctx.remote) plan.remote = {
+		ref: ctx.remote.display,
+		sha: ctx.remote.sha
+	};
+	if (settings.concurrency) plan.concurrency = concurrencyOf(settings.concurrency, id);
 	return plan;
+}
+function concurrencyOf(c, id) {
+	const out = {};
+	if (c.group !== void 0) out.group = c.group;
+	const cip = c.cancelInProgress;
+	if (cip !== void 0) out.cancelInProgress = typeof cip === "boolean" ? known$1(cip) : unknown$1([`${id}.concurrency`]);
+	return out;
 }
 function jobShell(job, jobNode, ctx, runs, continueOnError, segments) {
 	const segment = segments[0];
@@ -46376,6 +46949,58 @@ function stepShell(step, sid, parentId, runs, outcome, continueOnError, outputs)
 	if (step.run !== void 0) plan.run = true;
 	plan.loc = locOf(step.loc);
 	return plan;
+}
+/** GitHub's limit on the reusable workflows one run names (lab R7). */
+const MAX_CALLED_WORKFLOWS = 50;
+/** How much a `uses:`'s pin context says about a remote's commit: an `actions.lock` pin, a local use, a remote one. */
+const contextRank = (c) => c.actionsLock !== void 0 ? 2 : c.inRemote ? 0 : 1;
+/** By code unit, not locale, so every host orders alike. */
+const byCodeUnit = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+/** A workflow's path as the plan shows it: a called remote's ref as shown, so no id or name holds a commit. */
+const shownPath = (wf, ctx) => ctx.remote?.display ?? wf.path;
+/** A remote named through its unit's own repository, shown at the ref name the unit is shown at (GitHub records it so, lab R2). */
+const atRefName = (ref, refName) => `${ref.owner}/${ref.repo}${ref.path ? `/${ref.path}` : ""}@${refName ?? ref.ref}`;
+const refNameOf = (display) => display.slice(display.lastIndexOf("@") + 1);
+function remoteUseOf(target, at) {
+	const use = {
+		ref: target.display,
+		kind: target.ref.kind,
+		state: target.state,
+		at
+	};
+	if (target.source) {
+		use.sha = target.source.sha;
+		use.pinned = target.source.pinned;
+		if (target.source.host !== void 0) use.host = target.source.host;
+	}
+	if (target.failure) use.failure = target.failure.failure;
+	return use;
+}
+/** The diagnostic of a call that is not planned and whose file is not the problem. */
+function callProblem(shown, job, remote) {
+	if (remote?.state === "failed") return {
+		code: "remote-fetch-failed",
+		message: `${shown}: not read (${remote.failure.failure})`
+	};
+	if (remote?.state === "limit") return {
+		code: "remote-limit",
+		message: `${shown}: not read, past the limit on how many remote files a run reads`
+	};
+	return {
+		code: "unsupported",
+		message: `${shown}: ${(remote ? remote.state === "not-fetched" : job.uses?.kind === "remote-workflow") ? "a remote reusable workflow is not loaded" : "the called workflow was not found or cannot be called"}`
+	};
+}
+/** A remote's parse error (an alias bomb is one), at its place in the remote's text. */
+function parseDiagnostic(shown, e, node) {
+	const d = {
+		severity: "warning",
+		code: "parse",
+		message: `${shown}: ${e.message}`,
+		node
+	};
+	if (e.loc) d.loc = locOf(e.loc);
+	return d;
 }
 /** A plan position from a core one: file, line and column. */
 const locOf = (loc) => ({
@@ -46682,7 +47307,7 @@ const becauseOf = (r) => r.kind === "filter" ? r.filter : r.kind;
 //#region ../engine/src/render/text.ts
 /**
 * The plan as text: one line per workflow, job, leg and step with a mark (● runs, ○ skipped, ◐ maybe) and the
-* clause that decided it, then the unknowns with what would pin them.
+* clause that decided it, then the unknowns with what would pin them and the remotes with where each was read.
 */
 const MARK$1 = {
 	yes: "●",
@@ -46693,7 +47318,11 @@ function renderText(plan) {
 	const lines = [];
 	const triggered = plan.workflows.filter((w) => w.triggered.verdict !== "no");
 	lines.push(`${plan.scenario.id} · ${triggered.length} of ${plan.workflows.length} workflows triggered`);
-	for (const wf of plan.workflows) lines.push(...workflowLines(wf, plan.detail === "steps", 0));
+	const ctx = {
+		steps: plan.detail === "steps",
+		calls: remotesByLeg(plan)
+	};
+	for (const wf of plan.workflows) lines.push(...workflowLines(wf, ctx, 0));
 	if (plan.unknowns.length) {
 		lines.push("", "Unknowns:");
 		for (const u of plan.unknowns) {
@@ -46702,31 +47331,50 @@ function renderText(plan) {
 			lines.push(`  ${u.id}${affects}${pin}`);
 		}
 	}
+	lines.push(...remotesLines(plan));
 	for (const d of plan.diagnostics) {
 		const at = d.loc ? ` (${d.loc.file}:${d.loc.line})` : "";
 		lines.push(`${d.severity}: ${d.message}${at}`);
 	}
 	return `${lines.join("\n")}\n`;
 }
-function workflowLines(wf, steps, depth) {
-	const lines = [`${"  ".repeat(depth)}${MARK$1[wf.triggered.verdict]} ${wf.path} — ${decidingClause(wf.triggered)}`];
-	for (const job of wf.jobs) lines.push(...jobLines(job, steps, depth + 1));
+/** The remotes under the plan: each with the commit it was read at and its pin, or why it was not read. */
+function remotesLines(plan) {
+	if (!plan.remotes?.length) return [];
+	const lines = ["", "Remotes:"];
+	for (const r of plan.remotes) lines.push(`  ${r.ref}${r.sha ? ` → ${r.sha.slice(0, 7)}` : ""} (${remoteState(r)})`);
 	return lines;
 }
-function jobLines(job, steps, depth) {
+/** `pinned` for a remote read (`lockfile`, `sha-ref`, …), else why it was not. */
+function remoteState(r) {
+	if (r.state === "simulated") return r.pinned ?? "read";
+	if (r.state === "failed") return `not read: ${r.failure}`;
+	if (r.state === "limit") return "not read: past a limit";
+	return r.state === "invalid" ? "does not parse" : "not fetched";
+}
+function workflowLines(wf, ctx, depth) {
+	const pad = "  ".repeat(depth);
+	const remote = wf.remote ? ` (remote, ${wf.remote.sha.slice(0, 7)})` : "";
+	const lines = [`${pad}${MARK$1[wf.triggered.verdict]} ${wf.path}${remote} — ${decidingClause(wf.triggered)}`];
+	for (const job of wf.jobs) lines.push(...jobLines(job, ctx, depth + 1));
+	return lines;
+}
+function jobLines(job, ctx, depth) {
 	const pad = "  ".repeat(depth);
 	const why = job.runs.verdict === "yes" ? "" : ` — ${decidingClause(job.runs)}`;
 	const lines = [`${pad}${MARK$1[job.runs.verdict]} ${job.jobId}${why}`];
 	if (job.runs.verdict === "no") return lines;
 	const single = job.legs.length === 1 && job.legs[0].legKey === "";
-	for (const leg of job.legs) lines.push(...legLines(leg, steps, depth + 1, single));
+	for (const leg of job.legs) lines.push(...legLines(leg, ctx, depth + 1, single));
 	return lines;
 }
-function legLines(leg, steps, depth, single) {
+function legLines(leg, ctx, depth, single) {
 	const lines = single ? [] : [legHeader(leg, "  ".repeat(depth))];
 	const inner = single ? depth : depth + 1;
-	if (leg.call) lines.push(...workflowLines(leg.call, steps, inner));
-	for (const step of steps ? leg.steps ?? [] : []) lines.push(...stepLines(step, inner));
+	const remote = ctx.calls.get(leg.id);
+	if (leg.call) lines.push(...workflowLines(leg.call, ctx, inner));
+	else if (remote && leg.runs.verdict !== "no") lines.push(`${"  ".repeat(inner)}└ ${remote.ref} (remote, ${remoteState(remote)})`);
+	for (const step of ctx.steps ? leg.steps ?? [] : []) lines.push(...stepLines(step, inner));
 	return lines;
 }
 function legHeader(leg, pad) {
@@ -47069,6 +47717,10 @@ function boundaryText(ctx, u) {
 		case "untriggered": return `${ctx.name} is not triggered`;
 		case "skipped": return `'${u.path}' skips`;
 		case "not-loaded": return `the workflow '${u.path}' calls is not in the project`;
+		case "not-fetched": return `the remote workflow '${u.path}' calls (${u.remote.ref}) is not fetched`;
+		case "fetch-failed": return `the remote workflow '${u.path}' calls (${u.remote.ref}) could not be read (${u.remote.failure})`;
+		case "limit": return `the remote workflow '${u.path}' calls (${u.remote.ref}) is past the limit on remote files read`;
+		case "invalid": return `the remote workflow '${u.path}' calls (${u.remote.ref}) does not parse`;
 		default: return "the plan has no steps (detail: legs)";
 	}
 }
