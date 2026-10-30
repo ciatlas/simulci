@@ -1,0 +1,104 @@
+# Case R7 - remote-total-50: 50 distinct remote reusable workflows called from one workflow.
+name: case-remote-total-50
+on: workflow_dispatch
+jobs:
+  f01:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-01.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f02:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-02.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f03:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-03.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f04:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-04.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f05:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-05.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f06:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-06.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f07:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-07.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f08:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-08.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f09:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-09.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f10:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-10.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f11:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-11.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f12:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-12.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f13:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-13.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f14:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-14.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f15:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-15.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f16:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-16.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f17:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-17.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f18:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-18.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f19:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-19.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f20:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-20.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f21:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-21.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f22:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-22.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f23:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-23.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f24:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-24.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f25:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-25.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f26:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-26.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f27:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-27.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f28:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-28.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f29:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-29.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f30:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-30.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f31:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-31.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f32:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-32.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f33:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-33.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f34:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-34.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f35:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-35.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f36:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-36.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f37:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-37.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f38:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-38.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f39:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-39.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f40:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-40.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f41:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-41.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f42:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-42.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f43:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-43.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f44:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-44.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f45:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-45.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f46:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-46.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f47:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-47.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f48:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-48.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f49:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-49.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  f50:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-fan-50.yml@d19def8c3562ef6c1be3f12443345575530f1ac4

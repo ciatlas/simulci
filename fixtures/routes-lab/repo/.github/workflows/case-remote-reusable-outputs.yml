@@ -1,0 +1,35 @@
+# Case R1 - remote-reusable-outputs: remote reusable workflows that run, that skip every job, and a skipped remote
+# call; what dependents see and which checks are reported (cases 9 and 10, with the callee in another repository).
+name: case-remote-reusable-outputs
+on: workflow_dispatch
+jobs:
+  echo:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r1-echo.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  skipped:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r1-skipped.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  not-called:
+    if: false
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r1-echo.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  b:
+    needs: [echo, skipped, not-called]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        env:
+          ECHO: ${{ toJSON(needs.echo.outputs) }}
+          SKIPPED: ${{ toJSON(needs.skipped.outputs) }}
+        run: |
+          echo "probe: needs.echo.result=${{ needs.echo.result }}"
+          echo "probe: needs.echo.outputs.o=${{ needs.echo.outputs.o }}"
+          echo "probe: needs.skipped.result=${{ needs.skipped.result }}"
+          echo "probe: needs.skipped.outputs.o=${{ needs.skipped.outputs.o }}"
+          echo "probe: needs.skipped.outputs=$(jq -c . <<< "$SKIPPED")"
+          echo "probe: needs.echo.outputs=$(jq -c . <<< "$ECHO")"
+          echo "probe: needs.not-called.result=${{ needs.not-called.result }}"
+  c:
+    needs: [echo, skipped]
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: 'echo "probe: c=ran"'

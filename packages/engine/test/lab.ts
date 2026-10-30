@@ -25,9 +25,6 @@ import { isMap, isScalar, isSeq, parseDocument, type YAMLMap } from 'yaml';
 
 const lab = join(import.meta.dirname, '../../../fixtures/routes-lab');
 
-/** The last lab commit that started a run; `repo/` is the lab's `.github/` tree there (fixtures/routes-lab/README.md). */
-const CAPTURE = 'e623802ba524a344c2033c94c438a38fe0e8c07f';
-
 interface LabJob {
   name: string;
   conclusion: string;
@@ -51,6 +48,23 @@ export interface LabRun {
 
 export const labRuns = (JSON.parse(readFileSync(join(lab, 'expected.json'), 'utf8')) as { runs: LabRun[] })
   .runs;
+
+/** A push to the lab (pushes.json): the workflow files its commit has, and those whose `push` runs it started. */
+export interface LabPush {
+  kind: 'push' | 'branch_creation' | 'tag';
+  ref: string;
+  sha: string;
+  message: string;
+  changed: string[];
+  present: string[];
+  workflows: string[];
+}
+
+export const labPushes = (JSON.parse(readFileSync(join(lab, 'pushes.json'), 'utf8')) as { pushes: LabPush[] })
+  .pushes;
+
+/** The lab's newest `main` push; `repo/` is the lab's `.github/` tree there (fixtures/routes-lab/README.md). */
+const CAPTURE = labPushes.findLast((p) => p.ref === 'refs/heads/main')!.sha;
 
 function walk(dir: string, prefix = ''): Record<string, string> {
   const out: Record<string, string> = {};
@@ -185,7 +199,7 @@ type Grade = 'exact' | 'maybe' | 'wrong';
 type Kind = 'triggers' | 'checks' | 'jobs' | 'steps' | 'probes';
 
 export interface Accuracy {
-  /** The lab commit the runs were captured up to. */
+  /** The lab commit the runs and pushes were captured up to. */
   capture: string;
   runs: number;
   compared: Record<Kind, number>;
@@ -375,10 +389,48 @@ function gradeRun(t: Tally, run: LabRun) {
 /** The job id of a leg, from its node id `<file>#<job>`, `<file>#<job>[<leg>]` or `<caller>><file>#<job>`. */
 const jobIdOf = (leg: LegPlan) => leg.id.replace(/\[.*$/, '').replace(/^.*#/, '');
 
-/** Grades every captured run; `wrong` lists each wrong prediction. */
+/**
+ * The workflows a push did not start: each file the pushed commit has that is not among the push's runs must be
+ * predicted not to trigger. The ones it started are graded through their runs.
+ */
+function gradePush(t: Tally, push: LabPush) {
+  const plan = simulate({
+    project: labProject,
+    scenario: {
+      event: 'push',
+      ref: push.ref,
+      sha: push.sha,
+      message: push.message,
+      changed: push.changed,
+      repository: 'ciatlas/simulci-lab',
+    },
+  });
+  const started = new Set(push.workflows);
+  for (const path of push.present) {
+    if (started.has(path)) continue;
+    const wf = plan.workflows.find((w) => w.path === path);
+    if (!wf) throw new Error(`${path}: not in the lab's files (repo/)`);
+    const where = `${path} [push ${push.ref} ${push.sha.slice(0, 7)}]`;
+    t.add(
+      'triggers',
+      gradeTri(wf.triggered.verdict, false),
+      where,
+      () => `predicted ${wf.triggered.verdict}, did not run`,
+    );
+  }
+}
+
+/** The (push, workflow) pairs that did not trigger, which `measure` grades besides one trigger per run. */
+export const notTriggered = labPushes.reduce(
+  (n, p) => n + p.present.filter((path) => !p.workflows.includes(path)).length,
+  0,
+);
+
+/** Grades every captured run and every workflow a push did not start; `wrong` lists each wrong prediction. */
 export function measure(): { accuracy: Accuracy; wrong: string[] } {
   const t = new Tally();
   for (const run of labRuns) gradeRun(t, run);
+  for (const push of labPushes) gradePush(t, push);
   return {
     accuracy: { capture: CAPTURE, runs: labRuns.length, compared: t.compared, ...t.grades },
     wrong: t.wrong,

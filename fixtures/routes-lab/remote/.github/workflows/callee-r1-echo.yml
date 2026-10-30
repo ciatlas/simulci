@@ -1,0 +1,19 @@
+# Case R1: a remote reusable workflow that runs and declares an output.
+name: callee-r1-echo
+on:
+  workflow_call:
+    outputs:
+      o:
+        description: output of the job x
+        value: ${{ jobs.x.outputs.o }}
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    outputs:
+      o: ${{ steps.s.outputs.o }}
+    steps:
+      - id: s
+        name: write
+        run: |
+          echo "o=hello" >> "$GITHUB_OUTPUT"
+          echo "probe: r1-echo-x=ran"

@@ -1,0 +1,8 @@
+name: r3
+description: Case R3 - echoes which copy ran. The lab's own repository has one at the same path.
+runs:
+  using: composite
+  steps:
+    - name: probe
+      shell: bash
+      run: 'echo "probe: r3-action=remote"'

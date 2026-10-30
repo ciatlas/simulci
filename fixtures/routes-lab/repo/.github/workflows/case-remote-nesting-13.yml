@@ -1,0 +1,7 @@
+# Case R7 - remote-nesting-13: this workflow, local links callee-r7-wrap-9.yml to -10 and the 10 remote links, 13
+# levels in all; added after remote-nesting-11 ran, to find the limit.
+name: case-remote-nesting-13
+on: workflow_dispatch
+jobs:
+  call:
+    uses: ./.github/workflows/callee-r7-wrap-9.yml

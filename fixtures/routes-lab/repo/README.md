@@ -47,5 +47,29 @@ logs; failures are `exit 1`; everything runs on `ubuntu-latest`. Sleeps appear o
 | 21 | `skip-ci` | `on: [push, workflow_dispatch]` | A `[skip ci]` commit starts no push run at all; `workflow_dispatch` on that commit still works |
 
 The pushes that exercise the triggers, in order: the initial commit (workflows and README only), a `docs/`-only
-commit, a `src/`-only commit, a `[skip ci]` commit, the tag `v0.0.1`, then a pull request that is labeled `probe`,
-and `workflow_dispatch` of `case-unknown-or-true` and `case-skip-ci`.
+commit, a `src/`-only commit, the tag `v0.0.1` on that commit, a `[skip ci]` commit followed by `workflow_dispatch`
+of `case-skip-ci` and `case-unknown-or-true`, then a branch `probe/pr` opened as a pull request and labeled `probe`.
+The capture in simulci (`fixtures/routes-lab/README.md`) lists the commits and what each push started.
+
+## Remote reusable workflows and actions
+
+The callees live in the public `ciatlas/simulci-lab-remote` (mirrored, same commits, to `rumankazi/simulci-lab-remote`
+for case R6). Its commit `a` (`d19def8c3562ef6c1be3f12443345575530f1ac4`) is where `v1` and `main` start; between
+the two rounds both move to commit `b` (`38a93ff01695fd104bfe8bc8b79ceeae91206ddc`), where the probes of the files
+cases R2, R5 and R9 read say `b`. The remote cases run on `workflow_dispatch` (R10 also on a pull request that
+changes `callee-r10.yml`), and the lab pushes for them carry `[skip ci]`, so they add no runs of the status cases.
+
+| # | Case | Probes | Claim under test |
+|---|---|---|---|
+| R1 | `remote-reusable-outputs` | remote callees that run (with an output), that skip every job (output from a skipped job), and an `if: false` remote call; `b` (`always()`), `c` (no `if`) | Results, outputs and check names are those of cases 9 and 10 |
+| R2 | `remote-relative-workflow` | a remote at `@<a>` and at `@v1` calls `./.github/workflows/callee-r2-inner.yml`, which exists in both repositories with different probes | `./` inside a remote is the remote's file, at the commit the outer workflow was read at |
+| R2 | `remote-self` | a remote at `@<a>` uses `$/` at job and step level, with no checkout | `$/` inside a remote is the remote's repository at that commit |
+| R3 | `remote-workspace-action` | a remote's step uses `./.github/actions/r3`, without and after a default checkout; both repositories have the action | `./` in a step is the workspace: missing without a checkout, the caller's after one |
+| R4 | `remote-node-undeclared-output` | a remote node action writes `declared` and `undeclared` | Whether an output the action does not declare is readable |
+| R5 | `remote-tag-vs-sha` | one callee at `@v1`, `@main` and `@<a>`, in both rounds | A tag or branch runs where it points at run time; a SHA stays |
+| R6 | `remote-secrets-inherit` | `secrets: inherit` into the same callee under this owner and under another; the lab's secret `LAB_SECRET` | Whether `inherit` passes secrets to a remote of another owner |
+| R7 | `remote-nesting-10`, `-11` | chains of 10 and 11 levels through remote callees | Ten levels run; eleven are refused |
+| R7 | `remote-total-50`, `-51` | 50 and 51 distinct remote callees called from one workflow | Fifty run; fifty-one are refused |
+| R8 | `remote-composite-outputs` | a remote composite action with a declared output; its inner step also writes an undeclared one | Only declared outputs reach the caller |
+| R9 | `remote-actions-lock`, `-uncovered`, `-local-callee`, `-missing` | a remote action at `@v1`; `actions.lock` (written by `gh actions-lock`) covers three of the four workflows and pins `v1` to `a`; the second round moves `v1` to `b` | A covered workflow runs the pin, an uncovered one the tag; what a local callee's step runs; a covered step the lock lacks fails |
+| R10 | `remote-same-repo-ref`, `-self` | this repository's `callee-r10.yml` by `@main`, by `./` and by `$/`, run on `main` and on the branch `probe/r10`, whose copy says `branch` | A full ref to this repository runs that ref, not the working copy; `./` and `$/` run the working copy |

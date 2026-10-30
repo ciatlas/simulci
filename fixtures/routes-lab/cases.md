@@ -232,3 +232,134 @@ The later README commit `5e59469…`, also `[skip ci]`, started nothing either.
 
 Verdict: `[skip ci]` in the head commit's message suppresses every `push` workflow of that push; a
 `workflow_dispatch` on the same commit runs normally.
+
+## Remote reusable workflows and actions (L1)
+
+The callers are `case-remote-*.yml` in the lab; the callees are in the public `ciatlas/simulci-lab-remote`, whose tree
+is `remote/` here (README.md "The remote repository"). Their runs are in `expected-remote.json`, with the commit each
+called workflow resolved to (`referenced`) and the commit of each action a job downloaded (`actions`); dispatches
+GitHub refused, which leave no run, are in `refused.json`. `a` is the remote commit `d19def8…`, `b` is `38a93ff…`.
+Round 1 (lab commit `2035977…`, 2026-10-30) ran with the remote's `v1` and `main` on `a`, round 2 (lab `4061055…`)
+with both on `b`. Every run concluded `success`.
+
+### R1. remote-reusable-outputs (`case-remote-reusable-outputs.yml`)
+
+Claim: a remote reusable workflow behaves as a local one (cases 9 and 10).
+
+Observed: `echo / x` ran, `needs.echo.result=success`, `needs.echo.outputs.o=hello`, `toJSON` `{"o":"hello"}`. The
+all-skipped callee: checks `skipped / x` and `skipped / y` `skipped`, no check `skipped`; `needs.skipped.result=skipped`;
+`needs.skipped.outputs.o=''`, `toJSON` `{"o":""}`. The `if: false` remote call: one check `not-called`, `skipped`,
+`needs.not-called.result=skipped`. `b` (`always()`) ran; `c` (no `if`, needing a skipped call) skipped.
+
+Verdict: identical to cases 9 and 10; where the callee lives changes nothing about results, outputs or check names.
+
+### R2. remote-relative-workflow, remote-self (`case-remote-relative-workflow.yml`, `case-remote-self.yml`)
+
+Claim: a job's `./.github/workflows/…` inside a remote is the remote repository's file at the commit the outer
+workflow was read at; `$/` inside a remote, at job and step level, is the remote's repository at that commit.
+
+Observed: never `caller`. Round 1: `by-sha` and `by-tag` both `remote-a`. Round 2: `by-sha` (outer `@a`) read the
+inner at `a` (`r2-inner=remote-a`) while the remote's `main` was on `b`; `by-tag` (outer `@v1` = `b`) read the inner
+at `b`, and `referenced` lists it as `callee-r2-inner.yml@38a93ff…` with ref `refs/tags/v1`, the outer's ref. `$/`
+(no checkout, round 2, `main` on `b`): the job-level call ran the remote's inner at `a` (`referenced`
+`callee-r2-inner.yml@d19def8…`), and the step-level `$/.github/actions/r2-self` was downloaded as
+`ciatlas/simulci-lab-remote@d19def8…` and echoed `remote-a`.
+
+Verdict: as claimed. A remote's `./` (job level) and `$/` (both levels) are `<remote>@<the commit its parent was read
+at>`: synthesis § 2.4's row 3 and K1's reading of `self: true` inside an external unit hold. GitHub records the
+`./` callee under its parent's ref name.
+
+### R3. remote-workspace-action (`case-remote-workspace-action.yml`)
+
+Claim: a step's `./` inside a remote is the runner's workspace, not the remote repository.
+
+Observed: without a checkout the step failed (`bare.outcome=failure`; its API conclusion `success` under
+`continue-on-error`). After a default `actions/checkout` (`checkout.repository=ciatlas/simulci-lab`) the caller's
+copy ran (`r3-action=caller`).
+
+Verdict: as claimed; a remote's step-level `./` reads whatever the job checked out, by default the caller's
+repository, never the remote's. Core's mapping (`workspacePath`) stands.
+
+### R4. remote-node-undeclared-output (`case-remote-node-undeclared-output.yml`)
+
+Claim: a node action's outputs are what it writes, declared or not.
+
+Observed: `steps.n.outputs.declared=d`, `steps.n.outputs.undeclared=u`, `toJSON(steps.n.outputs)`
+`{"declared":"d","undeclared":"u"}`.
+
+Verdict: as claimed; `action.yml`'s `outputs` do not filter a node action's outputs, so an undeclared one is
+readable (unlike a composite's, R8). An unknown output of a remote node action is unknown, not `''`.
+
+### R5. remote-tag-vs-sha (`case-remote-tag-vs-sha.yml`)
+
+Claim: a tag or branch ref runs the commit it points at when the run starts; a SHA ref never moves.
+
+Observed: round 1 `r5-version=a` three times. Round 2 `by-tag` and `by-branch` `b`, `by-sha` `a`; `referenced`
+records `@v1` and `@main` at `38a93ff…` (refs `refs/tags/v1`, `refs/heads/main`), `@<a>` at `d19def8…` with no ref.
+
+Verdict: as claimed.
+
+### R6. remote-secrets-inherit (`case-remote-secrets-inherit.yml`)
+
+Claim: `secrets: inherit` passes secrets to a remote of the same owner, not to one of another owner, without failing.
+
+Observed: same owner `lab-secret=true`; other owner (`rumankazi/simulci-lab-remote`, same commit) `lab-secret=false`;
+both `github-token=true` and `owner=ciatlas` (the caller's context); both calls `success`.
+
+Verdict: as claimed; across owners `inherit` silently passes nothing but `GITHUB_TOKEN`, so secrets read there are
+`''`.
+
+### R7. remote-nesting-10 … -21, remote-total-50, -51
+
+Claim: GitHub runs ten levels (the caller and nine reusable workflows) and refuses eleven; 50 distinct called
+workflows run, 51 are refused.
+
+Observed: `nesting-10` and `nesting-11` ran to their leaf (check `call / next / … / leaf`, 9 and 10 entries in
+`referenced`). Depths 12 to 21 (local wrappers in front of the remote chain, added after `nesting-11` ran) were
+refused at dispatch: no run, `HTTP 422 … error parsing called workflow` with the chain, ending `job "next" calls
+workflow "…", but doing so would exceed the limit on called workflow depth of 10` (`refused.json`). `total-50` ran
+its 50 leaves; `total-51` was refused at dispatch: `too many workflows are referenced, total: 51, limit: 50`.
+
+Verdict: the depth limit counts called workflows, not the caller: a caller and ten nested callees (eleven files)
+run, a twelfth file is refused; local and remote links count alike. The total is 50 distinct called workflows. Both
+refusals happen when the run would be created, so they never show as a failed run (a push would start nothing for
+that workflow); the message names the call that crosses the limit.
+
+### R8. remote-composite-outputs (`case-remote-composite-outputs.yml`)
+
+Claim: a composite action exposes only its declared outputs.
+
+Observed: `steps.c.outputs.o=x`, `steps.c.outputs.extra=''`, `toJSON(steps.c.outputs)` `{"o":"x"}`.
+
+Verdict: as claimed.
+
+### R9. remote-actions-lock, -uncovered, -local-callee, -missing
+
+Claim (K4, unverified until here): GitHub runs an `actions.lock` pin only in a workflow the lock covers.
+
+The lock (`repo/.github/workflows/actions.lock`, written by `gh actions-lock` v0.4.0 with `--no-narrow` over three
+workflows) pins `ciatlas/simulci-lab-remote@v1` to `a` under `case-remote-actions-lock.yml` and `-missing.yml` (whose
+`@main` step was added afterwards), and lists `case-remote-actions-lock-local-callee.yml` with no pins (the tool
+does not follow its local callee).
+
+Observed: round 1 all three ran `a`. Round 2 (`v1` on `b`): the covered workflow downloaded
+`ciatlas/simulci-lab-remote@v1` at `d19def8…` and echoed `a`; the uncovered one downloaded it at `38a93ff…` and
+echoed `b`; the step inside the local callee of a covered workflow ran `b` and did not fail. The covered workflow
+whose step the lock lacks was refused at dispatch in both rounds: `Invalid dependency lockfile … references actions
+not present in the lockfile: ciatlas/simulci-lab-remote@main`.
+
+Verdict: a pin applies only in a workflow the lock lists, keyed by that workflow's own path (K4's `pinApplies`
+holds): an uncovered workflow runs the tag, and a local reusable workflow's steps are judged by the callee's own
+path (here uncovered, so the tag), not by the covered caller's. A covered workflow with a step the lock lacks is
+not a failing job but a workflow GitHub refuses to start. The lock is in effect on the lab's plan (Team, private
+repository).
+
+### R10. remote-same-repo-ref, remote-same-repo-self
+
+Claim (finding 5): a full ref to the running repository runs that ref, never the working copy.
+
+Observed: on `main` all three read `main`. On `probe/r10` (copy says `branch`): `full-ref`
+(`ciatlas/simulci-lab/…@main`) read `main`, `referenced` at `2035977…` (`refs/heads/main`); `relative` (`./`) and
+`self` (`$/`) read `branch`, `referenced` at the branch head `17ffb50…`.
+
+Verdict: as claimed; a same-repository full ref is a remote at that ref, and `./` and `$/` are the running commit.

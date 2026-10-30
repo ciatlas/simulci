@@ -1,0 +1,10 @@
+# Case R5: echoes the version of the commit it was read at. The lab moves `v1` (and `main`) from the commit where
+# this line says `a` to the one where it says `b`.
+name: callee-r5-version
+on: workflow_call
+jobs:
+  v:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: 'echo "probe: r5-version=a"'

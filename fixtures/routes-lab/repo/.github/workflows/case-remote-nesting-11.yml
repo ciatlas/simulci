@@ -1,0 +1,7 @@
+# Case R7 - remote-nesting-11: this workflow and a chain of remote reusable workflows, 11 levels in all
+# (callee-r7-chain-1.yml to callee-r7-chain-10.yml, each calling the next through `./`).
+name: case-remote-nesting-11
+on: workflow_dispatch
+jobs:
+  call:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-1.yml@d19def8c3562ef6c1be3f12443345575530f1ac4

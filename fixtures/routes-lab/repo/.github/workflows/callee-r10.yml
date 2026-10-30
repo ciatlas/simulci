@@ -1,0 +1,9 @@
+# Helper for case R10: says which copy ran. The branch probe/r10 changes `main` to `branch` below.
+name: callee-r10
+on: workflow_call
+jobs:
+  m:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: 'echo "probe: r10-copy=main"'

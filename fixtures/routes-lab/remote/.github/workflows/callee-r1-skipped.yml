@@ -1,0 +1,23 @@
+# Case R1: a remote reusable workflow whose jobs are all skipped; its output comes from a skipped job (case 9, remote).
+name: callee-r1-skipped
+on:
+  workflow_call:
+    outputs:
+      o:
+        description: output of the skipped job x
+        value: ${{ jobs.x.outputs.o }}
+jobs:
+  x:
+    if: false
+    runs-on: ubuntu-latest
+    outputs:
+      o: hello
+    steps:
+      - name: never
+        run: 'echo "probe: x=ran"'
+  y:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: never
+        run: 'echo "probe: y=ran"'

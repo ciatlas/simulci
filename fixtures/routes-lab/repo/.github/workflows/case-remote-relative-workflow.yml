@@ -1,0 +1,21 @@
+# Case R2 - remote-relative-workflow: a remote workflow calls `./.github/workflows/callee-r2-inner.yml`. Which
+# repository's file runs (this repository has one too), and at which commit (the remote's `v1` and `main` move
+# between the two rounds; the SHA ref does not).
+name: case-remote-relative-workflow
+on: workflow_dispatch
+jobs:
+  by-sha:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r2-outer.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  by-tag:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r2-outer.yml@v1
+  b:
+    needs: [by-sha, by-tag]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: |
+          echo "probe: needs.by-sha.result=${{ needs.by-sha.result }}"
+          echo "probe: needs.by-sha.outputs.inner=${{ needs.by-sha.outputs.inner }}"
+          echo "probe: needs.by-tag.result=${{ needs.by-tag.result }}"
+          echo "probe: needs.by-tag.outputs.inner=${{ needs.by-tag.outputs.inner }}"

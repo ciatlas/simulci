@@ -1,0 +1,9 @@
+# Case R9 - remote-actions-lock-uncovered: the same `@v1` in a workflow the lock does not cover: the tag or the pin?
+name: case-remote-actions-lock-uncovered
+on: workflow_dispatch
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - name: remote action
+        uses: ciatlas/simulci-lab-remote/.github/actions/r9-action@v1

@@ -1,0 +1,11 @@
+# Case R5 - remote-tag-vs-sha: one callee read at a tag, a branch and a SHA. Between the two rounds the remote's
+# `v1` and `main` move to a commit whose probe says `b`; the SHA stays on `a`.
+name: case-remote-tag-vs-sha
+on: workflow_dispatch
+jobs:
+  by-tag:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@v1
+  by-branch:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@main
+  by-sha:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r5-version.yml@d19def8c3562ef6c1be3f12443345575530f1ac4

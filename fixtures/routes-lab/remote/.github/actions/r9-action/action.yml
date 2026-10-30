@@ -1,0 +1,8 @@
+name: r9-action
+description: Case R9 - echoes the version of the commit it was read at (`a`, then `b` once `v1` moves).
+runs:
+  using: composite
+  steps:
+    - name: probe
+      shell: bash
+      run: 'echo "probe: r9-action=a"'

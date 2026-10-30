@@ -93,7 +93,8 @@ function checkNode([id, kind, decision]: Node, derived: Derived, known: Set<stri
 
 describe('the derived tables over the routes lab', () => {
   it('describe every workflow and job of the lab in the outline', () => {
-    const workflows = Object.keys(files).filter((f) => f.startsWith('.github/workflows/'));
+    // The lab's .github/workflows/ also holds actions.lock, which is not a workflow.
+    const workflows = Object.keys(files).filter((f) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(f));
     expect(outline.workflows.map((w) => w.path).sort()).toEqual(workflows.sort());
     for (const w of outline.workflows) {
       expect(w.onLine, w.path).toBeGreaterThanOrEqual(1);

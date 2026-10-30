@@ -1,0 +1,10 @@
+# Case R9 - remote-actions-lock: a remote action at `@v1`, covered by `.github/workflows/actions.lock`, which pins
+# `v1` to the commit whose probe says `a`. In the second round `v1` points at `b`: which one runs?
+name: case-remote-actions-lock
+on: workflow_dispatch
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - name: remote action
+        uses: ciatlas/simulci-lab-remote/.github/actions/r9-action@v1

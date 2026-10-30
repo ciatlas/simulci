@@ -1,0 +1,18 @@
+# Case R2: a remote reusable workflow that calls another workflow of its own repository through `./`.
+# Which repository and which commit does the inner call read? The inner file exists in both repositories with
+# different probes, and its version line changes when the lab moves `v1` and `main`.
+name: callee-r2-outer
+on:
+  workflow_call:
+    outputs:
+      inner:
+        description: the inner workflow's marker
+        value: ${{ jobs.inner.outputs.marker }}
+jobs:
+  outer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: 'echo "probe: r2-outer=remote-a"'
+  inner:
+    uses: ./.github/workflows/callee-r2-inner.yml

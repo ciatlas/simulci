@@ -1,0 +1,6 @@
+# Helper for case R7: local link 5 of 10 in front of the remote chain, to find how deep a tree GitHub runs.
+name: callee-r7-wrap-5
+on: workflow_call
+jobs:
+  next:
+    uses: ./.github/workflows/callee-r7-wrap-6.yml

@@ -1,0 +1,84 @@
+{
+  "source": "https://github.com/ciatlas/simulci-lab (private)",
+  "how": "recorded from the answer of POST /repos/ciatlas/simulci-lab/actions/workflows/{file}/dispatches (gh workflow run) on 2026-10-30; GitHub keeps no run or record of a refused dispatch, so this file is the only copy",
+  "refused": [
+    {
+      "workflow": ".github/workflows/case-remote-actions-lock-missing.yml",
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "HTTP 422: Invalid Argument - failed to parse workflow: Invalid dependency lockfile \".github/workflows/actions.lock\": workflow \".github/workflows/case-remote-actions-lock-missing.yml\" references actions not present in the lockfile: ciatlas/simulci-lab-remote@main Run 'gh actions-lock' to regenerate the lockfile."
+    },
+    {
+      "workflow": ".github/workflows/case-remote-total-51.yml",
+      "ref": "refs/heads/main",
+      "sha": "203597779b990c61f6150bb92b814055eb0241f8",
+      "message": "HTTP 422: Invalid Argument - failed to parse workflow: too many workflows are referenced, total: 51, limit: 50"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-12.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "HTTP 422: Invalid Argument - failed to parse workflow: error parsing called workflow\n\"\"\n-> \"./.github/workflows/callee-r7-wrap-10.yml\" (source branch with sha:40610550821392d10214c8dd5a72dc780ec106d5)\n--> \"ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-1.yml@d19def8c3562ef6c1be3f12443345575530f1ac4\"\n---> \"./.github/workflows/callee-r7-chain-2.yml\"\n----> \"./.github/workflows/callee-r7-chain-3.yml\"\n-----> \"./.github/workflows/callee-r7-chain-4.yml\"\n------> \"./.github/workflows/callee-r7-chain-5.yml\"\n-------> \"./.github/workflows/callee-r7-chain-6.yml\"\n--------> \"./.github/workflows/callee-r7-chain-7.yml\"\n---------> \"./.github/workflows/callee-r7-chain-8.yml\"\n----------> \"./.github/workflows/callee-r7-chain-9.yml\"\n: job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-10.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-13.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-9.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-14.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-8.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-15.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-7.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-16.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-6.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-17.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-5.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-18.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-4.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-19.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-3.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-20.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"./.github/workflows/callee-r7-chain-2.yml\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-nesting-21.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "(last line) job \"next\" calls workflow \"ciatlas/simulci-lab-remote/.github/workflows/callee-r7-chain-1.yml@d19def8c3562ef6c1be3f12443345575530f1ac4\", but doing so would exceed the limit on called workflow depth of 10"
+    },
+    {
+      "workflow": ".github/workflows/case-remote-actions-lock-missing.yml",
+      "ref": "refs/heads/main",
+      "sha": "40610550821392d10214c8dd5a72dc780ec106d5",
+      "message": "HTTP 422: Invalid Argument - failed to parse workflow: Invalid dependency lockfile \".github/workflows/actions.lock\": workflow \".github/workflows/case-remote-actions-lock-missing.yml\" references actions not present in the lockfile: ciatlas/simulci-lab-remote@main Run 'gh actions-lock' to regenerate the lockfile."
+    }
+  ]
+}

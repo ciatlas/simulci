@@ -1,0 +1,9 @@
+# Case R7: the last link of the chain; it runs a job, so a run that reaches it shows a check for it.
+name: callee-r7-chain-10
+on: workflow_call
+jobs:
+  leaf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: 'echo "probe: r7-chain-leaf=ran"'
