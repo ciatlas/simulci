@@ -1,0 +1,8 @@
+{
+  "access-control-allow-origin": "*",
+  "access-control-expose-headers": "ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning",
+  "cache-control": "public, max-age=60, s-maxage=60",
+  "x-ratelimit-limit": "60",
+  "x-ratelimit-resource": "core",
+  "x-github-api-version-selected": "2022-11-28"
+}

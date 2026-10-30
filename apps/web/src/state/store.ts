@@ -5,6 +5,7 @@ import type { PendingSel, Refused } from '../edit/types';
 import type { GraphState, GraphUi } from '../graph/types';
 import { isProjectFile } from '../input/filter';
 import { fileLabel } from '../lib/file-label';
+import { isTarget, type RepoTarget, targetText } from '../lib/repo-words';
 import { classifyEol, type FileMeta, textMeta } from '../input/read';
 import type { DiskConflict, DiskFile, FileOutcome } from '../input/save';
 import { type ChangeRow, changeRows, changeSentence } from '../plan/change-rows';
@@ -25,7 +26,28 @@ export type Source =
   | { kind: 'sample'; name: string }
   /** Pasted files, or a sample once edited: its buffers follow every edit (`writtenThrough`); `name` says which sample. */
   | { kind: 'paste'; buffers: { path: string; text: string }[]; name?: string }
-  | { kind: 'folder'; name: string; handle?: FileSystemDirectoryHandle; readAt: number };
+  | { kind: 'folder'; name: string; handle?: FileSystemDirectoryHandle; readAt: number }
+  | GitHubSource;
+
+/**
+ * A public GitHub repository read at a commit (M4 synthesis § 5.5). Read-only to GitHub: its edits leave as a patch.
+ * `ref` is what was asked for (a branch, a tag, a commit), `sha` the commit it was read at, `readAt` when.
+ */
+export interface GitHubSource {
+  kind: 'github';
+  /** The GitHub host the API serves: `github.com`. */
+  host: string;
+  owner: string;
+  repo: string;
+  ref: string;
+  sha: string;
+  defaultBranch: string;
+  /** As GitHub said when it was opened: only a repository seen public has its files cached or put in the URL. */
+  private: boolean;
+  readAt: number;
+  /** The pull request it was opened for (WP). */
+  pull?: number;
+}
 
 export interface Issue {
   path: (string | number)[];
@@ -270,6 +292,11 @@ export interface SessionState {
   generated?: Record<string, string>;
   /** The Tests tab: the route tests run in the worker after each plan of new files (synthesis § 5.1). */
   tests: TestsState;
+  /**
+   * A repository a link names (`gh=`) that is not the source: the page offers to open it and asks GitHub for nothing
+   * until the author clicks (M4 synthesis § 5.5, failure mode 15). Opening it, or Dismiss, lets it go.
+   */
+  githubOffer?: RepoTarget;
 }
 
 /** What the Tests tab shows: the last run of the route tests, the one under way, and how they run. */
@@ -343,7 +370,8 @@ export type Saving =
 /** The conflicts of a save or a reload (§ 5.4, § 5.7), until the author chose for each or cancelled. */
 export interface Settling {
   seq: number;
-  mode: 'save' | 'reload';
+  /** `fetch`: a GitHub repository's Fetch again, a reload whose other side is GitHub. */
+  mode: 'save' | 'reload' | 'fetch';
   folder: string;
   conflicts: DiskConflict[];
 }
@@ -384,8 +412,17 @@ export interface SessionActions {
    */
   loadCase: (scenario: ScenarioInput, assume: AssumeEntry[], workflow: string) => void;
   forgetSource: () => void;
+  /**
+   * The source of `epoch` read again elsewhere, its files merged (a GitHub repository's Fetch again at a new commit):
+   * the files, their epoch and the history stay, and the files it changed (`moved`) are opened anew at their new base,
+   * so "since opened" compares with the commit the source names and its patch applies there. Nothing happens for
+   * another epoch.
+   */
+  moveSource: (epoch: number, source: Source, moved: readonly string[]) => void;
   /** A source that has no files until the author acts: a stored folder waiting for Reopen. */
   awaitReopen: (source: Source) => void;
+  /** The repository a link names, offered until it is opened or dismissed (`undefined`). */
+  offerGitHub: (target: RepoTarget | undefined) => void;
   setScenario: (
     scenario: ScenarioInput,
     options?: { assumed?: string[]; from?: SessionState['scenarioFrom'] },
@@ -782,6 +819,8 @@ export function createSessionStore(initial: SessionState = initialSessionState()
       setFiles: (byPath, source, meta, base, readonly) =>
         set((s) => ({
           source,
+          // The repository a link offered is open now.
+          githubOffer: s.githubOffer && isTarget(source, s.githubOffer) ? undefined : s.githubOffer,
           files: withReadonly(sourceFiles(s.files, byPath, metaOf(byPath, meta), base), readonly),
           ...UNLOADED,
           tests: untested(s.tests),
@@ -799,6 +838,15 @@ export function createSessionStore(initial: SessionState = initialSessionState()
           sel: undefined,
           error: replaceError(s.error, undefined),
         })),
+      offerGitHub: (target) =>
+        set((s) =>
+          target === s.githubOffer ||
+          (target && s.githubOffer && targetText(target) === targetText(s.githubOffer))
+            ? s
+            : { githubOffer: target },
+        ),
+      moveSource: (epoch, source, moved) =>
+        set((s) => (s.files.epoch === epoch ? { source, files: reopened(s.files, moved) } : s)),
       // A new epoch, so the session takes it for a source with no files, not for an edit that emptied them.
       awaitReopen: (source) => get().setFiles({}, source),
       setReadonly: (epoch, readonly) =>
@@ -1227,6 +1275,16 @@ const contextOf = (s: SessionState): history.Context => {
     },
   };
 };
+
+/** The files with these paths opened again at their base (none: not there). */
+function reopened(files: SessionState['files'], paths: readonly string[]): SessionState['files'] {
+  if (paths.length === 0) return files;
+  const opened = { ...files.opened };
+  for (const path of paths)
+    if (Object.hasOwn(files.base, path)) opened[path] = files.base[path]!;
+    else delete opened[path];
+  return { ...files, opened };
+}
 
 /**
  * The files of a new source: a new epoch, every file at the new version, its text as read and as opened, except

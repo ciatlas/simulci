@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { fakeGitHub, OWNER, REPO } from './github-api';
 import { folderWith, useOpfsFolder } from './opfs';
 
 /**
@@ -14,7 +15,7 @@ import { folderWith, useOpfsFolder } from './opfs';
  * motion gets no transition, no flash and an instant fit, and still hears the pin's sentence; with motion the cards a
  * pin changed flash once; the pointer on an unknown's "affects n" dims every card it does not affect; a pin from the
  * Unknowns tab leaves the focus on the next row and dims nothing; and a reason's "Show … in Unknowns" puts the focus
- * on that unknown's row.
+ * on that unknown's row. The Open GitHub repository dialog and a link's card are checked too, against recorded answers.
  */
 
 const CI = '.github/workflows/ci.yml';
@@ -142,6 +143,33 @@ test.describe('axe finds nothing', () => {
     await viewButton(page, 'Text').click();
     await expect(thePlan(page)).toBeVisible();
     await expectAxeClean(page, 'light: the text view');
+  });
+
+  test('in the Open GitHub repository dialog and the card a link to a repository shows, in both themes', async ({
+    page,
+  }) => {
+    await fakeGitHub(page);
+    await page.goto(`/?event=push&gh=${OWNER}/${REPO}@main`);
+    const offer = page.getByRole('region', { name: 'Open from GitHub' });
+    await expect(offer).toBeVisible();
+    await expectAxeClean(page, 'light: the link’s card');
+    await page.getByRole('main').getByRole('button', { name: 'Open GitHub repository…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Open a GitHub repository' });
+    await dialog.getByRole('textbox', { name: 'Repository' }).fill(`${OWNER}/${REPO}`);
+    await expect(dialog).toContainText('requests left this hour');
+    await expectAxeClean(page, 'light: the dialog');
+    await dialog
+      .getByRole('textbox', { name: 'Repository' })
+      .fill(`https://github.com/${OWNER}/${REPO}/pull/1`);
+    await expect(dialog).toContainText('pull request');
+    await expectAxeClean(page, 'light: the dialog saying why a link does not open');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await darkTheme(page);
+    await expectAxeClean(page, 'dark: the link’s card');
+    await page.getByRole('main').getByRole('button', { name: 'Open GitHub repository…' }).click();
+    await dialog.getByRole('textbox', { name: 'Repository' }).fill(`${OWNER}/${REPO}`);
+    await expect(dialog).toContainText('requests left this hour');
+    await expectAxeClean(page, 'dark: the dialog');
   });
 
   test('on the Tests tab with passed, failed and invalid cases, in both themes', async ({ page }) => {

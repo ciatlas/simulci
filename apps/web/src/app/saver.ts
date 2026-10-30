@@ -1,4 +1,5 @@
 import type { Choices, DirectoryLike, DiskConflict } from '../input/save';
+import { githubNote } from '../lib/repo-words';
 import { dirtyPaths, type SessionState, type SessionStore, type Settling } from '../state/store';
 import { type Dialogs, loadDialogs } from './dialogs-load';
 import { targetsOf } from './save-targets';
@@ -7,8 +8,9 @@ import { targetsOf } from './save-targets';
  * Save (synthesis § 5.3): the top bar's Save, Mod+S and the replace prompt's Save run it, in the click or the key, since
  * write access is asked for first and the browser grants it only within the gesture. The run that checks and writes
  * the files (`app/save-run.ts`) is in the dialogs chunk, fetched right after that question; the saver keeps one save
- * at a time and the conflicts dialog's question. Only a folder opened with a handle saves: a paste, a sample or a copy
- * of a folder downloads (§ 5.5), and the first edit of a copy says so once.
+ * at a time and the conflicts dialog's question. Only a folder opened with a handle saves: a paste, a sample, a copy
+ * of a folder or a GitHub repository (read-only to GitHub, M4 § 5.7) downloads (§ 5.5), and the first edit of a copy or
+ * of a repository says so once.
  */
 export interface Saver {
   /**
@@ -130,14 +132,19 @@ export function createSaver({
   const unsubscribe = store.subscribe((s, prev) => {
     // New files: the conflicts asked about are not theirs.
     if (s.files.epoch !== prev.files.epoch && open) answer(undefined);
-    if (!noted && s.files.version !== prev.files.version && isEditedCopy(s)) {
+    const note = !noted && s.files.version !== prev.files.version ? editNote(s) : undefined;
+    if (note) {
       noted = true;
-      s.notify(COPY_NOTE);
+      s.notify(note);
     }
   });
 
   return { save, settle, answer, dispose: unsubscribe };
 }
 
-const isEditedCopy = (s: SessionState): boolean =>
-  s.source.kind === 'folder' && !s.source.handle && dirtyPaths(s.files).length > 0;
+/** What the first edit of a source that cannot be saved in place says: a folder's copy, or a GitHub repository. */
+function editNote(s: SessionState): string | undefined {
+  if (dirtyPaths(s.files).length === 0) return undefined;
+  if (s.source.kind === 'github') return githubNote(s.source);
+  return s.source.kind === 'folder' && !s.source.handle ? COPY_NOTE : undefined;
+}

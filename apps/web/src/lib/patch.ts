@@ -5,10 +5,9 @@ import { diffLines, hunkHeader, hunksOf, linesOf } from './line-diff';
  * handle saves instead, reviewable and `git apply`-able at the repository's root. Paths are `a/` and `b/` the file's
  * path in the project; a created file comes from `/dev/null` and a removed one goes there. Content lines are the
  * file's bytes as they would be written: a CRLF stays in the line, and a BOM file's first line carries U+FEFF on both
- * sides (the caller passes the texts through `asWritten`).
+ * sides (the caller passes the texts through `asWritten`). A preamble, a line naming what the changes are against
+ * (`lib/repo-words.ts`), may come first: `git apply` reads nothing before the first `diff --git`.
  */
-
-export const PATCH_NAME = 'simulci-changes.patch';
 
 /** One file's two sides as a file holds them: no `before` for a file created, no `after` for one removed. */
 export interface PatchFile {
@@ -17,8 +16,9 @@ export interface PatchFile {
   after?: string;
 }
 
-/** The files' patches one after another; a file whose two sides are equal has none. */
-export const patchOf = (files: readonly PatchFile[]): string => files.map(filePatch).join('');
+/** The files' patches one after another, after the preamble if any; a file whose two sides are equal has none. */
+export const patchOf = (files: readonly PatchFile[], preamble?: string): string =>
+  `${preamble === undefined ? '' : `${preamble}\n`}${files.map(filePatch).join('')}`;
 
 export function filePatch({ path, before, after }: PatchFile): string {
   if (before === after) return '';
