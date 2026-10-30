@@ -45752,7 +45752,7 @@ function verdictOf(gates) {
 //#endregion
 //#region ../engine/src/version.ts
 /** The simulci version. release-please updates it with every release. */
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 /** The schema version of every JSON document the engine emits or reads. A breaking change bumps it. */
 const SCHEMA_VERSIONS = {
 	scenario: 1,
