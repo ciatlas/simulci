@@ -121,13 +121,49 @@ export interface ErrorIo {
  * The exit code of a command's body; 2 when it throws, with the error's message on stderr (its stack under
  * `SIMULCI_DEBUG=1`). citty would print the stack and exit 1, which `simulci test` uses for a failed case.
  */
-export function exitCodeOf(body: () => number, io: ErrorIo): number {
+export async function exitCodeOf(body: () => number | Promise<number>, io: ErrorIo): Promise<number> {
   try {
-    return body();
+    return await body();
   } catch (e) {
     io.stderr(`${errorText(e, io.env.SIMULCI_DEBUG === '1')}\n`);
     return 2;
   }
+}
+
+/** A command's output and environment as a process has them, and the tokens it read, which it never prints. */
+export interface ProcessIo extends ErrorIo {
+  stdout: (text: string) => void;
+  /** Filled as a command reads tokens: every write leaves them out. */
+  secrets: string[];
+}
+
+export function processIo(): ProcessIo {
+  const secrets: string[] = [];
+  return {
+    stdout: (t) => process.stdout.write(printable(t, secrets)),
+    stderr: (t) => process.stderr.write(printable(t, secrets)),
+    env: process.env,
+    secrets,
+  };
+}
+
+/**
+ * Text as a terminal or a runner's log may show it: without the tokens a command read (the longest first, so one inside
+ * another leaves nothing), and with control characters other than a newline and a tab escaped as `\\uXXXX`. Remote
+ * workflows name jobs and steps, and an escape sequence there could rewrite a terminal.
+ */
+export function printable(text: string, secrets: readonly string[] = []): string {
+  const hidden = [...secrets]
+    .filter((s) => s.length >= 8)
+    .sort((a, b) => b.length - a.length)
+    .reduce((out, s) => out.split(s).join('***'), text);
+  let out = '';
+  for (const c of hidden) {
+    const code = c.charCodeAt(0);
+    const control = (code < 0x20 && c !== '\n' && c !== '\t') || (code >= 0x7f && code < 0xa0);
+    out += control ? `\\u${code.toString(16).padStart(4, '0')}` : c;
+  }
+  return out;
 }
 
 function errorText(e: unknown, stack: boolean): string {

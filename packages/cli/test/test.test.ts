@@ -64,14 +64,22 @@ function checkout(files: Record<string, string>): string {
 function io(env: Record<string, string> = {}): TestIo & { out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
-  return { out, err, stdout: (t) => out.push(t), stderr: (t) => err.push(t), env };
+  return {
+    out,
+    err,
+    stdout: (t) => out.push(t),
+    stderr: (t) => err.push(t),
+    env,
+    fetch: () => Promise.reject(new Error('no network')),
+    gh: () => undefined,
+  };
 }
 
 describe('simulci test', () => {
-  it('runs the tests of a checkout, reports, writes a snapshot locally and fails on it under ci', () => {
+  it('runs the tests of a checkout, reports, writes a snapshot locally and fails on it under ci', async () => {
     const dir = checkout({ '.github/workflows/ci.yml': ci, '.github/simulci/tests/ci.test.yml': tests });
     const local = io();
-    expect(runTestCommand({ dir }, local)).toBe(1);
+    expect(await runTestCommand({ dir }, local)).toBe(1);
     const text = local.out.join('');
     expect(text).toContain(
       '.github/simulci/tests/ci.test.yml → ci.yml\n  ✓ main\n  ✗ wrong\n      skip[0]: expected deploy to skip; it runs\n',
@@ -88,11 +96,11 @@ describe('simulci test', () => {
     );
 
     const again = io({ CI: 'true', GITHUB_ACTIONS: 'true' });
-    expect(runTestCommand({ dir, filter: 'snap' }, again)).toBe(0);
+    expect(await runTestCommand({ dir, filter: 'snap' }, again)).toBe(0);
     expect(again.out.join('')).toContain('  ✓ snap\n');
     const fresh = checkout({ '.github/workflows/ci.yml': ci, '.github/simulci/tests/ci.test.yml': tests });
     const ciRun = io({ CI: 'true', GITHUB_ACTIONS: 'true' });
-    expect(runTestCommand({ dir: fresh, junit: join(fresh, 'out/junit.xml') }, ciRun)).toBe(1);
+    expect(await runTestCommand({ dir: fresh, junit: join(fresh, 'out/junit.xml') }, ciRun)).toBe(1);
     const out = ciRun.out.join('');
     expect(out).toContain(
       "snapshot: no snapshot for 'snap' (CI=true never writes one; run simulci test -u and commit it)",
@@ -107,11 +115,11 @@ describe('simulci test', () => {
     expect(junit).toContain('<failure type="assertion" message="skip[0]: expected deploy to skip; it runs">');
   });
 
-  it('refuses test files under .github/workflows, and applies --assume to every case', () => {
+  it('refuses test files under .github/workflows, and applies --assume to every case', async () => {
     const misplaced = checkout({ '.github/workflows/ci.yml': ci, '.github/workflows/x.test.yml': tests });
     const bad = io();
     expect(
-      runTestCommand({ dir: misplaced, files: [join(misplaced, '.github/workflows/x.test.yml')] }, bad),
+      await runTestCommand({ dir: misplaced, files: [join(misplaced, '.github/workflows/x.test.yml')] }, bad),
     ).toBe(2);
     expect(bad.err.join('')).toMatch(/^T000 .*would be run by GitHub/);
     const dir = checkout({
@@ -119,18 +127,18 @@ describe('simulci test', () => {
       '.github/simulci/tests/ci.test.yml':
         'workflow: ci.yml\ncases:\n  - { name: x, when: { event: push, branch: main }, then: { conclusion: failure } }\n',
     });
-    expect(runTestCommand({ dir }, io())).toBe(1);
-    expect(runTestCommand({ dir, assume: 'build.t=failure' }, io())).toBe(0);
+    expect(await runTestCommand({ dir }, io())).toBe(1);
+    expect(await runTestCommand({ dir, assume: 'build.t=failure' }, io())).toBe(0);
     const unread = io();
-    expect(runTestCommand({ dir, assumeFile: join(dir, 'nope.yml') }, unread)).toBe(2);
+    expect(await runTestCommand({ dir, assumeFile: join(dir, 'nope.yml') }, unread)).toBe(2);
     expect(unread.err.join('')).toBe(`--assume-file ${join(dir, 'nope.yml')}: no such file\n`);
     const missing = io();
-    expect(runTestCommand({ dir, files: [join(dir, '.github/simulci/tests/nope.test.yml')] }, missing)).toBe(
-      2,
-    );
+    expect(
+      await runTestCommand({ dir, files: [join(dir, '.github/simulci/tests/nope.test.yml')] }, missing),
+    ).toBe(2);
     expect(missing.err.join('')).toBe('T000 .github/simulci/tests/nope.test.yml: no such test file\n');
     const none = io();
-    expect(runTestCommand({ dir: checkout({ '.github/workflows/ci.yml': ci }) }, none)).toBe(2);
+    expect(await runTestCommand({ dir: checkout({ '.github/workflows/ci.yml': ci }) }, none)).toBe(2);
     expect(none.out.join('')).toContain('T000 no test files');
   });
 });
@@ -222,17 +230,20 @@ jobs:
 });
 
 describe('simulci plan --as-test', () => {
-  it('prints a test case for the scenario, with the assumptions given', () => {
+  it('prints a test case for the scenario, with the assumptions given', async () => {
     const dir = checkout({ '.github/workflows/ci.yml': ci });
-    const out = planOutput({
-      dir,
-      event: 'push',
-      branch: 'main',
-      format: 'text',
-      detail: 'steps',
-      asTest: 'steps',
-      assume: 'build.t=failure',
-    });
+    const out = await planOutput(
+      {
+        dir,
+        event: 'push',
+        branch: 'main',
+        format: 'text',
+        detail: 'steps',
+        asTest: 'steps',
+        assume: 'build.t=failure',
+      },
+      io(),
+    );
     expect(out.code).toBe(0);
     expect(out.text).toBe(`workflow: ci.yml
 cases:
@@ -254,8 +265,12 @@ cases:
           runs: yes
 `);
     expect(
-      planOutput({ dir, event: 'push', branch: 'main', format: 'text', detail: 'steps', assume: 'nonsense' })
-        .code,
+      (
+        await planOutput(
+          { dir, event: 'push', branch: 'main', format: 'text', detail: 'steps', assume: 'nonsense' },
+          io(),
+        )
+      ).code,
     ).toBe(2);
   });
 });

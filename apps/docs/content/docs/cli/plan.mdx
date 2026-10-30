@@ -70,10 +70,30 @@ from: what runs, skips and might run, and the conclusion. `--as-test steps` adds
 npx simulci plan --event push --branch main --as-test steps > .github/simulci/tests/push.test.yml
 ```
 
+## Remotes
+
+A `uses:` of another repository's reusable workflow or action is read from GitHub at a pinned commit, and planned
+as GitHub runs it. See [simulci remotes](/docs/cli/remotes) for the lockfile that pins them.
+
+| Flag           | Does                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| `--remotes`    | `lock` (default) reads only pinned commits; `fetch` also resolves tags and branches now; `off` reads none |
+| `--offline`    | reads only the cache, never the network; default when `SIMULCI_OFFLINE=1`                            |
+| `--api-url`    | the GitHub API; default `GITHUB_API_URL`, else `https://api.github.com`                              |
+| `--repository` | the checkout's `owner/name`; default `GITHUB_REPOSITORY`, else the `origin` remote                   |
+| `--github-com` | on GitHub Enterprise Server, reads what it lacks from github.com, with `GITHUB_COM_TOKEN` if set      |
+
+A commit is pinned by a full-SHA ref, by `.github/workflows/actions.lock` (actions only), or by
+`.github/simulci/remotes.lock.yml`. The token is `GH_TOKEN`, else `GITHUB_TOKEN`, else `gh auth token`; on GitHub
+Enterprise Server, `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN`. It goes only to the API, and is never printed.
+A remote that cannot be read stays an open call, with GitHub's answer on stderr. The text output lists every remote
+under the plan, with the commit it was read at and what pinned it.
+
 ## Exit codes
 
-`0` with the plan, also when a mock cannot apply (its error is printed after the plan). `2`, with the reason on
-stderr, when the checkout has no workflows, two of `--ref`, `--branch` and `--tag` are given, `--format`, `--detail`
-or `--as-test` is given a value not in its list, an `--assume` entry or file is not in an entry's form, the
+`0` with the plan, also when a mock cannot apply (its error is printed after the plan), or a remote cannot be read. `2`, with the reason on
+stderr, when the checkout has no workflows, two of `--ref`, `--branch` and `--tag` are given, `--format`, `--detail`,
+`--as-test` or `--remotes` is given a value not in its list, `--api-url` is not a URL or `--repository` not
+`owner/name`, an `--assume` entry or file is not in an entry's form, the
 `--assume-file` cannot be read, or `--workflow` names no workflow. Any other error also exits `2` with its message;
 `SIMULCI_DEBUG=1` prints its stack as well.

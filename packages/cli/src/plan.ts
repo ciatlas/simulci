@@ -1,7 +1,9 @@
+import { resolve } from 'node:path';
 import {
   type AssumeEntry,
   fileFromPlan,
   MocksError,
+  parseScenario,
   type RunPlan,
   renderMermaid,
   renderText,
@@ -11,14 +13,22 @@ import {
 } from '@simulci/engine';
 import { type ArgsDef, defineCommand } from 'citty';
 import { AssumeError, readWorkflowFiles } from '@simulci/node';
-import { assumeOf, exitCodeOf, oneOf, readArgs, spoken, values } from './args';
+import { assumeOf, exitCodeOf, oneOf, processIo, readArgs, spoken, values } from './args';
+import {
+  failureLines,
+  readRemotes,
+  REMOTE_ARGS,
+  type RemoteArgs,
+  type RemotesIo,
+  remotesMode,
+} from './remotes';
 
 const FORMATS = ['text', 'json', 'mermaid'] as const;
 const DETAILS = ['steps', 'legs'] as const;
 const AS_TEST = ['jobs', 'steps'] as const;
 
 /** The `simulci plan` arguments: as citty parses them, by their camelCase names, with each choice checked. */
-export interface PlanArgs {
+export interface PlanArgs extends RemoteArgs {
   dir: string;
   event: string;
   action?: string;
@@ -129,16 +139,17 @@ const PLAN_ARGS = {
     description: 'Print a test case instead of the plan: jobs (also a bare --as-test) or steps',
   },
   workflow: { type: 'string', description: 'With --as-test: the workflow the case is about' },
+  ...REMOTE_ARGS,
 } satisfies ArgsDef;
 
 export const planCommand = defineCommand({
   meta: { name: 'plan', description: 'Which jobs and steps run for a scenario, and why' },
   args: PLAN_ARGS,
-  run({ rawArgs }) {
-    const io = { stderr: (t: string) => process.stderr.write(t), env: process.env };
-    process.exitCode = exitCodeOf(() => {
-      const out = planOutput(planArgs(rawArgs));
-      (out.code ? process.stderr : process.stdout).write(out.text);
+  async run({ rawArgs }) {
+    const io = processIo();
+    process.exitCode = await exitCodeOf(async () => {
+      const out = await planOutput(planArgs(rawArgs), io);
+      (out.code ? io.stderr : io.stdout)(out.text);
       return out.code;
     }, io);
   },
@@ -146,7 +157,7 @@ export const planCommand = defineCommand({
 
 /**
  * The arguments of a `simulci plan` command line: every value of a repeated flag, and `jobs` for a bare `--as-test`.
- * A `FlagError` when `--format`, `--detail` or `--as-test` is given a value it does not take.
+ * A `FlagError` when `--format`, `--detail`, `--as-test` or `--remotes` is given a value it does not take.
  */
 export function planArgs(rawArgs: readonly string[]): PlanArgs {
   const a = readArgs(rawArgs, PLAN_ARGS, {
@@ -157,13 +168,17 @@ export function planArgs(rawArgs: readonly string[]): PlanArgs {
     ...(a as unknown as PlanArgs),
     format: oneOf('format', a.format, FORMATS),
     detail: oneOf('detail', a.detail, DETAILS),
+    remotes: remotesMode(a.remotes),
     // `--no-as-test` reads false: no test case.
     asTest: a.asTest === undefined || a.asTest === false ? undefined : oneOf('as-test', a.asTest, AS_TEST),
   };
 }
 
-/** What `simulci plan` prints, and the exit code: 2, with the message, when it cannot. */
-export function planOutput(a: PlanArgs): { text: string; code: number } {
+/**
+ * What `simulci plan` prints, and the exit code: 2, with the message, when it cannot. Remotes are read as `--remotes`
+ * says; one that could not be read stays an open call, with the host's message on stderr.
+ */
+export async function planOutput(a: PlanArgs, io: RemotesIo): Promise<{ text: string; code: number }> {
   const files = readWorkflowFiles(a.dir);
   if (Object.keys(files).length === 0)
     return { text: `no workflows under ${a.dir}/.github/workflows\n`, code: 2 };
@@ -171,11 +186,17 @@ export function planOutput(a: PlanArgs): { text: string; code: number } {
   if (typeof assume === 'string') return { text: assume, code: 2 };
   const scenario = scenarioFromArgs(a);
   try {
+    parseScenario(scenario);
+    const remotes = await readRemotes(resolve(a.dir), files, a, io);
+    for (const line of failureLines(remotes.read?.remotes.failed ?? [])) io.stderr(line);
     const plan = simulate({
-      files,
+      files: remotes.files,
       scenario,
       detail: a.detail,
       mocks: { cli: assume },
+      ...(remotes.options.repository === undefined ? {} : { repository: remotes.options.repository }),
+      ...(remotes.options.remotes ? { remotes: remotes.options.remotes } : {}),
+      ...(remotes.options.mode ? { remotesMode: remotes.options.mode } : {}),
     });
     if (a.asTest === undefined) return { text: render(plan, a.format), code: 0 };
     return asTest(plan, a, scenario, assume);

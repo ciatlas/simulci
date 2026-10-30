@@ -23,14 +23,23 @@ import {
   TestsError,
 } from '@simulci/node';
 import { type ArgsDef, defineCommand } from 'citty';
-import { assumeOf, exitCodeOf, oneOf, readArgs, spoken, values } from './args';
+import { assumeOf, exitCodeOf, oneOf, processIo, readArgs, spoken, values } from './args';
+import {
+  failureLines,
+  readRemotes,
+  REMOTE_ARGS,
+  type RemoteArgs,
+  type RemotesIo,
+  remotesMode,
+  unpinnable,
+} from './remotes';
 
 /** `simulci test`: the route tests under `.github/simulci/tests`, or the files named. */
 
 const DETAILS = ['steps', 'legs'] as const;
 
 /** The `simulci test` arguments: as citty parses them, by their camelCase names, with `--snapshot-detail` checked. */
-export interface TestArgs {
+export interface TestArgs extends RemoteArgs {
   dir: string;
   files?: string | string[];
   junit?: string;
@@ -44,19 +53,24 @@ export interface TestArgs {
   assumeFile?: string;
 }
 
-export interface TestIo {
+export interface TestIo extends RemotesIo {
   stdout: (text: string) => void;
-  stderr: (text: string) => void;
-  env: Record<string, string | undefined>;
 }
 
 /** Runs the command; returns the exit code. */
-export function runTestCommand(a: TestArgs, io: TestIo): number {
-  const ready = prepare(a, io);
+export async function runTestCommand(a: TestArgs, io: TestIo): Promise<number> {
+  const ci = a.ci ?? io.env.CI === 'true';
+  if (ci && a.remotes === 'fetch') {
+    io.stderr(
+      '--remotes fetch reads the commit a tag or branch is at now, so a CI run could pass today and fail tomorrow on the same commit. Pin remotes with `simulci remotes update` and test with --remotes lock.\n',
+    );
+    return 2;
+  }
+  const ready = await prepare(a, io);
   if (typeof ready === 'number') return ready;
   const { root, files, cli } = ready;
   const options: RunOptions = {
-    ci: a.ci ?? io.env.CI === 'true',
+    ci,
     update: a.update ?? false,
     strict: a.strict ?? false,
     snapshotDetail: a.snapshotDetail ?? 'steps',
@@ -83,8 +97,11 @@ interface Prepared {
   cli: AssumeEntry[];
 }
 
-/** The checkout, the test files, the project and the cli mocks; or the exit code when one of them is not there. */
-function prepare(a: TestArgs, io: TestIo): Prepared | number {
+/**
+ * The checkout, the test files, the project with its remotes (read once, as `--remotes` says) and the cli mocks; or the
+ * exit code when one of them is not there, or a remote could not be read as pinned.
+ */
+async function prepare(a: TestArgs, io: TestIo): Promise<Prepared | number> {
   const root = resolve(a.dir);
   const files = discoverTests(root, values(a.files));
   const misplaced = misplacedTests(files);
@@ -99,13 +116,22 @@ function prepare(a: TestArgs, io: TestIo): Prepared | number {
     io.stderr(`no workflows under ${a.dir}/.github/workflows\n`);
     return 2;
   }
+  let cli: AssumeEntry[];
   try {
-    return { root, files, project: loadFiles(workflows), cli: assumeOf(a.assume, a.assumeFile) };
+    cli = assumeOf(a.assume, a.assumeFile);
   } catch (e) {
     if (!(e instanceof AssumeError)) throw e;
     io.stderr(`${e.message}\n`);
     return 2;
   }
+  const remotes = await readRemotes(root, workflows, a, io);
+  const unpinned = unpinnable(remotes);
+  if (unpinned !== undefined) {
+    for (const line of failureLines(remotes.read?.remotes.failed ?? [])) io.stderr(line);
+    io.stderr(unpinned);
+    return 2;
+  }
+  return { root, files, project: loadFiles(remotes.files, remotes.options), cli };
 }
 
 function report(result: RunResult, a: TestArgs, io: TestIo): void {
@@ -148,30 +174,28 @@ const TEST_ARGS = {
     description: 'A mock for every case: build.unit=failure, build.unit.outputs.sha=abc (repeatable)',
   },
   'assume-file': { type: 'string', description: 'A YAML list of mocks for every case' },
+  ...REMOTE_ARGS,
 } satisfies ArgsDef;
 
 export const testCommand = defineCommand({
   meta: { name: 'test', description: 'Run the route tests under .github/simulci/tests' },
   args: TEST_ARGS,
-  run({ rawArgs }) {
-    const io: TestIo = {
-      stdout: (t) => process.stdout.write(t),
-      stderr: (t) => process.stderr.write(t),
-      env: process.env,
-    };
-    process.exitCode = exitCodeOf(() => runTestCommand(testArgs(rawArgs), io), io);
+  async run({ rawArgs }) {
+    const io = processIo();
+    process.exitCode = await exitCodeOf(() => runTestCommand(testArgs(rawArgs), io), io);
   },
 });
 
 /**
  * The arguments of a `simulci test` command line: every test file named, and every `--assume`. A `FlagError` when
- * `--snapshot-detail` is given a value it does not take.
+ * `--snapshot-detail` or `--remotes` is given a value it does not take.
  */
 export function testArgs(rawArgs: readonly string[]): TestArgs {
   const a = readArgs(rawArgs, TEST_ARGS, { repeated: ['assume'] });
   const args = {
     ...(a as unknown as TestArgs),
     snapshotDetail: oneOf('snapshot-detail', a.snapshotDetail, DETAILS),
+    remotes: remotesMode(a.remotes),
   };
   const files = a._ as string[];
   return files.length ? { ...args, files } : args;
