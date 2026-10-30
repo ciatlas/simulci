@@ -1,0 +1,14 @@
+# Case R3 - remote-workspace-action: a remote workflow's step uses `./.github/actions/r3`, with and without a
+# checkout first. This repository and the remote both have the action, with different probes.
+name: case-remote-workspace-action
+on: workflow_dispatch
+jobs:
+  call:
+    uses: ciatlas/simulci-lab-remote/.github/workflows/callee-r3-workspace.yml@d19def8c3562ef6c1be3f12443345575530f1ac4
+  b:
+    needs: call
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: 'echo "probe: needs.call.result=${{ needs.call.result }}"'

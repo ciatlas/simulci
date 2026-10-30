@@ -1,0 +1,18 @@
+# Case R8 - remote-composite-outputs: a remote composite action's declared output, and an output its inner step
+# wrote but the action does not declare.
+name: case-remote-composite-outputs
+on: workflow_dispatch
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: c
+        name: composite action
+        uses: ciatlas/simulci-lab-remote/r8-composite@d19def8c3562ef6c1be3f12443345575530f1ac4
+      - name: probe
+        env:
+          OUTPUTS: ${{ toJSON(steps.c.outputs) }}
+        run: |
+          echo "probe: steps.c.outputs.o=${{ steps.c.outputs.o }}"
+          echo "probe: steps.c.outputs.extra=${{ steps.c.outputs.extra }}"
+          echo "probe: steps.c.outputs=$(jq -c . <<< "$OUTPUTS")"

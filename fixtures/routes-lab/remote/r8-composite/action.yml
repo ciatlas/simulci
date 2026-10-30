@@ -1,0 +1,16 @@
+name: r8-composite
+description: Case R8 - a composite action with one declared output; its inner step also writes an undeclared one.
+outputs:
+  o:
+    description: the inner step's v
+    value: ${{ steps.s.outputs.v }}
+runs:
+  using: composite
+  steps:
+    - id: s
+      name: write
+      shell: bash
+      run: |
+        echo "v=x" >> "$GITHUB_OUTPUT"
+        echo "extra=y" >> "$GITHUB_OUTPUT"
+        echo "probe: r8-inner=ran"

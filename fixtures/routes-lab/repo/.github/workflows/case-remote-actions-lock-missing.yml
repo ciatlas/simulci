@@ -1,0 +1,13 @@
+# Case R9 - remote-actions-lock-missing: a covered workflow with a step the lock lacks (the `@main` step is added
+# after the lock was written). If GitHub enforces the lock in this repository, the job fails at that step; this case
+# tells "the pin is not used" apart from "the lock is not in effect here".
+name: case-remote-actions-lock-missing
+on: workflow_dispatch
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - name: remote action
+        uses: ciatlas/simulci-lab-remote/.github/actions/r9-action@v1
+      - name: unlisted remote action
+        uses: ciatlas/simulci-lab-remote/.github/actions/r9-action@main

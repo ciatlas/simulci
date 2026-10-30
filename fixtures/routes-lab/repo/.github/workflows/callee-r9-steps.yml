@@ -1,0 +1,9 @@
+# Helper for case R9: a local reusable workflow whose step uses the remote action at `@v1`.
+name: callee-r9-steps
+on: workflow_call
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - name: remote action
+        uses: ciatlas/simulci-lab-remote/.github/actions/r9-action@v1

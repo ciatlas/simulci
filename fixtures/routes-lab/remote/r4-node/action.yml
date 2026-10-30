@@ -1,0 +1,8 @@
+name: r4-node
+description: Case R4 - a node action that writes a declared and an undeclared output.
+outputs:
+  declared:
+    description: declared in this file
+runs:
+  using: node24
+  main: index.js

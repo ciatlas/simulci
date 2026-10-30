@@ -1,0 +1,6 @@
+# Case R7: link 7 of a chain of reusable workflows; it calls link 8 through `./`.
+name: callee-r7-chain-7
+on: workflow_call
+jobs:
+  next:
+    uses: ./.github/workflows/callee-r7-chain-8.yml

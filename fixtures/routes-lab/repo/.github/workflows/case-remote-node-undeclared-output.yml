@@ -1,0 +1,17 @@
+# Case R4 - remote-node-undeclared-output: a remote node action writes an output its action.yml does not declare.
+name: case-remote-node-undeclared-output
+on: workflow_dispatch
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - id: n
+        name: node action
+        uses: ciatlas/simulci-lab-remote/r4-node@d19def8c3562ef6c1be3f12443345575530f1ac4
+      - name: probe
+        env:
+          OUTPUTS: ${{ toJSON(steps.n.outputs) }}
+        run: |
+          echo "probe: steps.n.outputs.declared=${{ steps.n.outputs.declared }}"
+          echo "probe: steps.n.outputs.undeclared=${{ steps.n.outputs.undeclared }}"
+          echo "probe: steps.n.outputs=$(jq -c . <<< "$OUTPUTS")"

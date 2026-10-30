@@ -1,0 +1,221 @@
+{
+  "source": "https://github.com/ciatlas/simulci-lab",
+  "pushes": [
+    {
+      "kind": "branch_creation",
+      "ref": "refs/heads/main",
+      "sha": "5043371fae5a0dae0899a01f8a8b7de8deb63eb1",
+      "message": "feat(lab): status and trigger cases",
+      "changed": [
+        ".github/actions/comp/action.yml",
+        ".github/workflows/callee-echo.yml",
+        ".github/workflows/callee-skipped.yml",
+        ".github/workflows/case-composite-action-status.yml",
+        ".github/workflows/case-continue-on-error-job.yml",
+        ".github/workflows/case-continue-on-error-step.yml",
+        ".github/workflows/case-fail-fast-cancelled.yml",
+        ".github/workflows/case-filter-branches-and-paths.yml",
+        ".github/workflows/case-filter-branches-tags.yml",
+        ".github/workflows/case-filter-paths-ignore.yml",
+        ".github/workflows/case-filter-paths.yml",
+        ".github/workflows/case-filter-tags.yml",
+        ".github/workflows/case-grandparent-outputs.yml",
+        ".github/workflows/case-if-boolean-literal-empty.yml",
+        ".github/workflows/case-if-boolean-literal-zero.yml",
+        ".github/workflows/case-if-boolean-literal.yml",
+        ".github/workflows/case-matrix-aggregate.yml",
+        ".github/workflows/case-matrix-one-failed.yml",
+        ".github/workflows/case-matrix-outputs.yml",
+        ".github/workflows/case-output-last-write.yml",
+        ".github/workflows/case-reusable-all-skipped.yml",
+        ".github/workflows/case-reusable-skipped-call.yml",
+        ".github/workflows/case-skip-ci.yml",
+        ".github/workflows/case-skipped-job-outputs.yml",
+        ".github/workflows/case-skipped-need.yml",
+        ".github/workflows/case-skipped-step-outputs.yml",
+        ".github/workflows/case-step-timeout.yml",
+        ".github/workflows/case-types-default.yml",
+        ".github/workflows/case-types-labeled.yml",
+        ".github/workflows/case-unknown-or-true.yml",
+        "README.md"
+      ],
+      "workflows": [
+        ".github/workflows/case-composite-action-status.yml",
+        ".github/workflows/case-continue-on-error-job.yml",
+        ".github/workflows/case-continue-on-error-step.yml",
+        ".github/workflows/case-fail-fast-cancelled.yml",
+        ".github/workflows/case-filter-branches-tags.yml",
+        ".github/workflows/case-filter-paths-ignore.yml",
+        ".github/workflows/case-grandparent-outputs.yml",
+        ".github/workflows/case-if-boolean-literal-empty.yml",
+        ".github/workflows/case-if-boolean-literal-zero.yml",
+        ".github/workflows/case-if-boolean-literal.yml",
+        ".github/workflows/case-matrix-aggregate.yml",
+        ".github/workflows/case-matrix-one-failed.yml",
+        ".github/workflows/case-matrix-outputs.yml",
+        ".github/workflows/case-output-last-write.yml",
+        ".github/workflows/case-reusable-all-skipped.yml",
+        ".github/workflows/case-reusable-skipped-call.yml",
+        ".github/workflows/case-skip-ci.yml",
+        ".github/workflows/case-skipped-job-outputs.yml",
+        ".github/workflows/case-skipped-need.yml",
+        ".github/workflows/case-skipped-step-outputs.yml",
+        ".github/workflows/case-step-timeout.yml",
+        ".github/workflows/case-unknown-or-true.yml"
+      ]
+    },
+    {
+      "kind": "push",
+      "ref": "refs/heads/main",
+      "sha": "c3741fa8b8dd8c6e8f57f060173648d8b9bcbfdc",
+      "message": "docs(lab): a docs-only commit for the path filters",
+      "changed": [
+        "docs/note.md"
+      ],
+      "workflows": [
+        ".github/workflows/case-composite-action-status.yml",
+        ".github/workflows/case-continue-on-error-job.yml",
+        ".github/workflows/case-continue-on-error-step.yml",
+        ".github/workflows/case-fail-fast-cancelled.yml",
+        ".github/workflows/case-filter-branches-tags.yml",
+        ".github/workflows/case-grandparent-outputs.yml",
+        ".github/workflows/case-if-boolean-literal-empty.yml",
+        ".github/workflows/case-if-boolean-literal-zero.yml",
+        ".github/workflows/case-if-boolean-literal.yml",
+        ".github/workflows/case-matrix-aggregate.yml",
+        ".github/workflows/case-matrix-one-failed.yml",
+        ".github/workflows/case-matrix-outputs.yml",
+        ".github/workflows/case-output-last-write.yml",
+        ".github/workflows/case-reusable-all-skipped.yml",
+        ".github/workflows/case-reusable-skipped-call.yml",
+        ".github/workflows/case-skip-ci.yml",
+        ".github/workflows/case-skipped-job-outputs.yml",
+        ".github/workflows/case-skipped-need.yml",
+        ".github/workflows/case-skipped-step-outputs.yml",
+        ".github/workflows/case-step-timeout.yml",
+        ".github/workflows/case-unknown-or-true.yml"
+      ]
+    },
+    {
+      "kind": "push",
+      "ref": "refs/heads/main",
+      "sha": "37e44101431bc8c46dc3ba1631d9dcf92cda5ea3",
+      "message": "feat(lab): a src-only commit for the path filters",
+      "changed": [
+        "src/main.txt"
+      ],
+      "workflows": [
+        ".github/workflows/case-composite-action-status.yml",
+        ".github/workflows/case-continue-on-error-job.yml",
+        ".github/workflows/case-continue-on-error-step.yml",
+        ".github/workflows/case-fail-fast-cancelled.yml",
+        ".github/workflows/case-filter-branches-and-paths.yml",
+        ".github/workflows/case-filter-branches-tags.yml",
+        ".github/workflows/case-filter-paths-ignore.yml",
+        ".github/workflows/case-filter-paths.yml",
+        ".github/workflows/case-grandparent-outputs.yml",
+        ".github/workflows/case-if-boolean-literal-empty.yml",
+        ".github/workflows/case-if-boolean-literal-zero.yml",
+        ".github/workflows/case-if-boolean-literal.yml",
+        ".github/workflows/case-matrix-aggregate.yml",
+        ".github/workflows/case-matrix-one-failed.yml",
+        ".github/workflows/case-matrix-outputs.yml",
+        ".github/workflows/case-output-last-write.yml",
+        ".github/workflows/case-reusable-all-skipped.yml",
+        ".github/workflows/case-reusable-skipped-call.yml",
+        ".github/workflows/case-skip-ci.yml",
+        ".github/workflows/case-skipped-job-outputs.yml",
+        ".github/workflows/case-skipped-need.yml",
+        ".github/workflows/case-skipped-step-outputs.yml",
+        ".github/workflows/case-step-timeout.yml",
+        ".github/workflows/case-unknown-or-true.yml"
+      ]
+    },
+    {
+      "kind": "push",
+      "ref": "refs/heads/main",
+      "sha": "e623802ba524a344c2033c94c438a38fe0e8c07f",
+      "message": "chore(lab): a commit whose message skips CI [skip ci]",
+      "changed": [
+        "docs/skip.md"
+      ],
+      "workflows": []
+    },
+    {
+      "kind": "branch_creation",
+      "ref": "refs/heads/probe/pr",
+      "sha": "0ca8d4f44a28f6d4444d9fc36f355dcd476f8f48",
+      "message": "docs(lab): the pull request commit for the pull_request types",
+      "changed": [
+        "docs/pr.md"
+      ],
+      "workflows": [
+        ".github/workflows/case-composite-action-status.yml",
+        ".github/workflows/case-continue-on-error-job.yml",
+        ".github/workflows/case-continue-on-error-step.yml",
+        ".github/workflows/case-fail-fast-cancelled.yml",
+        ".github/workflows/case-grandparent-outputs.yml",
+        ".github/workflows/case-if-boolean-literal-empty.yml",
+        ".github/workflows/case-if-boolean-literal-zero.yml",
+        ".github/workflows/case-if-boolean-literal.yml",
+        ".github/workflows/case-matrix-aggregate.yml",
+        ".github/workflows/case-matrix-one-failed.yml",
+        ".github/workflows/case-matrix-outputs.yml",
+        ".github/workflows/case-output-last-write.yml",
+        ".github/workflows/case-reusable-all-skipped.yml",
+        ".github/workflows/case-reusable-skipped-call.yml",
+        ".github/workflows/case-skip-ci.yml",
+        ".github/workflows/case-skipped-job-outputs.yml",
+        ".github/workflows/case-skipped-need.yml",
+        ".github/workflows/case-skipped-step-outputs.yml",
+        ".github/workflows/case-step-timeout.yml",
+        ".github/workflows/case-unknown-or-true.yml"
+      ]
+    },
+    {
+      "kind": "push",
+      "ref": "refs/heads/main",
+      "sha": "5e594693380fa34235983969abd581e7523d7cb8",
+      "message": "docs(lab): the push order as it happened [skip ci]",
+      "changed": [
+        "README.md"
+      ],
+      "workflows": []
+    },
+    {
+      "kind": "tag",
+      "ref": "refs/tags/v0.0.1",
+      "sha": "37e44101431bc8c46dc3ba1631d9dcf92cda5ea3",
+      "message": "feat(lab): a src-only commit for the path filters",
+      "changed": [
+        "src/main.txt"
+      ],
+      "workflows": [
+        ".github/workflows/case-composite-action-status.yml",
+        ".github/workflows/case-continue-on-error-job.yml",
+        ".github/workflows/case-continue-on-error-step.yml",
+        ".github/workflows/case-fail-fast-cancelled.yml",
+        ".github/workflows/case-filter-branches-tags.yml",
+        ".github/workflows/case-filter-paths-ignore.yml",
+        ".github/workflows/case-filter-paths.yml",
+        ".github/workflows/case-filter-tags.yml",
+        ".github/workflows/case-grandparent-outputs.yml",
+        ".github/workflows/case-if-boolean-literal-empty.yml",
+        ".github/workflows/case-if-boolean-literal-zero.yml",
+        ".github/workflows/case-if-boolean-literal.yml",
+        ".github/workflows/case-matrix-aggregate.yml",
+        ".github/workflows/case-matrix-one-failed.yml",
+        ".github/workflows/case-matrix-outputs.yml",
+        ".github/workflows/case-output-last-write.yml",
+        ".github/workflows/case-reusable-all-skipped.yml",
+        ".github/workflows/case-reusable-skipped-call.yml",
+        ".github/workflows/case-skip-ci.yml",
+        ".github/workflows/case-skipped-job-outputs.yml",
+        ".github/workflows/case-skipped-need.yml",
+        ".github/workflows/case-skipped-step-outputs.yml",
+        ".github/workflows/case-step-timeout.yml",
+        ".github/workflows/case-unknown-or-true.yml"
+      ]
+    }
+  ]
+}

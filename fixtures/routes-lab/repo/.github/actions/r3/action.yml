@@ -1,0 +1,8 @@
+name: r3
+description: Helper for case R3 - this repository's copy; a checkout in the remote workflow brings it in.
+runs:
+  using: composite
+  steps:
+    - name: probe
+      shell: bash
+      run: 'echo "probe: r3-action=caller"'

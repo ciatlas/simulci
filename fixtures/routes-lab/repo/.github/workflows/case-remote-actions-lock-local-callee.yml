@@ -1,0 +1,7 @@
+# Case R9 - remote-actions-lock-local-callee: a covered workflow whose step reaches `@v1` only through a local
+# reusable workflow (callee-r9-steps.yml). Is that step pinned under the caller's entry, the callee's, or not at all?
+name: case-remote-actions-lock-local-callee
+on: workflow_dispatch
+jobs:
+  call:
+    uses: ./.github/workflows/callee-r9-steps.yml

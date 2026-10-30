@@ -1,0 +1,9 @@
+# Case R7: one of 51 distinct leaf workflows, to count the unique reusable workflows a run may call.
+name: callee-r7-fan-40
+on: workflow_call
+jobs:
+  leaf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: 'echo "probe: r7-fan-40=ran"'

@@ -1,0 +1,12 @@
+# Case R2 (self form): a remote reusable workflow that names its own repository with `$/`, once at job level and
+# once at step level, with no checkout. Kept apart from callee-r2-outer.yml so a refusal of `$/` cannot sink R2.
+name: callee-r2-self
+on: workflow_call
+jobs:
+  inner:
+    uses: $/.github/workflows/callee-r2-inner.yml
+  step:
+    runs-on: ubuntu-latest
+    steps:
+      - name: self action
+        uses: $/.github/actions/r2-self

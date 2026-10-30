@@ -1,0 +1,8 @@
+name: r2-self
+description: Helper for case R2 (self form) - this repository's copy; the remote's `$/` must not reach it.
+runs:
+  using: composite
+  steps:
+    - name: probe
+      shell: bash
+      run: 'echo "probe: r2-self-action=caller"'

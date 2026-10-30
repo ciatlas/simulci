@@ -593,7 +593,117 @@
     },
     "commentGap": 1
   },
+  "fixtures/routes-lab/repo/.github/actions/r2-self/action.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/actions/r3/action.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
   "fixtures/routes-lab/repo/.github/workflows/callee-echo.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/callee-r10.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/callee-r2-inner.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/callee-r9-steps.yml": {
     "indent": 2,
     "indentSeq": true,
     "quote": "'",
@@ -1001,6 +1111,402 @@
       "matrix": true,
       "runs-on": true,
       "other": true
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-actions-lock-local-callee.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-actions-lock-missing.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-actions-lock-uncovered.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-actions-lock.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-composite-outputs.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-nesting-10.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-nesting-11.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-node-undeclared-output.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-relative-workflow.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": true,
+      "filters": true,
+      "types": true,
+      "matrix": true,
+      "runs-on": true,
+      "other": true
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-reusable-outputs.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": true,
+      "filters": true,
+      "types": true,
+      "matrix": true,
+      "runs-on": true,
+      "other": true
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-same-repo-ref.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": true,
+      "filters": true,
+      "types": true,
+      "matrix": true,
+      "runs-on": true,
+      "other": true
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-same-repo-self.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": true,
+      "filters": true,
+      "types": true,
+      "matrix": true,
+      "runs-on": true,
+      "other": true
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-secrets-inherit.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": true,
+      "filters": true,
+      "types": true,
+      "matrix": true,
+      "runs-on": true,
+      "other": true
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-self.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-tag-vs-sha.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-total-50.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-total-51.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
+    },
+    "ifStyle": "bare",
+    "eol": "\n",
+    "finalNewline": true,
+    "blank": {
+      "jobs": false,
+      "steps": false
+    },
+    "commentGap": 1
+  },
+  "fixtures/routes-lab/repo/.github/workflows/case-remote-workspace-action.yml": {
+    "indent": 2,
+    "indentSeq": true,
+    "quote": "'",
+    "flowPadding": false,
+    "flow": {
+      "needs": null,
+      "filters": null,
+      "types": null,
+      "matrix": null,
+      "runs-on": null,
+      "other": null
     },
     "ifStyle": "bare",
     "eol": "\n",

@@ -1,0 +1,8 @@
+name: r2-self
+description: Case R2 (self form) - echoes which copy ran. The lab's own repository has one at the same path.
+runs:
+  using: composite
+  steps:
+    - name: probe
+      shell: bash
+      run: 'echo "probe: r2-self-action=remote-a"'

@@ -1,0 +1,20 @@
+# Case R2: the inner workflow, as the remote repository has it. The lab's own repository has a file at the same
+# path whose marker says `caller`.
+name: callee-r2-inner
+on:
+  workflow_call:
+    outputs:
+      marker:
+        description: which copy ran
+        value: ${{ jobs.m.outputs.marker }}
+jobs:
+  m:
+    runs-on: ubuntu-latest
+    outputs:
+      marker: ${{ steps.s.outputs.marker }}
+    steps:
+      - id: s
+        name: probe
+        run: |
+          echo "marker=remote-a" >> "$GITHUB_OUTPUT"
+          echo "probe: r2-inner=remote-a"

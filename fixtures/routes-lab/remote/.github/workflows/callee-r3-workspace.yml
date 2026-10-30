@@ -1,0 +1,32 @@
+# Case R3: a remote reusable workflow whose step uses `./.github/actions/r3`. Which workspace does `./` read: an
+# empty one (no checkout), and after a default checkout, the caller's repository or the remote's? Both repositories
+# have the action, with different probes.
+name: callee-r3-workspace
+on: workflow_call
+jobs:
+  bare:
+    runs-on: ubuntu-latest
+    steps:
+      - id: a
+        name: local action, no checkout
+        continue-on-error: true
+        uses: ./.github/actions/r3
+      - name: probe
+        if: always()
+        run: 'echo "probe: bare.outcome=${{ steps.a.outcome }}"'
+  checkout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: a
+        name: local action after checkout
+        continue-on-error: true
+        uses: ./.github/actions/r3
+      - name: probe
+        if: always()
+        run: |
+          echo "probe: checkout.outcome=${{ steps.a.outcome }}"
+          echo "probe: checkout.repository=${{ github.repository }}"
