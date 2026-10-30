@@ -226,7 +226,14 @@ function tokenVariables(env: NodeJS.ProcessEnv, apiUrl: string): TokenVariable[]
   return ['GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', ...(runner ? (['GITHUB_TOKEN'] as const) : [])];
 }
 
-const sameUrl = (a: string, b: string) => a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+const sameUrl = (a: string, b: string) => withoutTrailingSlashes(a) === withoutTrailingSlashes(b);
+
+/** A loop, not `/\/+$/`: a regex anchored after a repeat backtracks quadratically on a long run of `/` (CodeQL). */
+function withoutTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') end--;
+  return url.slice(0, end);
+}
 
 /**
  * The API at `apiUrl` and its token: `given`, else the first set of the variables for its host (`GH_TOKEN`, then

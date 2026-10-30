@@ -676,6 +676,20 @@ describe('githubAccess', () => {
     expect(githubAccess({ GH_TOKEN: 'gh', GITHUB_TOKEN: 'actions' }, ghes, undefined, gh())).toEqual({
       apiUrl: ghes,
     });
+    // A long run of slashes, then another character: linear, not a backtracking regex (CodeQL js/polynomial-redos).
+    const slashes = `${ghes}${'/'.repeat(100_000)}x`;
+    const started = performance.now();
+    expect(
+      githubAccess(
+        { GITHUB_TOKEN: 'actions', GITHUB_API_URL: slashes },
+        slashes.slice(0, -1),
+        undefined,
+        gh(),
+      ),
+    ).toEqual({
+      apiUrl: slashes.slice(0, -1),
+    });
+    expect(performance.now() - started).toBeLessThan(1000);
     const runner = { GITHUB_TOKEN: 'actions', GITHUB_API_URL: `${ghes}/` };
     expect(githubAccess(runner, ghes, undefined, gh())).toMatchObject({
       token: 'actions',
