@@ -209,3 +209,86 @@ describe('a remote action the host could not read', () => {
     expect(unread.diagnostics).toEqual([]);
   });
 });
+
+describe('a remote unit’s ./ step, in the job’s workspace (lab R3)', () => {
+  const CALLEE = 'octo/ship/.github/workflows/w.yml@v1';
+  const LOCAL = '.github/actions/x/action.yml';
+  const local = 'runs:\n  using: composite\n  steps:\n    - run: echo caller\n      shell: bash\n';
+  const callee = (before: string) => `
+on: workflow_call
+jobs:
+  j:
+    runs-on: ubuntu-latest
+    steps:
+${before}      - id: a
+        continue-on-error: true
+        uses: ./.github/actions/x
+`;
+  const run = (before: string, assume: AssumeEntry[] = []) =>
+    simulate({
+      files: { [CI]: `on: push\njobs:\n  call:\n    uses: ${CALLEE}\n`, [LOCAL]: local },
+      scenario: { event: 'push', repository: 'me/app' },
+      remotes: {
+        sources: [{ ref: CALLEE, kind: 'workflow', sha: SHA, text: callee(before), pinned: 'lockfile' }],
+      },
+      assume,
+    });
+  const stepA = (p: RunPlan) => p.workflows[0]!.jobs[0]!.legs[0]!.call!.jobs[0]!.legs[0]!.steps!.at(-1)!;
+
+  it('fails before any checkout: the action is not there', () => {
+    const a = stepA(run(''));
+    expect(a.outcome).toEqual({ known: true, value: 'failure' });
+    expect(a.conclusion).toEqual({ known: true, value: 'success' });
+    expect(a.composite).toBeUndefined();
+  });
+
+  it('runs the caller’s action after a default checkout, never the remote’s', () => {
+    for (const w of ['', '        with: { repository: me/app, path: ., persist-credentials: false }\n']) {
+      const a = stepA(run(`      - uses: actions/checkout@v4\n${w}`));
+      expect(a.composite?.path).toBe('.github/actions/x');
+      expect(a.outcome).toEqual({ known: true, value: 'success' });
+    }
+  });
+
+  it('cannot tell after another checkout, one that may not run, or another step', () => {
+    for (const before of [
+      '      - uses: actions/checkout@v4\n        with: { repository: other/repo }\n',
+      '      - uses: actions/checkout@v4\n        with: { path: sub }\n',
+      '      - uses: actions/checkout@v4\n        with: { ref: main }\n',
+      "      - if: github.event.head_commit.message == 'y'\n        uses: actions/checkout@v4\n",
+      '      - run: git clone https://example.com/x .\n',
+    ]) {
+      const p = run(before);
+      expect(stepA(p).outcome, before).toEqual({
+        known: false,
+        unknowns: [`${CI}#call>${CALLEE}#j/steps.a.outcome`],
+        oneOf: ['success', 'failure'],
+      });
+      expect(p.unknowns.map((u) => u.id)).toContain(`${CI}#call>${CALLEE}#j/steps.a.outcome`);
+    }
+  });
+
+  it('takes a mocked outcome', () => {
+    const a = stepA(run('', [{ uses: './.github/actions/x', outcome: 'success' }]));
+    expect(a.outcome).toEqual({ known: true, value: 'success' });
+  });
+
+  it('follows the job’s checkouts into a remote composite, and leaves this repository’s ./ steps as they were', () => {
+    const KIT = 'octo/kit/run@v1';
+    const kit = 'runs:\n  using: composite\n  steps:\n    - id: x\n      uses: ./.github/actions/x\n';
+    const job = (before: string) =>
+      simulate({
+        files: {
+          [CI]: `on: push\njobs:\n  j:\n    runs-on: x\n    steps:\n${before}      - continue-on-error: true\n        uses: ${KIT}\n      - uses: ./.github/actions/x\n`,
+          [LOCAL]: local,
+        },
+        scenario: { event: 'push' },
+        remotes: { sources: [action(KIT, kit)] },
+      }).workflows[0]!.jobs[0]!.legs[0]!.steps!;
+    const bare = job('');
+    expect(bare.at(-2)!.composite!.steps[0]!.outcome).toEqual({ known: true, value: 'failure' });
+    expect(bare.at(-1)!.composite?.path).toBe('.github/actions/x');
+    const checkedOut = job('      - uses: actions/checkout@v4\n');
+    expect(checkedOut.at(-2)!.composite!.steps[0]!.composite?.path).toBe('.github/actions/x');
+  });
+});

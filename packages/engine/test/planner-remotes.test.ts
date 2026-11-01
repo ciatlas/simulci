@@ -358,7 +358,7 @@ jobs:
     ]);
   });
 
-  it('plans a remote step’s ./ as the job’s workspace, opaque and open (lab R3)', () => {
+  it('plans a remote step’s ./ in the job’s workspace, where nothing is before a checkout (lab R3)', () => {
     const outer = `
 on: workflow_call
 jobs:
@@ -377,7 +377,8 @@ jobs:
     const p = planWith({ sources: [source(DEPLOY, outer)] }, files);
     const steps = callee(p)!.jobs[0]!.legs[0]!.steps!;
     expect(steps[0]!.composite).toBeUndefined();
-    expect(steps[1]!.runs.verdict).toBe('maybe');
+    expect(steps[0]!.outcome).toEqual({ known: true, value: 'failure' });
+    expect(steps[1]!.runs.verdict).toBe('no');
     expect(p.remotes!.map((r) => r.ref)).toEqual([DEPLOY]);
   });
 

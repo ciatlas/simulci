@@ -270,7 +270,15 @@ interface StepTarget {
   scope?: Scope;
   /** A remote's ref as the plan shows it, which `uses:` mocks match. */
   shown?: string;
+  /** The outcome unless a mock sets it, when it is not success: a remote's `./` step with no action there. */
+  outcome?: Value<Result>;
 }
+
+/**
+ * What a leg's workspace holds as far as a remote unit's `./` steps go (lab R3): nothing yet, the caller's files at its
+ * running commit (a default `actions/checkout`), or what the plan cannot tell.
+ */
+type Workspace = 'empty' | 'caller' | 'unknown';
 
 /** The outputs an opaque step may set before mocks: the names of its interface, those already valued, and whether it is open. */
 interface Opaque {
@@ -298,6 +306,8 @@ class Planner {
   private readonly openCalls = new WeakSet<LegPlan>();
   /** The remote workflows and actions the plan uses, by the ref it shows. */
   private readonly remoteUses = new Map<string, RemoteUseSite>();
+  /** The workspace of the leg being planned, after the steps planned so far. */
+  private workspace: Workspace = 'empty';
   /** The composite actions being planned, outermost first: one that uses itself is not planned again. */
   private readonly composites: ActionDecl[] = [];
   private readonly index: ProjectIndex;
@@ -796,6 +806,7 @@ class Planner {
       return leg;
     }
     leg.check = { name: `${ctx.checkPrefix}${seg.name}`, certain: seg.certain };
+    this.workspace = 'empty';
     const steps = this.planSteps(
       job.steps,
       ctx.settings.steps,
@@ -1100,6 +1111,8 @@ class Planner {
       state,
       location,
     );
+    const repository = this.index.project.repository ?? this.scenario.repository;
+    this.workspace = workspaceAfter(this.workspace, step, runs.verdict, withValues, repository);
     const plan = stepShell(step, sid, parentId, runs, outcome, continueOnError, outputs);
     plan.with = withValues;
     plan.env = this.bindings(step.env, state);
@@ -1124,16 +1137,29 @@ class Planner {
     return this.remoteAction(remote, sid, withValues);
   }
 
-  /** A step whose `uses:` names no remote: this repository's action, else a model or nothing (a remote's `./`, docker). */
+  /** A step whose `uses:` names no remote: this repository's action, a remote's `./` in the workspace, else a model or nothing. */
   private localStep(
     step: StepDecl,
     sid: NodeId,
     withValues: Record<string, Value<string>>,
     scope: Scope,
   ): StepTarget {
+    const path = scope.unit.external ? step.uses!.workspacePath : undefined;
+    if (path !== undefined) return this.workspaceAction(path, sid);
     const action = scope.unit.external ? undefined : this.index.actionOf(step);
     if (!action || this.cyclic(action, sid)) return this.modelTarget(step.uses!.raw, sid, withValues);
     return { action, scope: { unit: action, ...(scope.running ? { running: scope.running } : {}) } };
+  }
+
+  /**
+   * A remote unit's `./` step: the job's workspace, never the remote's own files (lab R3). Before a checkout nothing is
+   * there and the step fails; after a default checkout it is the caller's action; otherwise the plan cannot tell.
+   */
+  private workspaceAction(path: string, sid: NodeId): StepTarget {
+    if (this.workspace === 'empty') return { outcome: known('failure') };
+    const action = this.workspace === 'caller' ? this.index.project.actions.get(path) : undefined;
+    if (action && !this.cyclic(action, sid)) return { action, scope: { unit: action } };
+    return { outcome: unknown([`${sid}.outcome`], ['success', 'failure']) };
   }
 
   /**
@@ -1195,7 +1221,7 @@ class Planner {
     if (runs.verdict === 'no') return { outcome: known('skipped'), outputs: {}, open: false, envWrites: {} };
     const facts = this.mocks.factsFor(location, sid, target.shown ?? step.uses?.raw, target.model);
     const envWrites = this.envWrites(step, sid, state, facts);
-    const { produced, base } = this.producedOutcome(facts, runs, cond, sid);
+    const { produced, base } = this.producedOutcome(facts, runs, cond, sid, target.outcome);
     if (target.action?.using === 'composite') {
       return {
         ...this.compositeProduct(target, step, sid, state, runs, location, facts, produced, base),
@@ -1244,15 +1270,17 @@ class Planner {
     return envWrites;
   }
 
-  /** The outcome as mocked, else success; a step whose own `if:` is unknown may also have been skipped. */
+  /** The outcome as mocked, else the target's or success; a step whose own `if:` is unknown may also have been skipped. */
   private producedOutcome(
     facts: Facts,
     runs: Decision,
     cond: Condition,
     sid: NodeId,
+    outcome: Value<Result> = known('success'),
   ): { produced: Value<Result>; base: Value<Result> } {
-    const produced: Value<Result> = facts.outcome ? facts.outcome.value : known('success');
+    const produced: Value<Result> = facts.outcome ? facts.outcome.value : outcome;
     if (facts.outcome) this.record(facts.outcome.by, sid, 'outcome');
+    else this.noteValue(outcome);
     const base = runs.verdict === 'yes' ? produced : orSkipped(produced, cond.value, 'last');
     return { produced, base };
   }
@@ -1568,6 +1596,37 @@ function stepShell(
 
 /** GitHub's limit on the reusable workflows one run names (lab R7). */
 const MAX_CALLED_WORKFLOWS = 50;
+
+const CHECKOUT = /^actions\/checkout@/i;
+
+/**
+ * The workspace after a step that runs (lab R3): a checkout of the caller at the root holds the caller's files; any other
+ * checkout, or one that may not run, leaves what the plan cannot tell; so does any other step on an empty workspace,
+ * which might fill it.
+ */
+function workspaceAfter(
+  ws: Workspace,
+  step: StepDecl,
+  runs: Tri,
+  withValues: Record<string, Value<string>>,
+  repository: string | undefined,
+): Workspace {
+  if (runs === 'no') return ws;
+  if (!CHECKOUT.test(step.uses?.raw.trim() ?? '')) return ws === 'empty' ? 'unknown' : ws;
+  return runs === 'yes' && callerCheckout(withValues, repository) ? 'caller' : 'unknown';
+}
+
+/** A value absent or known to be one of the defaults. */
+const isDefault = (v: Value<string> | undefined, defaults: string[]) =>
+  v === undefined || (v.known && defaults.includes(v.value.trim()));
+
+/** `actions/checkout`'s defaults: the run's repository at the running commit, at the workspace root. */
+function callerCheckout(w: Record<string, Value<string>>, repository: string | undefined): boolean {
+  const repo = w.repository;
+  const own =
+    isDefault(repo, ['']) || (repo?.known && repo.value.trim().toLowerCase() === repository?.toLowerCase());
+  return !!own && isDefault(w.path, ['', '.', './']) && isDefault(w.ref, ['']);
+}
 
 /** The remote actions the steps of a workflow's own jobs use, as `actions.lock` keys them. */
 function ownActionKeys(wf: WorkflowDecl): string[] {

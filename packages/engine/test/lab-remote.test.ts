@@ -6,7 +6,7 @@ import { measureRemote, NOT_COMPARED, refusals, remoteRuns } from './lab-remote'
  * Conformance against the routes lab's remote cases (fixtures/routes-lab/cases.md, R1-R10): every outcome GitHub
  * reported for a run calling ciatlas/simulci-lab-remote, and every dispatch it refused, graded against the plan with
  * the remote files fed in as a host reads them. scripts/lab-accuracy.ts writes the counts to accuracy.json's
- * `remote` block. The engine predicts four outcomes wrongly; they are pinned here by case, so a fix or a new miss
+ * `remote` block. The engine predicts two outcomes wrongly; they are pinned here by case, so a fix or a new miss
  * fails this test until accuracy.json and this list are updated (~/.claude/plans/simulci/m4-pass/wave3/l3.md).
  */
 
@@ -35,13 +35,8 @@ const CASES: Record<string, string[]> = {
 
 const wf = (file: string) => `.github/workflows/${file}`;
 
-/** The engine's four wrong predictions, by case (the PR that added this test lists what GitHub did in each). */
+/** The engine's two wrong predictions, by case (the PR that added this test lists what GitHub did in each). */
 const KNOWN_WRONG = [
-  // R3: a remote step's `./` is the job's workspace: empty without a checkout, the caller's files after one.
-  `probes ${wf('case-remote-workspace-action.yml')} [workflow_dispatch refs/heads/main] call / bare probe ` +
-    'bare.outcome: predicted {"known":true,"value":"success"}, was failure',
-  `probes ${wf('case-remote-workspace-action.yml')} [workflow_dispatch refs/heads/main] call / checkout probe ` +
-    'r3-action: no predicted step echoes it',
   // R9: an `actions.lock` pin holds only in the workflow it covers; one source per ref gives every use the pin.
   `probes ${wf('case-remote-actions-lock-uncovered.yml')} [workflow_dispatch refs/heads/main] a probe r9-action: ` +
     'predicted {"known":true,"value":"a"}, was b',
@@ -89,7 +84,7 @@ describe('routes lab, remote cases', () => {
     expect(measured.inputs).toEqual(KNOWN_INPUTS);
   });
 
-  it('predicts wrongly only the four known outcomes of R3 and R9', () => {
+  it('predicts wrongly only the two known outcomes of R9', () => {
     expect(measured.wrong).toEqual(KNOWN_WRONG);
     expect(measured.accuracy.wrong).toBe(KNOWN_WRONG.length);
   });
