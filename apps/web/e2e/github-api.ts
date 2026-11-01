@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Page, Route } from '@playwright/test';
+import { expect, type Page, type Route } from '@playwright/test';
 
 /**
  * api.github.com for the browser pass (M4 synthesis § 5.12): `ciatlas/flowpact` as recorded in
@@ -9,7 +9,9 @@ import type { Page, Route } from '@playwright/test';
  * `page.route`. The CSP is checked before the route, so these answers reach the page only because `connect-src`
  * allows the API. Every GET is counted, the rate limit goes down with each, and a test can move the branch to a new
  * commit with changed files, make a branch or a tag at the commit `main` is at, or spend the limit. A ref resolves as
- * git resolves one: a full SHA, `refs/heads/…` and `refs/tags/…`, then a bare name, a tag before a branch.
+ * git resolves one: a full SHA, `refs/heads/…` and `refs/tags/…`, then a bare name, a tag before a branch. Any other
+ * repository is one the workflows call (M4 synthesis § 5.3): each ref resolves to a commit of its own, and each file
+ * at a commit is a node action or a reusable workflow.
  */
 
 const here = import.meta.dirname;
@@ -46,6 +48,32 @@ interface Answer {
 }
 
 const NOT_FOUND: Answer = { status: 404, body: '{"message":"Not Found"}', type: 'application/json' };
+
+/** What another repository serves: any ref's commit, and at any commit a node action or an empty reusable workflow. */
+export function elsewhere(path: string, accept: string): Answer | undefined {
+  const ref = /^\/repos\/[^/]+\/[^/]+\/commits\/([^/?]+)$/.exec(path);
+  if (ref && accept === 'application/vnd.github.sha')
+    return { status: 200, body: shaOf('commit', Buffer.from(path)), type: 'application/vnd.github.sha' };
+  const file = /^\/repos\/[^/]+\/[^/]+\/contents\/(.+)\?ref=\w{40}$/.exec(path);
+  if (!file) return undefined;
+  const body = file[1]!.endsWith('action.yml')
+    ? 'name: remote\nruns:\n  using: node20\n  main: index.js\n'
+    : 'on: workflow_call\njobs:\n  remote:\n    runs-on: ubuntu-latest\n    steps: [{ run: echo }]\n';
+  return { status: 200, body, type: 'text/plain; charset=utf-8' };
+}
+
+/** Whether a request is for a repository the workflows call, not the one opened. */
+export const isElsewhere = (request: string): boolean =>
+  request !== `/repos/${OWNER}/${REPO}` && !request.startsWith(`/repos/${OWNER}/${REPO}/`);
+
+/**
+ * Once a repository is open, the page reads the remotes its workflows call (M4 synthesis § 5.3): waits until it asked
+ * for them and the status bar no longer says it is reading, so a later count of requests is not raced.
+ */
+export async function remotesRead(page: Page, github: FakeGitHub): Promise<void> {
+  await expect.poll(() => github.requests.filter(isElsewhere).length).toBeGreaterThan(0);
+  await expect(page.getByText('reading remotes from api.github.com…')).toHaveCount(0);
+}
 
 export interface FakeGitHub {
   /** Every GET, as `<path><search>`. */
@@ -186,9 +214,9 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     remaining--;
     const path = (url.pathname + url.search).slice(`/repos/${OWNER}/${REPO}`.length);
     const accept = request.headers().accept ?? '';
-    const { status, body, type } = url.pathname.startsWith(`/repos/${OWNER}/${REPO}`)
+    const { status, body, type } = !isElsewhere(url.pathname)
       ? answer(path, accept)
-      : NOT_FOUND;
+      : (elsewhere(url.pathname + url.search, accept) ?? NOT_FOUND);
     await route.fulfill({ status, headers: limits(), contentType: type, body });
   };
   await page.route('https://api.github.com/**', handle);

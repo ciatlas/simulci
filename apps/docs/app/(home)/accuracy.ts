@@ -14,6 +14,8 @@ export interface Accuracy {
   exact: number;
   maybe: number;
   wrong: number;
+  /** The remote cases (R1-R10), graded apart: runs, refused dispatches and the same counts. */
+  remote: Omit<Accuracy, 'capture' | 'remote'> & { refused: number };
 }
 
 export interface Figure {

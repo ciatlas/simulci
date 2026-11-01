@@ -1,6 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { type FakeGitHub, fakeGitHub, OWNER, REPO, WORKFLOWS } from './github-api';
+import { type FakeGitHub, fakeGitHub, OWNER, REPO, remotesRead, WORKFLOWS } from './github-api';
 
 /**
  * The ref picker of the Open GitHub repository dialog (M4 synthesis § 5.6, § 5.12), in a real browser under the
@@ -121,6 +121,8 @@ test('opens at a tag picked from the list, and keeps it through a reload', async
   expect(github.requests[before]).toBe(`${REPOS}/commits/v1.0.0`);
   await expect(page).toHaveURL(new RegExp(`[?&]gh=${OWNER}%2F${REPO}%40v1\\.0\\.0(&|$)`));
 
+  // The remotes its workflows call are read once the repository is open: after these, a reload asks nothing.
+  await remotesRead(page, github);
   const read = github.requests.length;
   await page.reload();
   await expect(nav(page)).toContainText(`${NAME} @ v1.0.0 (${short(tagged)}) · ${FILES} files`);

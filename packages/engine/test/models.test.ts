@@ -8,7 +8,7 @@ import {
   simulate,
   usesRepo,
 } from '@simulci/engine';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { anyMatcher, matcher } from '../src/models/changes';
 
 const run = (yaml: string, scenario: ScenarioInput, assume: unknown[] = []): RunPlan =>
@@ -232,6 +232,17 @@ describe('shipped models: dorny/paths-filter', () => {
       changed: [{ path: 'docs/x.md', status: 'removed' }],
     });
     expect(verdicts(onlyRemoved)).toEqual({ changes: 'yes', test: 'no', docs: 'no' });
+  });
+
+  it('prints no YAML warning: one would quote the filters, another repository’s text, on stderr', () => {
+    const warn = vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
+    try {
+      const filters = "|\n            src: '**'\n            ::error::forged: !x y";
+      run(filterWorkflow(filters), { event: 'pull_request', changed: ['src/a.ts'] });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('without changed files every filter is unknown, pinned by the scenario', () => {

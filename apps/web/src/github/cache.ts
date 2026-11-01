@@ -4,9 +4,10 @@ import { openDatabase } from '../lib/idb';
  * The content cache of a GitHub source (M4 synthesis § 2.6): git objects by SHA, so a ref that has not moved reads
  * nothing but its commit, and an object never goes stale. It lives in an IndexedDB of its own, `simulci-cache` (not a
  * version of `simulci-web`, which holds the author's source), with two stores: `blobs` (trees and files, here) and
- * `remotes` (the remote workflows and actions a plan reads, WR's). It holds at most 20 MB, the oldest written going
- * first, and only what was read anonymously from a repository seen `private: false`: the browser keeps no private
- * file a later visitor of the profile could read. A memory map stands in where IndexedDB is missing.
+ * `remotes` (the remote workflows and actions a plan reads, `github/remotes.ts`). It holds at most 20 MB, 16 for the
+ * blobs and 4 for the remotes, the oldest written in a store going first, and only what was read anonymously from a
+ * repository seen `private: false`: the browser keeps no private file a later visitor of the profile could read. A
+ * memory map stands in where IndexedDB is missing.
  */
 
 const CACHE_DB = 'simulci-cache';
@@ -14,8 +15,8 @@ const BLOBS = 'blobs';
 const REMOTES = 'remotes';
 const BY_AGE = 'at';
 
-/** The most the cache holds, in bytes. */
-const MAX_CACHE_BYTES = 20 * 1024 * 1024;
+/** The most each store holds, in bytes. */
+const MAX_BYTES = { [BLOBS]: 16 * 1024 * 1024, [REMOTES]: 4 * 1024 * 1024 };
 
 export interface GitHubCache {
   get(key: string): Promise<Uint8Array | undefined>;
@@ -34,7 +35,7 @@ interface Entry {
 }
 
 /** The cache in memory, oldest written first out past `max` bytes. */
-export function memoryCache(max = MAX_CACHE_BYTES): GitHubCache {
+export function memoryCache(max = MAX_BYTES[BLOBS]): GitHubCache {
   const entries = new Map<string, Uint8Array>();
   let size = 0;
   const drop = (key: string): void => {
@@ -57,8 +58,14 @@ export function memoryCache(max = MAX_CACHE_BYTES): GitHubCache {
   };
 }
 
-/** The cache in IndexedDB; a read or a write that fails is a miss, or not kept. */
-export function openGitHubCache(max = MAX_CACHE_BYTES): GitHubCache {
+/**
+ * One store of the cache in IndexedDB, `blobs` by default; a read or a write that fails is a miss, or not kept. Each
+ * store counts and evicts its own entries.
+ */
+export function openGitHubCache(
+  name: typeof BLOBS | typeof REMOTES = BLOBS,
+  max = MAX_BYTES[name],
+): GitHubCache {
   if (typeof indexedDB === 'undefined') return memoryCache(max);
   let opened: Promise<IDBDatabase> | undefined;
   const db = (): Promise<IDBDatabase> => {
@@ -75,8 +82,8 @@ export function openGitHubCache(max = MAX_CACHE_BYTES): GitHubCache {
 
   const get = async (key: string): Promise<Uint8Array | undefined> => {
     try {
-      const tx = (await db()).transaction(BLOBS, 'readonly');
-      const entry = await done<Entry | undefined>(tx.objectStore(BLOBS).get(key));
+      const tx = (await db()).transaction(name, 'readonly');
+      const entry = await done<Entry | undefined>(tx.objectStore(name).get(key));
       return entry?.bytes instanceof Uint8Array ? entry.bytes : undefined;
     } catch {
       return undefined;
@@ -85,10 +92,10 @@ export function openGitHubCache(max = MAX_CACHE_BYTES): GitHubCache {
 
   const write = async (key: string, bytes: Uint8Array): Promise<void> => {
     const d = await db();
-    total ??= sizeOf(d);
+    total ??= sizeOf(d, name);
     let held = await total;
-    const tx = d.transaction(BLOBS, 'readwrite');
-    const store = tx.objectStore(BLOBS);
+    const tx = d.transaction(name, 'readwrite');
+    const store = tx.objectStore(name);
     const before = await done<Entry | undefined>(store.get(key));
     store.put({ bytes, size: bytes.byteLength, at: Date.now() } satisfies Entry, key);
     held += bytes.byteLength - (before?.size ?? 0);
@@ -128,8 +135,8 @@ async function evict(store: IDBObjectStore, held: number, max: number): Promise<
 }
 
 /** The bytes the store holds, counted over its entries. */
-async function sizeOf(d: IDBDatabase): Promise<number> {
-  const cursor = d.transaction(BLOBS, 'readonly').objectStore(BLOBS).openCursor();
+async function sizeOf(d: IDBDatabase, name: string): Promise<number> {
+  const cursor = d.transaction(name, 'readonly').objectStore(name).openCursor();
   return new Promise((resolve, reject) => {
     let size = 0;
     cursor.addEventListener('error', () => reject(cursor.error));

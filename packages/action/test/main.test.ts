@@ -63,6 +63,7 @@ function fake(workspace: string, inputs: Record<string, string>): Fake {
     logs: [],
     failures: [],
     workspace,
+    env: {},
     input: (name) => (inputs[name] ?? '').trim(),
     setOutput: (name, value) => {
       f.outputs[name] = value;
@@ -72,6 +73,7 @@ function fake(workspace: string, inputs: Record<string, string>): Fake {
       f.summaries.push(md);
     },
     log: (t) => f.logs.push(t),
+    warn: (m) => f.failures.push(`warning: ${m}`),
     fail: (m) => f.failures.push(m),
   };
   return f;

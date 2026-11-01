@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GraphState } from '../src/graph/types';
-import { createSessionStore, type PlanState, withTexts } from '../src/state/store';
+import { createSessionStore, type PlanState, remotePool, remotePoolKey, withTexts } from '../src/state/store';
 
 const CI = '.github/workflows/ci.yml';
 const RELEASE = '.github/workflows/release.yml';
@@ -113,5 +113,40 @@ describe('the files in the store', () => {
       files: { version: 4, epoch: 3, byPath: {}, meta: {}, revs: {}, base: {}, opened: {} },
       project: { status: 'idle' },
     });
+  });
+});
+
+describe('the remotes in the store', () => {
+  const SHA = 'a'.repeat(40);
+  const NEED = { ref: 'octo/act@v2', kind: 'action', depth: 1 } as const;
+
+  it('pools what was read by ref and commit, beside the files, and sends nothing before consent', () => {
+    const store = createSessionStore();
+    const a = store.getState();
+    a.setFiles({ [CI]: 'on: push' }, FOLDER);
+    const files = store.getState().files;
+    a.setRemotesNeeded([NEED]);
+    a.remotesFetching();
+    // A failed resolve, then the ref read at the commit resolved: the success replaces the failure.
+    a.remotesRead({ sources: [], failed: [{ ...NEED, failure: 'timeout', message: 'slow' }] }, false);
+    const source = {
+      ref: NEED.ref,
+      kind: NEED.kind,
+      sha: SHA,
+      text: 'name: act',
+      pinned: 'resolved',
+    } as const;
+    a.remotesRead({ sources: [source], failed: [] }, true);
+    const { remotes } = store.getState();
+    expect(remotes).toMatchObject({ status: 'done', consent: 'none', failed: {}, needed: [NEED] });
+    expect(remotes.byKey).toEqual({ [remotePoolKey(NEED.ref, SHA)]: source });
+    // No pane tab, no dirty state: the files did not move.
+    expect(store.getState().files).toBe(files);
+    expect(remotePool(remotes)).toBeUndefined();
+    a.consentRemotes();
+    expect(remotePool(store.getState().remotes)).toEqual({ sources: [source], failed: [] });
+    // A new source keeps what was read and needs nothing until its load says so.
+    a.setFiles({ [RELEASE]: 'on: release' }, FOLDER);
+    expect(store.getState().remotes).toMatchObject({ byKey: remotes.byKey, needed: [], consent: 'page' });
   });
 });

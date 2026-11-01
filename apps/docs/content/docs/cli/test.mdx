@@ -22,8 +22,15 @@ Runs every `*.test.yml` or `*.test.yaml` under `.github/simulci/tests` (or the f
 | `--annotations`         | prints GitHub annotations; default when `GITHUB_ACTIONS=true`                          |
 | `--assume`              | a mock for every case; repeat it for more                                              |
 | `--assume-file <file>`  | a YAML list of mocks for every case                                                    |
+| `--remotes`             | `lock` (default), `fetch` or `off`: how remote workflows and actions are read          |
+| `--offline`             | reads remotes only from the cache; default when `SIMULCI_OFFLINE=1`                    |
+| `--api-url`             | the GitHub API; default `GITHUB_API_URL`, else `https://api.github.com`                |
+| `--repository`          | the checkout's `owner/name`; default none, so each case's `when.repository` decides    |
+| `--github-com`          | on GitHub Enterprise Server, reads what it lacks from github.com                       |
 
 `--assume` and `--assume-file` take [assume entries](/docs/reference/mocks); they win over the file's and the case's.
+The other remote flags are [`simulci plan`'s](/docs/cli/plan#remotes). Remotes are read once, before any case
+runs. `--repository` takes no default from the environment, so a fork's CI gives the verdicts its upstream gives.
 
 ## Results
 
@@ -38,7 +45,14 @@ Runs every `*.test.yml` or `*.test.yaml` under `.github/simulci/tests` (or the f
 A case passes, fails, is invalid (it cannot be checked: a schema error, a unit path that names nothing, a mock
 conflict) or is skipped. The exit code is `0` when nothing failed, `1` when a case failed, and `2` when anything is
 invalid, there are no test files or no workflows, a test file sits under `.github/workflows` (GitHub would run it),
-`--snapshot-detail` is not `steps` or `legs`, or an `--assume` entry or the `--assume-file` cannot be read. Any other
+`--snapshot-detail` is not `steps` or `legs`, or an `--assume` entry or the `--assume-file` cannot be read.
+
+It is also `2`, before any case runs, when a remote it reads (pinned, or resolved with `fetch`) cannot be read or no
+longer matches its digest, the lockfile records a remote the checkout uses as unreadable, `remotes.lock.yml` cannot
+be used, or `actions.lock` cannot be used while a remote action could be pinned by it: the plans would differ from
+GitHub's, so no verdict is given.
+`--remotes fetch` with `--ci` (or `CI=true`) exits `2` too: a tag that moves would change the verdict of the same
+commit. Pin remotes with `simulci remotes update` instead. Any other
 error (a `--junit` file it cannot write) also exits `2` with its message, so `1` always means a case failed;
 `SIMULCI_DEBUG=1` prints its stack as well.
 

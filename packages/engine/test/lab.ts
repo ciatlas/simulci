@@ -5,6 +5,8 @@ import {
   type CheckVerdict,
   checksOf,
   type LegPlan,
+  type LoadedProject,
+  type LoadOptions,
   loadFiles,
   type Result,
   type RunPlan,
@@ -15,6 +17,7 @@ import {
   type Value,
   type WorkflowPlan,
 } from '@simulci/engine';
+import { remoteKey } from '@ciatlas/core';
 import { isMap, isScalar, isSeq, parseDocument, type YAMLMap } from 'yaml';
 
 /**
@@ -23,9 +26,9 @@ import { isMap, isScalar, isSeq, parseDocument, type YAMLMap } from 'yaml';
  * with the unknown named, or wrongly.
  */
 
-const lab = join(import.meta.dirname, '../../../fixtures/routes-lab');
+export const lab = join(import.meta.dirname, '../../../fixtures/routes-lab');
 
-interface LabJob {
+export interface LabJob {
   name: string;
   conclusion: string;
   steps: { number: number; name: string; conclusion: string }[];
@@ -66,7 +69,7 @@ export const labPushes = (JSON.parse(readFileSync(join(lab, 'pushes.json'), 'utf
 /** The lab's newest `main` push; `repo/` is the lab's `.github/` tree there (fixtures/routes-lab/README.md). */
 const CAPTURE = labPushes.findLast((p) => p.ref === 'refs/heads/main')!.sha;
 
-function walk(dir: string, prefix = ''): Record<string, string> {
+export function walk(dir: string, prefix = ''): Record<string, string> {
   const out: Record<string, string> = {};
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
@@ -77,8 +80,7 @@ function walk(dir: string, prefix = ''): Record<string, string> {
   return out;
 }
 
-const files = walk(join(lab, 'repo'));
-export const labProject = loadFiles(files, 'ciatlas/simulci-lab');
+export const labFiles = walk(join(lab, 'repo'));
 
 export function scenarioOf(run: LabRun): ScenarioInput {
   const s: ScenarioInput = {
@@ -119,7 +121,7 @@ export const assumeFor = (workflow: string) => ASSUME[workflow.replace(/^.*\//, 
  * variable of the step's `env:` (`$M`), the same compacted by jq (`$(jq -c . <<< "$OUTPUTS")`, compared as JSON), or
  * plain text.
  */
-type ProbeSource =
+export type ProbeSource =
   | { kind: 'template'; env: string }
   | { kind: 'env'; name: string }
   | { kind: 'text'; value: string };
@@ -165,37 +167,52 @@ function stepLists(doc: ReturnType<typeof parseDocument>): { at: string; steps: 
   return lists;
 }
 
-/**
- * The lab's files with every probe template moved into its step's `env:` too, so the plan evaluates it with that
- * step's contexts (steps before it, `job.status`, needs, matrix), and the probes of each step by file, list and index.
- */
-function instrument(): {
-  project: ReturnType<typeof loadFiles>;
-  probes: Map<string, Map<string, ProbeSource>>;
-} {
-  const probes = new Map<string, Map<string, ProbeSource>>();
-  const out: Record<string, string> = {};
-  for (const [path, text] of Object.entries(files)) {
-    if (!/\.ya?ml$/.test(path)) {
-      out[path] = text;
-      continue;
-    }
-    const doc = parseDocument(text);
-    for (const { at, steps } of stepLists(doc))
-      steps.forEach((step, i) => {
-        const found = probesOf(step);
-        if (found.size) probes.set(`${path}:${at}:${i}`, found);
-      });
-    out[path] = doc.toString();
-  }
-  return { project: loadFiles(out, 'ciatlas/simulci-lab'), probes };
+/** A YAML file with every probe template moved into its step's `env:` too; the probes of each step go to `probes`. */
+function instrumentText(key: string, text: string, probes: Map<string, Map<string, ProbeSource>>): string {
+  const doc = parseDocument(text);
+  for (const { at, steps } of stepLists(doc))
+    steps.forEach((step, i) => {
+      const found = probesOf(step);
+      if (found.size) probes.set(`${key}:${at}:${i}`, found);
+    });
+  return doc.toString();
 }
 
-const probed = instrument();
+/**
+ * A lab tree to plan runs against: as loaded, and with every probe template moved into its step's `env:` too, so the
+ * plan evaluates it with that step's contexts (steps before it, `job.status`, needs, matrix). `probes` has the probes
+ * of each step by file (a remote's by its unit key, which its steps' `loc.file` holds), list and index.
+ */
+export interface LabTree {
+  project: LoadedProject;
+  probed: LoadedProject;
+  probes: Map<string, Map<string, ProbeSource>>;
+}
+
+export function labTree(files: Record<string, string>, opts: LoadOptions): LabTree {
+  const probes = new Map<string, Map<string, ProbeSource>>();
+  const out: Record<string, string> = {};
+  for (const [path, text] of Object.entries(files))
+    out[path] = /\.ya?ml$/.test(path) ? instrumentText(path, text, probes) : text;
+  const remotes = opts.remotes && {
+    ...opts.remotes,
+    sources: opts.remotes.sources.map((s) => ({
+      ...s,
+      text: instrumentText(remoteKey(s.ref), s.text, probes),
+    })),
+  };
+  return {
+    project: loadFiles(files, opts),
+    probed: loadFiles(out, { ...opts, ...(remotes ? { remotes } : {}) }),
+    probes,
+  };
+}
+
+const status = labTree(labFiles, { repository: 'ciatlas/simulci-lab' });
 
 // --- Grading --------------------------------------------------------------------------------------------------------
 
-type Grade = 'exact' | 'maybe' | 'wrong';
+export type Grade = 'exact' | 'maybe' | 'wrong';
 type Kind = 'triggers' | 'checks' | 'jobs' | 'steps' | 'probes';
 
 export interface Accuracy {
@@ -214,10 +231,10 @@ function gradeValue<T>(v: Value<T>, observed: T, same = (a: T, b: T) => a === b)
   return v.oneOf && !v.oneOf.some((c) => same(c, observed)) ? 'wrong' : 'maybe';
 }
 
-const gradeTri = (t: Tri, observed: boolean): Grade =>
+export const gradeTri = (t: Tri, observed: boolean): Grade =>
   t === 'maybe' ? 'maybe' : (t === 'yes') === observed ? 'exact' : 'wrong';
 
-class Tally {
+export class Tally {
   readonly compared: Record<Kind, number> = { triggers: 0, checks: 0, jobs: 0, steps: 0, probes: 0 };
   readonly grades: Record<Grade, number> = { exact: 0, maybe: 0, wrong: 0 };
   /** Each wrong prediction, for the test to print. */
@@ -251,10 +268,11 @@ const stepKey = (step: StepPlan, at: string, i: number) => `${step.loc?.file}:${
 function emitters(
   steps: readonly StepPlan[],
   jobId: string,
+  probes: LabTree['probes'],
 ): { step: StepPlan; probes: Map<string, ProbeSource> }[] {
   return steps.flatMap((step) => {
-    const own = probed.probes.get(stepKey(step, jobId, step.index));
-    const inner = step.composite ? emitters(step.composite.steps, '') : [];
+    const own = probes.get(stepKey(step, jobId, step.index));
+    const inner = step.composite ? emitters(step.composite.steps, '', probes) : [];
     return [...(own ? [{ step, probes: own }] : []), ...inner];
   });
 }
@@ -282,8 +300,14 @@ function probeValue(step: StepPlan, source: ProbeSource): Value<string> {
   return v;
 }
 
-function gradeProbes(t: Tally, where: string, job: LabJob, leg: LegPlan | undefined) {
-  const sources = leg ? emitters(leg.steps ?? [], jobIdOf(leg)) : [];
+function gradeProbes(
+  t: Tally,
+  where: string,
+  job: LabJob,
+  leg: LegPlan | undefined,
+  probes: LabTree['probes'],
+) {
+  const sources = leg ? emitters(leg.steps ?? [], jobIdOf(leg), probes) : [];
   for (const [label, observed] of Object.entries(job.probes)) {
     const at = `${where} probe ${label}`;
     // A label echoed twice keeps the last value (capture-lab.mjs), so the last step that may have echoed it counts.
@@ -337,7 +361,7 @@ function gradeJob(
   job: LabJob,
   check: CheckVerdict | undefined,
   leg: LegPlan | undefined,
-  probedLeg: LegPlan | undefined,
+  probed: { leg: LegPlan | undefined; probes: LabTree['probes'] },
 ) {
   t.add('checks', check ? gradeTri(check.runs, job.conclusion !== 'skipped') : 'wrong', at, () =>
     check ? `predicted runs ${check.runs}, was ${job.conclusion}` : 'no predicted check of this name',
@@ -346,11 +370,16 @@ function gradeJob(
     check ? `predicted ${JSON.stringify(check.result)}, was ${job.conclusion}` : 'no predicted check',
   );
   gradeSteps(t, at, job, leg);
-  gradeProbes(t, at, job, probedLeg);
+  gradeProbes(t, at, job, probed.leg, probed.probes);
 }
 
-function gradeRun(t: Tally, run: LabRun) {
-  const plan = simulate({ project: labProject, scenario: scenarioOf(run), assume: assumeFor(run.workflow) });
+/**
+ * A captured run against the plan of its workflow in `tree`: its trigger, checks, jobs, steps and probes. `given` is
+ * what the run's repository had besides its files (the remote cases' secret).
+ */
+export function gradeRun(t: Tally, run: LabRun, tree: LabTree, given: Partial<ScenarioInput> = {}) {
+  const scenario = { ...scenarioOf(run), ...given };
+  const plan = simulate({ project: tree.project, scenario, assume: assumeFor(run.workflow) });
   const where = `${run.workflow} [${run.event} ${run.ref}]`;
   const wf = plan.workflows.find((w) => w.path === run.workflow)!;
   t.add('triggers', gradeTri(wf.triggered.verdict, true), where, () => `predicted ${wf.triggered.verdict}`);
@@ -363,8 +392,8 @@ function gradeRun(t: Tally, run: LabRun) {
       .map((c) => [c.name, c]),
   );
   const instrumented = simulate({
-    project: probed.project,
-    scenario: scenarioOf(run),
+    project: tree.probed,
+    scenario,
     assume: assumeFor(run.workflow),
   });
   const legs = legsById(plan);
@@ -372,14 +401,10 @@ function gradeRun(t: Tally, run: LabRun) {
   for (const job of run.jobs) {
     const check = predicted.get(job.name);
     predicted.delete(job.name);
-    gradeJob(
-      t,
-      `${where} ${job.name}`,
-      job,
-      check,
-      check && legs.get(check.node),
-      check && probedLegs.get(check.node),
-    );
+    gradeJob(t, `${where} ${job.name}`, job, check, check && legs.get(check.node), {
+      leg: check && probedLegs.get(check.node),
+      probes: tree.probes,
+    });
   }
   // A check the plan names that GitHub did not create is wrong too.
   for (const name of predicted.keys())
@@ -395,7 +420,7 @@ const jobIdOf = (leg: LegPlan) => leg.id.replace(/\[.*$/, '').replace(/^.*#/, ''
  */
 function gradePush(t: Tally, push: LabPush) {
   const plan = simulate({
-    project: labProject,
+    project: status.project,
     scenario: {
       event: 'push',
       ref: push.ref,
@@ -429,7 +454,7 @@ export const notTriggered = labPushes.reduce(
 /** Grades every captured run and every workflow a push did not start; `wrong` lists each wrong prediction. */
 export function measure(): { accuracy: Accuracy; wrong: string[] } {
   const t = new Tally();
-  for (const run of labRuns) gradeRun(t, run);
+  for (const run of labRuns) gradeRun(t, run, status);
   for (const push of labPushes) gradePush(t, push);
   return {
     accuracy: { capture: CAPTURE, runs: labRuns.length, compared: t.compared, ...t.grades },
