@@ -47377,10 +47377,13 @@ var Planner = class {
 		this.useRemote(remote, sid);
 		return this.remoteAction(remote, sid, withValues);
 	}
-	/** A step whose `uses:` names no remote: this repository's action, a remote's `./` in the workspace, else a model or nothing. */
+	/**
+	* A step whose `uses:` names no remote: this repository's action, a remote's `./` in the workspace, else a model or
+	* nothing. Any `./` before a checkout fails, this repository's too (lab R3).
+	*/
 	localStep(step, sid, withValues, scope) {
-		const path = scope.unit.external ? step.uses.workspacePath : void 0;
-		if (path !== void 0) return this.workspaceAction(path, sid);
+		const path = step.uses.workspacePath;
+		if (path !== void 0 && (scope.unit.external || this.workspace === "empty")) return this.workspaceAction(path, sid);
 		const action = scope.unit.external ? void 0 : this.index.actionOf(step);
 		if (!action || this.cyclic(action, sid)) return this.modelTarget(step.uses.raw, sid, withValues);
 		return {
