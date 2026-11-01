@@ -59,6 +59,10 @@ the newest `N` release.
 | `junit`             |         | write a JUnit report to this path, relative to the workspace (and inside it)            |
 | `scenario`          |         | plan mode: the [scenario](/docs/reference/scenarios) as a YAML mapping                  |
 | `format`            | `text`  | plan mode: what the log shows, `text`, `json` or `mermaid`                               |
+| `remotes`           | `lock`  | how [remote workflows and actions](#remote-workflows-and-actions) are read: `off`, `lock` or `fetch` (plan mode only) |
+| `token`             | `${{ github.token }}` | the token remotes are read with, sent only to `api-url`                     |
+| `api-url`           | `${{ github.api_url }}` | the GitHub API remotes are read from                                      |
+| `github-com-token`  |         | GitHub Enterprise Server: read what the server lacks from github.com with this token     |
 
 ## Outputs
 
@@ -71,3 +75,19 @@ the newest `N` release.
 | `exit-code` | what `simulci test` would exit with: `0`, `1` when a case failed, `2` when something is invalid or the action stopped early |
 | `junit`     | the absolute path of the JUnit report, when `junit` is set                                  |
 | `triggered` | plan mode: how many workflows the scenario triggers (`yes` or `maybe`)                      |
+
+## Remote workflows and actions
+
+A call to another repository's workflow (`octo/ship/.github/workflows/deploy.yml@v1`) or action is simulated from
+that file at the commit `.github/simulci/remotes.lock.yml` or `actions.lock` pins; without a pin it stays open, as
+not fetched. `remotes.lock.yml` is written by `simulci remotes update`.
+
+- `GITHUB_TOKEN` reads this repository and public ones. For a private one, pass a token that can read it as `token`,
+  from `actions/create-github-app-token` or a fine-grained token. It is sent only to `api-url`, which must be
+  `https://`; an empty `token` reads anonymously.
+- A locked remote that cannot be read fails test mode with exit code `2`; plan mode warns. `remotes: fetch`, which
+  resolves refs live, is refused in test mode, as `simulci test --ci` refuses it.
+- On `pull_request_target`, `workflow_run` and `issue_comment` nothing is read: those runs hold this repository's
+  token while a pull request may have chosen the workflows. Locked calls then show as not fetched, so plans and snapshots differ from other
+  events. Run route tests on `pull_request`.
+- A failure decided inside a remote file is annotated on the `uses:` line that reaches it.
