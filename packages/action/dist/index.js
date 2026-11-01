@@ -47242,7 +47242,10 @@ var Planner = class {
 		const target = this.stepTarget(step, sid, withValues, scope);
 		const { outcome, outputs, open, composite, envWrites } = this.stepOutcome(step, target, sid, runs, cond, state, location);
 		const repository = this.index.project.repository ?? this.scenario.repository;
-		this.workspace = workspaceAfter(this.workspace, step, runs.verdict, withValues, repository);
+		this.workspace = workspaceAfter(this.workspace, step, {
+			runs: runs.verdict,
+			outcome
+		}, withValues, repository);
 		const plan = stepShell(step, sid, parentId, runs, outcome, continueOnError, outputs);
 		plan.with = withValues;
 		plan.env = this.bindings(step.env, state);
@@ -47667,14 +47670,14 @@ function stepShell(step, sid, parentId, runs, outcome, continueOnError, outputs)
 const MAX_CALLED_WORKFLOWS = 50;
 const CHECKOUT = /^actions\/checkout@/i;
 /**
-* The workspace after a step that runs (lab R3): a checkout of the caller at the root holds the caller's files; any other
-* checkout, or one that may not run, leaves what the plan cannot tell; so does any other step on an empty workspace,
-* which might fill it.
+* The workspace after a step that runs (lab R3): a checkout of the caller at the root that succeeds holds the caller's
+* files (one that may be skipped keeps them there); any other checkout, or one that may fail, leaves what the plan
+* cannot tell; so does any other step on an empty workspace, which might fill it.
 */
-function workspaceAfter(ws, step, runs, withValues, repository) {
+function workspaceAfter(ws, step, { runs, outcome }, withValues, repository) {
 	if (runs === "no") return ws;
 	if (!CHECKOUT.test(step.uses?.raw.trim() ?? "")) return ws === "empty" ? "unknown" : ws;
-	return runs === "yes" && callerCheckout(withValues, repository) ? "caller" : "unknown";
+	return candidates(outcome)?.every((o) => o === "success" || o === "skipped") && callerCheckout(withValues, repository) && (runs === "yes" || ws === "caller") ? "caller" : "unknown";
 }
 /** A value absent or known to be one of the defaults. */
 const isDefault = (v, defaults) => v === void 0 || v.known && defaults.includes(v.value.trim());
@@ -47685,7 +47688,7 @@ function callerCheckout(w, repository) {
 		"",
 		".",
 		"./"
-	]) && isDefault(w.ref, [""]);
+	]) && isDefault(w.ref, [""]) && isDefault(w["sparse-checkout"], [""]);
 }
 /** The remote actions the steps of a workflow's own jobs use, as `actions.lock` keys them. */
 function ownActionKeys(wf) {
