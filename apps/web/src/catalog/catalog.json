@@ -1498,7 +1498,7 @@
   {
     "uses": "ruby/setup-ruby",
     "ref": "v1",
-    "sha": "7f797815d8adceb1c412e7abefdd1ab4abc47a5f",
+    "sha": "de492cf36cbab201753d720ce4f4e336cd688c94",
     "name": "Setup Ruby, JRuby and TruffleRuby",
     "description": "Download a prebuilt Ruby and add it to the PATH in 5 seconds",
     "inputs": [
