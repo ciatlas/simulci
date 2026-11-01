@@ -92,6 +92,29 @@ describe('a load with remotes', () => {
     expect(read(state)).toEqual([`${ACT} c resolved`, `${BUILD_AT_A} a parent`, `${DEPLOY} a lockfile`]);
   });
 
+  it('reads an action at its actions.lock pin for the workflow the lock covers, and live for the other (lab R9)', () => {
+    const covered = {
+      '.github/workflows/ci.yml': `on: push\njobs:\n  a:\n    runs-on: x\n    steps: [{ uses: ${ACT} }]\n`,
+      '.github/workflows/other.yml': `on: push\njobs:\n  a:\n    runs-on: x\n    steps: [{ uses: ${ACT} }]\n`,
+    };
+    const actionsLock = `version: v0.0.3\nworkflows:\n  .github/workflows/ci.yml: [${ACT}]\ndependencies:\n  ${ACT}:\n    commit: sha1-${B}\n`;
+    const locks = { '.github/workflows/actions.lock': actionsLock };
+    const PINNED = `octo/act@${B}`;
+    expect(load({ files: covered, readonly: locks }).needed.map((n) => [n.ref, n.pin])).toEqual([
+      [PINNED, { sha: B, pinned: 'actions-lock' }],
+      [ACT, undefined],
+    ]);
+    // The reader passes each need's ref back as it came: the pin under its commit, the ref as written resolved live.
+    const pool: RemotePool = {
+      sources: [source(PINNED, B, actText, 'actions-lock'), source(ACT, C, actText, 'resolved')],
+      failed: [],
+    };
+    const { state, needed } = load({ files: covered, readonly: locks, remotes: pool });
+    expect(needed).toEqual([]);
+    expect(read(state)).toEqual([`${PINNED} b actions-lock`, `${ACT} c resolved`]);
+    expect(read(state, true)).toEqual([`${PINNED} b actions-lock`]);
+  });
+
   it("leaves a file the pool holds at another commit than the pin's, and asks for the pinned one", () => {
     const pool: RemotePool = { sources: [source(DEPLOY, B, deployText, 'resolved')], failed: [] };
     const { state, needed } = load({ files, readonly, remotes: pool });

@@ -234,21 +234,22 @@ describe('loadRemotes: where each commit comes from (§ 2.5)', () => {
     ]);
   });
 
-  it('row 2: the running workflow’s actions.lock pins an action, and wins over the lockfile with a mismatch', async () => {
+  it('row 2: the running workflow’s actions.lock pins an action, read apart from the ref as the lockfile has it', async () => {
     const gh = fakeGitHub(REPOS());
     const root = checkout({
       [REMOTES_LOCK_FILE]: FULL_LOCK(),
       '.github/workflows/actions.lock': actionsLock({ '.github/workflows/ci.yml': [ACT] }, { [ACT]: SHA_D }),
     });
     const load = await loadRemotes(root, FILES, host('lock', gh.fetch));
-    // ci.yml runs octo/act at D; inside deploy.yml (a remote), the caller's lock does not apply: the lockfile's C.
+    // ci.yml runs octo/act at D, read as octo/act@D; inside deploy.yml (a remote), the caller's lock does not apply:
+    // octo/act@v1 at the lockfile's C. The lockfile's octo/act@v1 is that read, not the pin's (lab R9).
     expect(pins(load)).toEqual([
       `${ACT} c lockfile`,
-      `${ACT} d actions-lock`,
+      `octo/act@${SHA_D} d actions-lock`,
       `${BUILD_AT_A} a parent`,
       `${DEPLOY} a lockfile`,
     ]);
-    expect(load.issues.map((i) => i.code)).toEqual(['remote-pin-mismatch']);
+    expect(load.issues).toEqual([]);
   });
 
   it('row 2 applies per running file: a local action takes the pin of the workflows that run it', async () => {
@@ -265,8 +266,9 @@ describe('loadRemotes: where each commit comes from (§ 2.5)', () => {
       files,
       host('lock', gh.fetch),
     );
-    // other.yml is not covered, so it does not vote; ci.yml runs the local action, so its pin applies there.
-    expect(pins(one)).toEqual([`${ACT} d actions-lock`]);
+    // ci.yml runs the local action, so its pin applies there; other.yml is not covered, and with no lockfile, lock mode
+    // does not read its octo/act@v1.
+    expect(pins(one)).toEqual([`octo/act@${SHA_D} d actions-lock`]);
 
     const uncovered = actionsLock({ '.github/workflows/other.yml': [] }, { [ACT]: SHA_D });
     const none = await loadRemotes(
@@ -275,6 +277,135 @@ describe('loadRemotes: where each commit comes from (§ 2.5)', () => {
       host('lock', gh.fetch),
     );
     expect(pins(none)).toEqual([]);
+  });
+
+  it('row 2 reads one ref twice: at the pin for the workflow the lock covers, live for the one it does not (lab R9)', async () => {
+    const files = {
+      '.github/workflows/ci.yml': `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: ${ACT}\n`,
+      '.github/workflows/other.yml': `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: ${ACT}\n`,
+    };
+    const root = checkout({
+      '.github/workflows/actions.lock': actionsLock({ '.github/workflows/ci.yml': [ACT] }, { [ACT]: SHA_D }),
+    });
+    const fetched = await loadRemotes(root, files, host('fetch', fakeGitHub(REPOS()).fetch));
+    expect(pins(fetched)).toEqual([`${ACT} c resolved`, `octo/act@${SHA_D} d actions-lock`]);
+
+    // Locked apart, each with its digest: the pin under its own commit's ref, the ref as written at the live commit.
+    const update = await updateRemotesLock(root, files, { api: API, fetch: fakeGitHub(REPOS()).fetch });
+    expect(update.added).toEqual([`octo/act@${SHA_D}`, ACT]);
+    expect(update.lock.remotes[`octo/act@${SHA_D}`]).toMatchObject(
+      entry(SHA_D, 'action', 'action.yml', `${ACTION_YML}# v2\n`),
+    );
+    const gh = fakeGitHub(REPOS());
+    const locked = await loadRemotes(root, files, host('lock', gh.fetch));
+    expect(pins(locked)).toEqual([`${ACT} c lockfile`, `octo/act@${SHA_D} d actions-lock`]);
+    expect(locked.issues).toEqual([]);
+    expect(gh.calls.some((c) => c.url.includes('/commits/'))).toBe(false);
+
+    // A pin at the commit the ref points at now is still two reads, each under its own ref.
+    const same = checkout({
+      '.github/workflows/actions.lock': actionsLock({ '.github/workflows/ci.yml': [ACT] }, { [ACT]: SHA_C }),
+    });
+    const both = await loadRemotes(same, files, host('fetch', fakeGitHub(REPOS()).fetch));
+    expect(pins(both)).toEqual([`octo/act@${SHA_C} c actions-lock`, `${ACT} c resolved`]);
+
+    // The pin's read is checked against its own entry's digest.
+    const repos = REPOS();
+    repos['octo/act']!.files[SHA_D] = { 'action.yml': 'tampered\n' };
+    const tampered = await loadRemotes(root, files, host('lock', fakeGitHub(repos).fetch));
+    expect(tampered.remotes.failed?.map((f) => [f.ref, f.failure])).toEqual([
+      [`octo/act@${SHA_D}`, 'digest'],
+    ]);
+  });
+
+  it('row 2 reads past the closure as core would: the cap, the depth, the digest, what the lockfile lacks', async () => {
+    const step = (uses: string[]) =>
+      `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n${uses.map((u) => `      - uses: ${u}\n`).join('')}`;
+    const composite = (uses: string) => `runs:\n  using: composite\n  steps:\n    - uses: ${uses}\n`;
+    const covered = (refs: string[], commit: string) =>
+      actionsLock({ '.github/workflows/ci.yml': refs }, Object.fromEntries(refs.map((r) => [r, commit])));
+
+    // 200 reads at most, the reads after the closure included.
+    const keys = Array.from({ length: 120 }, (_, i) => `octo/k${i}@v1`);
+    const many: Record<string, Repo> = Object.fromEntries(
+      keys.map((k) => [
+        k.split('@')[0]!,
+        {
+          refs: { v1: SHA_C },
+          files: { [SHA_C]: { 'action.yml': ACTION_YML }, [SHA_D]: { 'action.yml': ACTION_YML } },
+        },
+      ]),
+    );
+    const capped = await loadRemotes(
+      checkout({ '.github/workflows/actions.lock': covered(keys, SHA_D) }),
+      { '.github/workflows/ci.yml': step(keys), '.github/workflows/other.yml': step(keys) },
+      host('fetch', fakeGitHub(many).fetch),
+    );
+    expect(capped.remotes.sources.length).toBe(200);
+    expect(capped.remotes.limited?.length).toBe(40);
+
+    // What a tenth-level read calls is past the limit, as core says of its own.
+    const chain: Record<string, Repo> = {
+      'octo/act': {
+        refs: { v1: SHA_C },
+        files: { [SHA_C]: { 'action.yml': composite('octo/c2@v1') }, [SHA_D]: { 'action.yml': ACTION_YML } },
+      },
+    };
+    for (let i = 2; i <= 11; i++)
+      chain[`octo/c${i}`] = {
+        refs: { v1: SHA_A },
+        files: { [SHA_A]: { 'action.yml': i < 11 ? composite(`octo/c${i + 1}@v1`) : ACTION_YML } },
+      };
+    const deep = await loadRemotes(
+      checkout({ '.github/workflows/actions.lock': covered([ACT], SHA_D) }),
+      { '.github/workflows/ci.yml': step([ACT]), '.github/workflows/other.yml': step([ACT]) },
+      host('fetch', fakeGitHub(chain).fetch),
+    );
+    expect(deep.remotes.limited).toEqual(['octo/c11@v1']);
+
+    // A lockfile from before pins locked the covered ref as written: its digest still holds for the pin's commit.
+    const repos = REPOS();
+    repos['octo/act']!.files[SHA_D] = { 'action.yml': 'tampered\n' };
+    const old = await loadRemotes(
+      checkout({
+        [REMOTES_LOCK_FILE]: lockText({ [ACT]: entry(SHA_D, 'action', 'action.yml', `${ACTION_YML}# v2\n`) }),
+        '.github/workflows/actions.lock': covered([ACT], SHA_D),
+      }),
+      { '.github/workflows/ci.yml': step([ACT]) },
+      host('lock', fakeGitHub(repos).fetch),
+    );
+    expect(old.remotes.failed?.map((f) => [f.ref, f.kind, f.failure])).toEqual([
+      [`octo/act@${SHA_D}`, 'action', 'digest'],
+    ]);
+
+    // The workflow the lock does not cover reads the ref as written, so the lockfile's lack of it is said.
+    const unlocked = await loadRemotes(
+      checkout({
+        [REMOTES_LOCK_FILE]: lockText({}),
+        '.github/workflows/actions.lock': covered([ACT], SHA_D),
+      }),
+      { '.github/workflows/ci.yml': step([ACT]), '.github/workflows/other.yml': step([ACT]) },
+      host('lock', fakeGitHub(REPOS()).fetch),
+    );
+    expect(unlocked.issues.map((i) => i.message)).toEqual([`${ACT} is not in ${REMOTES_LOCK_FILE}`]);
+  });
+
+  it('row 2 keeps a pin’s failure apart from a remote body’s failure of the same ref', async () => {
+    // ci.yml's pin of octo/act is to E, which octo/act lacks; deploy.yml's octo/act@v1 is locked at C, whose body differs.
+    const SHA_E = 'e'.repeat(40);
+    const root = checkout({
+      [REMOTES_LOCK_FILE]: lockText({
+        [DEPLOY]: entry(SHA_A, 'workflow', '.github/workflows/deploy.yml', DEPLOY_YML),
+        [BUILD_AT_A]: entry(SHA_A, 'workflow', '.github/workflows/build.yml', BUILD_YML),
+        [ACT]: entry(SHA_C, 'action', 'action.yml', 'another body\n'),
+      }),
+      '.github/workflows/actions.lock': actionsLock({ '.github/workflows/ci.yml': [ACT] }, { [ACT]: SHA_E }),
+    });
+    const load = await loadRemotes(root, FILES, host('lock', fakeGitHub(REPOS()).fetch));
+    expect(load.remotes.failed?.map((f) => [f.ref, f.kind, f.failure])).toEqual([
+      [`octo/act@${SHA_E}`, 'action', 'not-found'],
+      [ACT, 'action', 'digest'],
+    ]);
   });
 
   it('row 2 never pins a reusable workflow, and a broken actions.lock is named and not used', async () => {
@@ -585,15 +716,16 @@ describe('updateRemotesLock', () => {
     expect(update.failed.map((f) => f.ref)).toEqual(['nobody/there@v1', DEPLOY]);
   });
 
-  it('lists a ref as unreadable only when no commit of it was read', async () => {
+  it('lists an actions.lock pin it cannot read under its own commit, apart from the ref read live', async () => {
     // ci.yml's actions.lock pins octo/act to B, which octo/act lacks; deploy.yml's octo/act@v1 resolves to C.
     const root = checkout({
       '.github/workflows/actions.lock': actionsLock({ '.github/workflows/ci.yml': [ACT] }, { [ACT]: SHA_B }),
     });
     const update = await updateRemotesLock(root, FILES, { api: API, fetch: fakeGitHub(REPOS()).fetch });
-    expect(update.failed.map((f) => [f.ref, f.failure])).toEqual([[ACT, 'not-found']]);
+    // Once: the closure's failure is the pin's, so the reads after it do not ask for it again.
+    expect(update.failed.map((f) => [f.ref, f.failure])).toEqual([[`octo/act@${SHA_B}`, 'not-found']]);
     expect(update.lock.remotes[ACT]?.sha).toBe(SHA_C);
-    expect(update.lock.unreadable).toBeUndefined();
+    expect(update.lock.unreadable).toEqual({ [`octo/act@${SHA_B}`]: 'not-found' });
   });
 });
 

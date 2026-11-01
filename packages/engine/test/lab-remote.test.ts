@@ -6,8 +6,7 @@ import { measureRemote, NOT_COMPARED, refusals, remoteRuns } from './lab-remote'
  * Conformance against the routes lab's remote cases (fixtures/routes-lab/cases.md, R1-R10): every outcome GitHub
  * reported for a run calling ciatlas/simulci-lab-remote, and every dispatch it refused, graded against the plan with
  * the remote files fed in as a host reads them. scripts/lab-accuracy.ts writes the counts to accuracy.json's
- * `remote` block. The engine predicts four outcomes wrongly; they are pinned here by case, so a fix or a new miss
- * fails this test until accuracy.json and this list are updated (~/.claude/plans/simulci/m4-pass/wave3/l3.md).
+ * `remote` block. The engine predicts none wrongly, so a new miss fails this test until it is fixed.
  */
 
 /** Each case's callers in the lab (`repo/.github/workflows/`). */
@@ -35,30 +34,6 @@ const CASES: Record<string, string[]> = {
 
 const wf = (file: string) => `.github/workflows/${file}`;
 
-/** The engine's four wrong predictions, by case (the PR that added this test lists what GitHub did in each). */
-const KNOWN_WRONG = [
-  // R3: a remote step's `./` is the job's workspace: empty without a checkout, the caller's files after one.
-  `probes ${wf('case-remote-workspace-action.yml')} [workflow_dispatch refs/heads/main] call / bare probe ` +
-    'bare.outcome: predicted {"known":true,"value":"success"}, was failure',
-  `probes ${wf('case-remote-workspace-action.yml')} [workflow_dispatch refs/heads/main] call / checkout probe ` +
-    'r3-action: no predicted step echoes it',
-  // R9: an `actions.lock` pin holds only in the workflow it covers; one source per ref gives every use the pin.
-  `probes ${wf('case-remote-actions-lock-uncovered.yml')} [workflow_dispatch refs/heads/main] a probe r9-action: ` +
-    'predicted {"known":true,"value":"a"}, was b',
-  `probes ${wf('case-remote-actions-lock-local-callee.yml')} [workflow_dispatch refs/heads/main] call / a probe ` +
-    'r9-action: predicted {"known":true,"value":"a"}, was b',
-];
-
-/** The commits GitHub ran that a host following `remotesNeeded` does not read: R9's uncovered uses after the move. */
-const KNOWN_INPUTS = [
-  `${wf('case-remote-actions-lock-uncovered.yml')} [refs/heads/main 4061055] ` +
-    'ciatlas/simulci-lab-remote/.github/actions/r9-action@v1: fed d19def8c3562ef6c1be3f12443345575530f1ac4, a ' +
-    'downloaded 38a93ff01695fd104bfe8bc8b79ceeae91206ddc',
-  `${wf('case-remote-actions-lock-local-callee.yml')} [refs/heads/main 4061055] ` +
-    'ciatlas/simulci-lab-remote/.github/actions/r9-action@v1: fed d19def8c3562ef6c1be3f12443345575530f1ac4, call / a ' +
-    'downloaded 38a93ff01695fd104bfe8bc8b79ceeae91206ddc',
-];
-
 describe('routes lab, remote cases', () => {
   const measured = measureRemote();
 
@@ -85,12 +60,12 @@ describe('routes lab, remote cases', () => {
     expect(accuracy.compared.triggers).toBe(accuracy.runs + accuracy.refused);
   });
 
-  it('reads every remote at the commit GitHub ran, but where R9 needs two commits for one ref', () => {
-    expect(measured.inputs).toEqual(KNOWN_INPUTS);
+  it('reads every remote at the commit GitHub ran, and plans each job from it (R9: one ref at two commits)', () => {
+    expect(measured.inputs).toEqual([]);
   });
 
-  it('predicts wrongly only the four known outcomes of R3 and R9', () => {
-    expect(measured.wrong).toEqual(KNOWN_WRONG);
-    expect(measured.accuracy.wrong).toBe(KNOWN_WRONG.length);
+  it('predicts no outcome wrongly', () => {
+    expect(measured.wrong).toEqual([]);
+    expect(measured.accuracy.wrong).toBe(0);
   });
 });

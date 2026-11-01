@@ -18,7 +18,8 @@ Resolves every remote the checkout reaches, workflows called from remote workflo
 writes the lockfile: per remote, its commit, the file read and a sha256 digest of it. It prints what was added,
 changed and removed. Running it again with nothing moved writes the same bytes.
 
-A remote it cannot read keeps its old entry; one that never had an entry goes under `unreadable`, which `check` and
+An action `actions.lock` pins is locked under its commit (`owner/repo@<sha>`), apart from the ref as written that
+workflows the lock does not list read. A remote it cannot read keeps its old entry; one that never had an entry goes under `unreadable`, which `check` and
 `test` refuse until an update can read it. It then exits `1`. Remotes nested past GitHub's ten levels are not locked.
 
 ## check

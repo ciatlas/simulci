@@ -219,7 +219,6 @@ export default function HomePage() {
           <Stat value={ACCURACY.wrong} label="predicted wrongly" />
         </dl>
         <p className="mt-10 max-w-3xl text-lg">{ACCURACY.sentence}</p>
-        <p className="mt-4 text-fd-muted-foreground">Remote reusable workflows: not yet lab-verified.</p>
         <a
           href={LAB_URL}
           className="mt-6 inline-block font-medium text-fd-primary underline underline-offset-4"

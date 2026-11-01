@@ -25349,7 +25349,7 @@ const escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 //#endregion
 //#region ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/queries.ts
 /** Every reference in a unit's expressions, with the site it is in. */
-function* refsOf(unit) {
+function* refsOf$1(unit) {
 	for (const site of unit.sites) for (const seg of site.segments) for (const ref of seg.refs) yield {
 		site,
 		ref
@@ -25416,7 +25416,7 @@ const GITHUB_TOKEN = "GITHUB_TOKEN";
 /** The secrets a workflow reads by name, each spelling once, as written. */
 function namedSecrets(wf) {
 	const names = /* @__PURE__ */ new Set();
-	for (const { ref } of refsOf(wf)) if (ref.context === "secrets" && !computed(ref.path[0])) names.add(ref.path[0]);
+	for (const { ref } of refsOf$1(wf)) if (ref.context === "secrets" && !computed(ref.path[0])) names.add(ref.path[0]);
 	return [...names];
 }
 /** `names`, then each of `more` whose name, ignoring case, is not among them yet. */
@@ -34681,7 +34681,7 @@ const initialWorkspace = () => ({
 	managed: false,
 	writes: []
 });
-const CHECKOUT = /^actions\/checkout(?:@|$)/i;
+const CHECKOUT$1 = /^actions\/checkout(?:@|$)/i;
 /**
 * Contexts naming the workflow's own repository, or the fork a pull request comes from (the same tree at another
 * commit, as far as local actions go).
@@ -34703,7 +34703,7 @@ function alternatives(value) {
 const ownRepositoryExpression = (value) => !!alternatives(value)?.every((a) => OWN_REPOSITORY.test(a));
 /** Whether a checkout's `ref:` is the running commit (or the pull request's head): none, or one of those contexts. */
 const runningCommit = (value) => value === "" || PULL_REQUEST_REF.test(value) || !!alternatives(value)?.every((a) => RUNNING_REF.test(a));
-const isCheckout = (uses) => CHECKOUT.test(uses.raw.trim());
+const isCheckout = (uses) => CHECKOUT$1.test(uses.raw.trim());
 const escapes = (path) => path === ".." || path.startsWith("../") || path.startsWith("/");
 const text = (b) => b === void 0 || b.value === null || typeof b.value === "object" ? "" : String(b.value).trim();
 /** `with.repository` of a checkout: `undefined` for this repository. */
@@ -45219,6 +45219,11 @@ function keyIn(rec, ref) {
 	return Object.keys(rec).find((k) => remoteKey(k) === key);
 }
 /**
+* Where a host reads an action `actions.lock` pins: `owner/repo[/path]@<commit>`. GitHub runs the pin only in the
+* workflows the lock covers, and the ref as written everywhere else (lab R9), so one ref can be read at two commits.
+*/
+const pinnedRef = (ref, sha) => `${ref.owner}/${ref.repo}${ref.path ? `/${ref.path}` : ""}@${sha}`;
+/**
 * The commit a remote runs at, first match wins: a full-SHA ref; the calling workflow's `actions.lock`, for an action
 * used outside a remote unit; a `./` inside a remote unit, at its parent's commit; the lockfile (`lock` and `fetch`);
 * live (`fetch` only). A pin before the lockfile that disagrees with the lockfile's entry wins, with
@@ -45260,7 +45265,7 @@ function earlyPin(ref, ctx) {
 }
 function withMismatch(ref, ctx, pin) {
 	if (ctx.mode === "off") return pin;
-	const key = keyIn(ctx.lock?.remotes, ref.raw);
+	const key = keyIn(ctx.lock?.remotes, pin.pinned === "actions-lock" ? pinnedRef(ref, pin.sha) : ref.raw);
 	const locked = key === void 0 ? void 0 : ctx.lock.remotes[key].sha;
 	if (locked === void 0 || locked === pin.sha) return pin;
 	const by = pin.pinned === "sha-ref" ? "its ref" : pin.pinned === "parent" ? "its parent" : "actions.lock";
@@ -45296,7 +45301,7 @@ const sortFailures = (failed) => failed.map((f) => ({
 const sortSources = (sources) => sources.map((s) => ({
 	s,
 	key: remoteKey(s.ref)
-})).sort((a, b) => byCodeUnit$1(a.key, b.key) || byCodeUnit$1(a.s.ref, b.s.ref) || byCodeUnit$1(a.s.sha, b.s.sha)).map(({ s }) => s);
+})).sort((a, b) => byCodeUnit$1(a.key, b.key) || byCodeUnit$1(a.s.ref, b.s.ref) || byCodeUnit$1(a.s.sha, b.s.sha) || byCodeUnit$1(a.s.pinned, b.s.pinned)).map(({ s }) => s);
 /**
 * Loads the workflows and local actions of a repository snapshot (files by repository-relative path), with the remote
 * files a host read as external units. A string is the `repository`.
@@ -45380,6 +45385,12 @@ function lookupRemote(loaded, ref) {
 		state: limited.has(key) ? "limit" : "not-fetched"
 	};
 }
+/** The ref a use is read at: its `actions.lock` pin's commit (`pinnedRef`, lab R9), else as written. */
+const readRef = (ref, context) => context.actionsLock === void 0 ? ref : {
+	...ref,
+	ref: context.actionsLock,
+	raw: pinnedRef(ref, context.actionsLock)
+};
 /**
 * The pin context of a remote `uses:` in `unit`. `running` are the workflows of this repository that run the unit
 * (itself, or those that use a local action directly or through other local actions); the caller's `actions.lock`
@@ -45396,6 +45407,101 @@ function pinContextOf(loaded, unit, uses, ref, running) {
 		...unit.external ? { inRemote: true } : {},
 		...parentSha === void 0 ? {} : { parentSha }
 	};
+}
+/** The workflows of this repository that run a unit of it, sorted; none for a remote unit. */
+function runningWorkflows(loaded, unit) {
+	if (unit.external) return [];
+	if (unit.kind === "workflow") return [unit.path];
+	const out = /* @__PURE__ */ new Set();
+	const seen = /* @__PURE__ */ new Set([unit.path]);
+	const queue = [unit.path];
+	for (let path = queue.shift(); path !== void 0; path = queue.shift()) for (const use of loaded.index.usersOf(path)) if (use.unit.kind === "workflow") out.add(use.unit.path);
+	else if (!seen.has(use.unit.path)) {
+		seen.add(use.unit.path);
+		queue.push(use.unit.path);
+	}
+	return [...out].sort(byCodeUnit$1);
+}
+/** How deep a host follows remotes: the project's own refs are at depth 1 (core's `maxDepth`). */
+const MAX_REMOTE_DEPTH = 10;
+/**
+* The remote refs to read next: those the project and the remote units already read use, that are neither read, nor
+* failed, nor past a cap, at depth 10 or less, each with its pin (`pinFor` over the lockfile and `actions.lock`). In
+* `lock` mode only pinned refs are read; `fetch` adds the rest, resolved live; `off` reads nothing. Sorted by ref.
+*/
+function remotesNeeded(loaded, mode) {
+	if (mode === "off") return [];
+	const project = loaded.index.project;
+	const seen = /* @__PURE__ */ new Set();
+	const out = /* @__PURE__ */ new Map();
+	let level = [...project.workflows.values(), ...project.actions.values()];
+	for (let depth = 1; depth <= MAX_REMOTE_DEPTH && level.length; depth++) level = neededAt(loaded, mode, {
+		depth,
+		level,
+		seen,
+		out
+	});
+	return [...out.values()].sort((a, b) => byCodeUnit$1(a.ref, b.ref));
+}
+/**
+* One level of `remotesNeeded`: the refs its units use, a remote read once; returns the remote units read, to go on
+* with. A ref not read is needed at its shallowest depth, with a pin if any of its uses has one. An action is read once
+* per running file whose `actions.lock` pins it apart: at the lock's commit, and as written where none pins it (R9).
+*/
+function neededAt(loaded, mode, at) {
+	const next = [];
+	for (const { unit, uses, ref } of refsOf(at.level)) for (const context of contextsOf(loaded, unit, uses, ref)) {
+		const read = readRef(ref, context);
+		const found = lookupRemote(loaded, read);
+		if (found.state === "simulated" && !at.seen.has(found.key)) next.push(found.unit);
+		at.seen.add(found.key);
+		if (found.state === "not-fetched") needOnce(at, found.key, read, pinFor$1(ref, {
+			...context,
+			mode
+		}));
+	}
+	return next;
+}
+/** A use's pin contexts, one per commit its running files' `actions.lock` gives it (none: as written). */
+function contextsOf(loaded, unit, uses, ref) {
+	const running = runningWorkflows(loaded, unit);
+	const contexts = (running.length ? running : [""]).map((r) => pinContextOf(loaded, unit, uses, ref, r ? [r] : []));
+	return [...new Map(contexts.map((c) => [c.actionsLock, c])).values()];
+}
+/** A ref not read, needed once at its shallowest depth, with the pin of any use that has one. */
+function needOnce(at, key, read, pin) {
+	const was = at.out.get(key);
+	if (was?.pin) return;
+	const need = needed(read, was?.depth ?? at.depth, pin);
+	if (need && (!was || need.pin)) at.out.set(key, need);
+}
+function* refsOf(units) {
+	for (const unit of units) {
+		const users = unit.kind === "action" ? unit.steps : Object.values(unit.jobs).flatMap((j) => [j].concat(j.steps));
+		for (const { uses } of users) {
+			const ref = uses && remoteRefOf(unit, uses);
+			if (uses && ref) yield {
+				unit,
+				uses,
+				ref
+			};
+		}
+	}
+}
+function needed(ref, depth, pin) {
+	const need = {
+		ref: ref.raw,
+		kind: ref.kind,
+		depth
+	};
+	if (pin.issue) need.issue = pin.issue;
+	if (pin.pinned === "resolved") return need;
+	if (pin.pinned === void 0) return void 0;
+	need.pin = {
+		sha: pin.sha,
+		pinned: pin.pinned
+	};
+	return need;
 }
 //#endregion
 //#region ../engine/src/scenario.ts
@@ -46446,6 +46552,8 @@ var Planner = class {
 	openCalls = /* @__PURE__ */ new WeakSet();
 	/** The remote workflows and actions the plan uses, by the ref it shows. */
 	remoteUses = /* @__PURE__ */ new Map();
+	/** The workspace of the leg being planned, after the steps planned so far. */
+	workspace = "empty";
 	/** The composite actions being planned, outermost first: one that uses itself is not planned again. */
 	composites = [];
 	index;
@@ -46957,6 +47065,7 @@ var Planner = class {
 			name: `${ctx.checkPrefix}${seg.name}`,
 			certain: seg.certain
 		};
+		this.workspace = "empty";
 		const steps = this.planSteps(job.steps, ctx.settings.steps, legId, runs, state, void 0, location, ctx.scope);
 		if (this.detail === "steps") leg.steps = steps.plans;
 		leg.result = legResult(steps.conclusions);
@@ -47014,7 +47123,7 @@ var Planner = class {
 	planCall(leg, state, seg, ctx, location) {
 		const { job } = ctx;
 		const { callee, remote } = this.resolveCallee(job, ctx.scope);
-		if (remote) this.useRemote(remote, leg, ctx.scope, job.uses);
+		if (remote) this.useRemote(remote, leg);
 		if (!callee) {
 			this.unsupportedCall(leg, job, remote);
 			return;
@@ -47064,14 +47173,17 @@ var Planner = class {
 			remote
 		} : { remote };
 	}
+	/** A remote `uses:`, looked up where the host read it for this running file (an `actions.lock` pin's commit, R9). */
 	remoteTarget(scope, uses) {
 		const ref = remoteRefOf(scope.unit, uses);
 		if (!ref) return void 0;
 		const display = namedByOrigin(scope.unit, uses) ? atRefName(ref, scope.refName) : ref.raw;
+		const context = pinContextOf(this.loaded, scope.unit, uses, ref, scope.running ? [scope.running] : []);
 		return {
-			...lookupRemote(this.loaded, ref),
+			...lookupRemote(this.loaded, readRef(ref, context)),
 			ref,
-			display
+			display,
+			context
 		};
 	}
 	/** The secrets `secrets: inherit` passes: all of them, but only `GITHUB_TOKEN` to another owner's workflow (lab R6). */
@@ -47081,12 +47193,13 @@ var Planner = class {
 	}
 	/**
 	* Records a use. Uses are one row per fetch key and shown ref: a `./` inside a remote is shown like a direct ref to
-	* the same file at the parent's ref name, but is another remote. The pin context kept is the one that says most: an
+	* the same file at the parent's ref name, but is another remote, and so is an action `actions.lock` pins for one
+	* running file and not for another (lab R9). The pin context kept is the one that says most: an
 	* `actions.lock` pin, else a use in this repository, else one in a remote.
 	*/
-	useRemote(target, at, scope, uses) {
+	useRemote(target, at) {
 		const row = `${target.key}\n${remoteKey(target.display)}`;
-		const context = pinContextOf(this.loaded, scope.unit, uses, target.ref, scope.running ? [scope.running] : []);
+		const { context } = target;
 		const site = this.remoteUses.get(row);
 		if (!site) this.remoteUses.set(row, {
 			target,
@@ -47106,12 +47219,12 @@ var Planner = class {
 		const out = [];
 		for (const site of this.remoteUses.values()) {
 			const at = [...new Set(site.at.map((a) => typeof a === "string" ? a : a.id))].sort(byCodeUnit);
-			const { issue } = pinFor$1(site.target.ref, site.context);
-			if (issue) this.diagnostics.push({
-				...issue,
+			const pin = pinFor$1(site.target.ref, site.context);
+			if (pin.issue) this.diagnostics.push({
+				...pin.issue,
 				node: at[0]
 			});
-			if (site.target.ref.kind === "workflow" || site.target.state !== "not-fetched") out.push(remoteUseOf(site.target, at));
+			if (site.target.ref.kind === "workflow" || site.target.state !== "not-fetched") out.push(remoteUseOf(site.target, at, pin.pinned));
 		}
 		const { lockError, mode } = this.loaded.remotes;
 		if (lockError !== void 0 && mode !== "off") {
@@ -47238,6 +47351,11 @@ var Planner = class {
 		const withValues = this.bindings(step.with, state);
 		const target = this.stepTarget(step, sid, withValues, scope);
 		const { outcome, outputs, open, composite, envWrites } = this.stepOutcome(step, target, sid, runs, cond, state, location);
+		const repository = this.index.project.repository ?? this.scenario.repository;
+		this.workspace = workspaceAfter(this.workspace, step, {
+			runs: runs.verdict,
+			outcome
+		}, withValues, repository);
 		const plan = stepShell(step, sid, parentId, runs, outcome, continueOnError, outputs);
 		plan.with = withValues;
 		plan.env = this.bindings(step.env, state);
@@ -47256,11 +47374,13 @@ var Planner = class {
 		if (!step.uses) return {};
 		const remote = this.remoteTarget(scope, step.uses);
 		if (!remote) return this.localStep(step, sid, withValues, scope);
-		this.useRemote(remote, sid, scope, step.uses);
+		this.useRemote(remote, sid);
 		return this.remoteAction(remote, sid, withValues);
 	}
-	/** A step whose `uses:` names no remote: this repository's action, else a model or nothing (a remote's `./`, docker). */
+	/** A step whose `uses:` names no remote: this repository's action, a remote's `./` in the workspace, else a model or nothing. */
 	localStep(step, sid, withValues, scope) {
+		const path = scope.unit.external ? step.uses.workspacePath : void 0;
+		if (path !== void 0) return this.workspaceAction(path, sid);
 		const action = scope.unit.external ? void 0 : this.index.actionOf(step);
 		if (!action || this.cyclic(action, sid)) return this.modelTarget(step.uses.raw, sid, withValues);
 		return {
@@ -47270,6 +47390,19 @@ var Planner = class {
 				...scope.running ? { running: scope.running } : {}
 			}
 		};
+	}
+	/**
+	* A remote unit's `./` step: the job's workspace, never the remote's own files (lab R3). Before a checkout nothing is
+	* there and the step fails; after a default checkout it is the caller's action; otherwise the plan cannot tell.
+	*/
+	workspaceAction(path, sid) {
+		if (this.workspace === "empty") return { outcome: known$1("failure") };
+		const action = this.workspace === "caller" ? this.index.project.actions.get(path) : void 0;
+		if (action && !this.cyclic(action, sid)) return {
+			action,
+			scope: { unit: action }
+		};
+		return { outcome: unknown$1([`${sid}.outcome`], ["success", "failure"]) };
 	}
 	/**
 	* A remote action: its shipped model, if any, and the action itself when a host read it, planned from its file (a
@@ -47337,7 +47470,7 @@ var Planner = class {
 		};
 		const facts = this.mocks.factsFor(location, sid, target.shown ?? step.uses?.raw, target.model);
 		const envWrites = this.envWrites(step, sid, state, facts);
-		const { produced, base } = this.producedOutcome(facts, runs, cond, sid);
+		const { produced, base } = this.producedOutcome(facts, runs, cond, sid, target.outcome);
 		if (target.action?.using === "composite") return {
 			...this.compositeProduct(target, step, sid, state, runs, location, facts, produced, base),
 			envWrites
@@ -47383,10 +47516,11 @@ var Planner = class {
 		}
 		return envWrites;
 	}
-	/** The outcome as mocked, else success; a step whose own `if:` is unknown may also have been skipped. */
-	producedOutcome(facts, runs, cond, sid) {
-		const produced = facts.outcome ? facts.outcome.value : known$1("success");
+	/** The outcome as mocked, else the target's or success; a step whose own `if:` is unknown may also have been skipped. */
+	producedOutcome(facts, runs, cond, sid, outcome = known$1("success")) {
+		const produced = facts.outcome ? facts.outcome.value : outcome;
 		if (facts.outcome) this.record(facts.outcome.by, sid, "outcome");
+		else this.noteValue(outcome);
 		return {
 			produced,
 			base: runs.verdict === "yes" ? produced : orSkipped(produced, cond.value, "last")
@@ -47644,6 +47778,28 @@ function stepShell(step, sid, parentId, runs, outcome, continueOnError, outputs)
 }
 /** GitHub's limit on the reusable workflows one run names (lab R7). */
 const MAX_CALLED_WORKFLOWS = 50;
+const CHECKOUT = /^actions\/checkout@/i;
+/**
+* The workspace after a step that runs (lab R3): a checkout of the caller at the root that succeeds holds the caller's
+* files (one that may be skipped keeps them there); any other checkout, or one that may fail, leaves what the plan
+* cannot tell; so does any other step on an empty workspace, which might fill it.
+*/
+function workspaceAfter(ws, step, { runs, outcome }, withValues, repository) {
+	if (runs === "no") return ws;
+	if (!CHECKOUT.test(step.uses?.raw.trim() ?? "")) return ws === "empty" ? "unknown" : ws;
+	return candidates(outcome)?.every((o) => o === "success" || o === "skipped") && callerCheckout(withValues, repository) && (runs === "yes" || ws === "caller") ? "caller" : "unknown";
+}
+/** A value absent or known to be one of the defaults. */
+const isDefault = (v, defaults) => v === void 0 || v.known && defaults.includes(v.value.trim());
+/** `actions/checkout`'s defaults: the run's repository at the running commit, at the workspace root. */
+function callerCheckout(w, repository) {
+	const repo = w.repository;
+	return !!(isDefault(repo, [""]) || repo?.known && repo.value.trim().toLowerCase() === repository?.toLowerCase()) && isDefault(w.path, [
+		"",
+		".",
+		"./"
+	]) && isDefault(w.ref, [""]) && isDefault(w["sparse-checkout"], [""]);
+}
 /** The remote actions the steps of a workflow's own jobs use, as `actions.lock` keys them. */
 function ownActionKeys(wf) {
 	return Object.values(wf.jobs).flatMap(({ steps }) => steps.flatMap(({ uses }) => {
@@ -47660,7 +47816,11 @@ const shownPath = (wf, ctx) => ctx.remote?.display ?? wf.path;
 /** A remote named through its unit's own repository, shown at the ref name the unit is shown at (GitHub records it so, lab R2). */
 const atRefName = (ref, refName) => `${ref.owner}/${ref.repo}${ref.path ? `/${ref.path}` : ""}@${refName ?? ref.ref}`;
 const refNameOf = (display) => display.slice(display.lastIndexOf("@") + 1);
-function remoteUseOf(target, at) {
+/**
+* A row of `RunPlan.remotes`. Its `pinned` is the use's own when the ref or its context names the commit (a full SHA,
+* `actions.lock`, a `./`'s parent): one file at one commit may be read for a use of each kind (`pinnedRef`, lab R9).
+*/
+function remoteUseOf(target, at, pinned) {
 	const use = {
 		ref: target.display,
 		kind: target.ref.kind,
@@ -47669,7 +47829,7 @@ function remoteUseOf(target, at) {
 	};
 	if (target.source) {
 		use.sha = target.source.sha;
-		use.pinned = target.source.pinned;
+		use.pinned = pinned && pinned !== "lockfile" && pinned !== "resolved" ? pinned : target.source.pinned;
 		if (target.source.host !== void 0) use.host = target.source.host;
 	}
 	if (target.failure) use.failure = target.failure.failure;
@@ -49624,7 +49784,8 @@ function githubComFallback(env, apiUrl) {
 	};
 }
 async function closureOf(root, files, host, pinning) {
-	const { index } = loadFiles(Object.fromEntries(Object.entries(files).sort(([a], [b]) => compare(a, b))));
+	const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => compare(a, b)));
+	const { index } = loadFiles(sorted);
 	const actionsLock = readActionsLockOf(root, files, pinning.lockErrors, host.log);
 	const run = {
 		project: index.project,
@@ -49632,10 +49793,15 @@ async function closureOf(root, files, host, pinning) {
 		failed: [],
 		limited: [],
 		pinned: /* @__PURE__ */ new Map(),
+		readAs: /* @__PURE__ */ new Map(),
 		kinds: /* @__PURE__ */ new Map(),
 		issues: /* @__PURE__ */ new Map()
 	};
-	const local = localActionsLock(index, actionsLock);
+	const { commits: local, uncovered } = localActionsLock(index, actionsLock);
+	const pinned = {
+		top: /* @__PURE__ */ new Map(),
+		inRemote: /* @__PURE__ */ new Set()
+	};
 	const pin = (r, parent) => {
 		run.kinds.set(remoteKey(r.raw), r.kind);
 		const p = pinFor$1(r, {
@@ -49644,24 +49810,147 @@ async function closureOf(root, files, host, pinning) {
 			...pinContext(r, parent, local)
 		});
 		if (p.issue) run.issues.set(`${p.issue.code} ${p.issue.message}`, p.issue);
-		if (!("sha" in p)) return void 0;
-		const at = `${remoteKey(r.raw)}@${p.sha}`;
-		const before = run.pinned.get(at);
-		if (before === void 0 || RANK[p.pinned] < RANK[before]) run.pinned.set(at, p.pinned);
-		const digest = lockedDigest(pinning.lock, r.raw, p.sha);
-		return {
-			sha: p.sha,
-			...digest === void 0 ? {} : { digest }
-		};
+		if (!parent && p.pinned === "actions-lock") topPin(run, pinning, r, p.sha, uncovered.has(remoteKey(r.raw)));
+		notePin(pinned, r, parent, p);
+		return "sha" in p ? closurePin(run, pinning.lock, r, p) : void 0;
 	};
+	const options = fetchOptions(host);
+	options.unreachableHosts ??= /* @__PURE__ */ new Map();
 	const closure = await fetchRemoteClosure(index.project, pin, {
-		...fetchOptions(host),
+		...options,
 		resolveUnpinned: pinning.mode === "fetch"
 	});
-	return {
+	const done = {
 		...run,
-		...closure
+		...closure,
+		failed: pinnedFailures(closure, pinned)
 	};
+	await readNeeded(done, sorted, {
+		lock: pinning.lock,
+		actionsLock
+	}, host, options);
+	return done;
+}
+/**
+* A pin of one of the checkout's own refs: its pinned ref's kind, for its failures; and, since core asks once per ref,
+* the as-written pin's issue when a workflow the lock does not cover reads the same ref as written (lab R9).
+*/
+function topPin(run, pinning, r, sha, uncovered) {
+	run.kinds.set(remoteKey(pinnedRef(r, sha)), r.kind);
+	if (!uncovered) return;
+	const { issue } = pinFor$1(r, {
+		mode: pinning.mode,
+		...pinning.lock ? { lock: pinning.lock } : {}
+	});
+	if (issue) run.issues.set(`${issue.code} ${issue.message}`, issue);
+}
+function notePin(pinned, r, parent, p) {
+	if (parent) {
+		if ("sha" in p || p.pinned === "resolved") pinned.inRemote.add(remoteKey(r.raw));
+	} else if (p.pinned === "actions-lock") pinned.top.set(remoteKey(r.raw), p.sha);
+}
+/** The commit the closure reads a ref at, ranked by the table's order, with the lockfile's digest when it is for it. */
+function closurePin(run, lock, r, p) {
+	const at = `${remoteKey(r.raw)}@${p.sha}`;
+	const before = run.pinned.get(at);
+	if (before === void 0 || RANK[p.pinned] < RANK[before]) run.pinned.set(at, p.pinned);
+	const digest = (p.pinned === "actions-lock" ? lockedDigest(lock, pinnedRef(r, p.sha), p.sha) : void 0) ?? lockedDigest(lock, r.raw, p.sha);
+	return {
+		sha: p.sha,
+		...digest === void 0 ? {} : { digest }
+	};
+}
+/**
+* The closure's failures, with an `actions.lock` read's under its pinned ref, as the engine looks it up (lab R9). Core
+* records one failure per ref, the deepest level's: when the pin's commit was not read and a remote body did not also
+* ask for the ref, or did and read it, the failure is the pin's. When both failed it is the remote body's, and
+* `readNeeded` reads the pin again for its own.
+*/
+function pinnedFailures(closure, pinned) {
+	return closure.failed.flatMap((f) => {
+		const key = remoteKey(f.ref);
+		const sha = pinned.top.get(key);
+		const read = closure.sources.filter((s) => remoteKey(s.ref.raw) === key);
+		if (sha === void 0 || read.some((s) => s.sha === sha)) return [f];
+		const at = {
+			...f,
+			ref: pinnedRef(parseRemoteRef(f.ref, "action"), sha)
+		};
+		return pinned.inRemote.has(key) && !read.length ? [f] : [at];
+	});
+}
+/** How many sources a run reads at most, the closure's and `readNeeded`'s together (core's `maxUnits`). */
+const MAX_UNITS = 200;
+/**
+* What core's closure leaves unread that the engine needs: it reads one commit per ref, but an action `actions.lock`
+* pins is read at the lock's commit for the workflows it covers and as written for the others (lab R9). So, after it,
+* whatever the engine's `remotesNeeded` names for the files with what was read so far, until it names nothing new.
+*/
+async function readNeeded(run, files, locks, host, options) {
+	const asked = /* @__PURE__ */ new Set();
+	for (;;) {
+		const needs = remotesNeeded(loadedWith(files, inputsOf(run, host), locks), host.mode).filter((n) => !asked.has(remoteKey(n.ref)));
+		if (!needs.length) break;
+		for (const n of needs) asked.add(remoteKey(n.ref));
+		const room = Math.max(0, MAX_UNITS - run.sources.length - run.failed.length);
+		for (const n of needs.slice(room)) run.limited.push(n.ref);
+		const admitted = needs.slice(0, room);
+		for (let i = 0; i < admitted.length; i += CONCURRENCY) await Promise.all(admitted.slice(i, i + CONCURRENCY).map((n) => readOne(run, n, locks.lock, options)));
+	}
+	run.sources.sort((a, b) => compare(remoteKey(a.ref.raw), remoteKey(b.ref.raw)) || compare(a.sha, b.sha));
+	run.failed.sort((a, b) => compare(remoteKey(a.ref), remoteKey(b.ref)));
+	const done = /* @__PURE__ */ new Set([...run.sources.map((s) => remoteKey(refOf(run, s))), ...run.failed.map((f) => remoteKey(f.ref))]);
+	run.limited = [...new Set(run.limited)].filter((r) => !done.has(remoteKey(r))).sort((a, b) => compare(remoteKey(a), remoteKey(b)));
+}
+/** Core's concurrency. */
+const CONCURRENCY = 8;
+/**
+* The files as the closure loaded them (no repository), with what was read so far, pinned by the run's lockfiles rather
+* than any among the files (`update` reads past the old lockfile; `actions.lock` may be read from disk).
+*/
+function loadedWith(files, remotes, locks) {
+	const { [REMOTES_LOCK_FILE]: _lock, [ACTIONS_LOCK_FILE$1]: _actions, ...rest } = files;
+	const loaded = loadFiles(rest, { remotes });
+	const { lock, actionsLock } = locks;
+	return {
+		...loaded,
+		remotes: {
+			...loaded.remotes,
+			...lock ? { lock } : {},
+			...actionsLock ? { actionsLock } : {}
+		}
+	};
+}
+/** One need read at its pin, or resolved live, past the cap or not; a failure is recorded as the closure records one. */
+async function readOne(run, need, lock, options) {
+	const r = parseRemoteRef(need.ref, need.kind);
+	run.kinds.set(remoteKey(r.raw), r.kind);
+	if (need.issue) run.issues.set(`${need.issue.code} ${need.issue.message}`, need.issue);
+	const source = await readAt(run, r, need.pin, lock, options);
+	if (source && need.depth >= MAX_DEPTH) run.limited.push(...callsOf(run.project, source));
+}
+/** How deep a run follows remotes (core's and the engine's `maxDepth`). */
+const MAX_DEPTH = 10;
+async function readAt(run, r, pin, lock, options) {
+	try {
+		const sha = pin?.sha ?? await resolveRemoteCommit(r, options);
+		const digest = lockedDigest(lock, r.raw, sha);
+		const source = await fetchRemoteSourceAt(r, sha, {
+			...options,
+			...digest ? { expectDigest: digest } : {}
+		});
+		run.sources.push(source);
+		run.readAs.set(source, pin?.pinned ?? "resolved");
+		return source;
+	} catch (e) {
+		if (!(e instanceof RemoteFetchError)) throw e;
+		run.failed.push({
+			ref: r.raw,
+			kind: e.kind,
+			error: e.message
+		});
+		return;
+	}
 }
 /** The table's order: when two pins give one commit, the one that comes first names it. */
 const RANK = {
@@ -49743,17 +50032,26 @@ function unused(error, errors, log) {
 /**
 * The `actions.lock` commit of each remote action the checkout's own files use, by `remoteKey`. A pin applies under the
 * running file's own path: a workflow's (a local reusable workflow is its own running file), and for a local action,
-* each workflow that runs it. The lock has one commit per key, so every running file that pins a ref pins it alike; the
-* engine reads one body per ref, so a running file the lock does not cover reads that body too.
+* each workflow that runs it. The lock has one commit per key, so every running file that pins a ref pins it alike.
+* `uncovered`: the refs a running file the lock does not cover uses too, which it reads as written (lab R9).
 */
 function localActionsLock(index, lock) {
-	const out = /* @__PURE__ */ new Map();
-	if (!lock) return out;
+	const commits = /* @__PURE__ */ new Map();
+	const uncovered = /* @__PURE__ */ new Set();
+	if (!lock) return {
+		commits,
+		uncovered
+	};
 	for (const [unit, running] of runningFiles(index)) for (const r of remoteRefsOf(index.project, [unit])) {
-		const commit = [...running].map((path) => actionsLockCommit(lock, path, r)).find((c) => c !== void 0);
-		if (commit !== void 0) out.set(remoteKey(r.raw), commit);
+		const pins = (running.size ? [...running] : [""]).map((path) => actionsLockCommit(lock, path, r));
+		const commit = pins.find((c) => c !== void 0);
+		if (commit !== void 0) commits.set(remoteKey(r.raw), commit);
+		if (pins.includes(void 0)) uncovered.add(remoteKey(r.raw));
 	}
-	return out;
+	return {
+		commits,
+		uncovered
+	};
 }
 /** Each local unit and the workflow paths that run it: a workflow its own; an action, every workflow reaching it. */
 function runningFiles(index) {
@@ -49783,21 +50081,43 @@ function inputsOf(run, host) {
 		message: redact(f.error, secrets)
 	}));
 	return {
-		sources: run.sources.map((s) => ({
-			ref: s.ref.raw,
-			kind: s.ref.kind,
-			sha: s.sha,
-			text: s.text,
-			pinned: pinnedOf(run, s),
-			...s.host.toLowerCase() === runHost ? {} : { host: s.host }
-		})),
+		sources: run.sources.map((s) => {
+			const pinned = pinnedOf(run, s);
+			return {
+				ref: refOf(run, s),
+				kind: s.ref.kind,
+				sha: s.sha,
+				text: s.text,
+				pinned,
+				...s.host.toLowerCase() === runHost ? {} : { host: s.host }
+			};
+		}),
 		...failed.length ? { failed } : {},
 		...run.limited.length ? { limited: run.limited } : {}
 	};
 }
+/** The ref a source is emitted under: an `actions.lock` pin's apart from the same ref read live (lab R9). */
+const refOf = (run, s) => pinnedOf(run, s) === "actions-lock" ? pinnedRef(s.ref, s.sha) : s.ref.raw;
 /** The pin that gave a source's commit; none means the closure took the ref's own SHA, or resolved it. */
 function pinnedOf(run, s) {
-	return run.pinned.get(`${remoteKey(s.ref.raw)}@${s.sha}`) ?? (/^[0-9a-f]{40}$/i.test(s.ref.ref) ? "sha-ref" : "resolved");
+	return run.readAs.get(s) ?? run.pinned.get(`${remoteKey(s.ref.raw)}@${s.sha}`) ?? (/^[0-9a-f]{40}$/i.test(s.ref.ref) ? "sha-ref" : "resolved");
+}
+/** The remote refs inside a source's file, resolved as the closure resolves them (a `./` at the source's commit). */
+function callsOf(project, { ref: r, sha, text }) {
+	const ctx = createParseContext(`${r.owner}/${r.repo}`);
+	const unit = r.kind === "workflow" ? parseWorkflowFile(r.raw, text, ctx) : parseActionFile(r.raw, r.raw, text, ctx);
+	const origin = {
+		owner: r.owner,
+		repo: r.repo,
+		path: r.path,
+		ref: r.ref,
+		sha
+	};
+	return remoteRefsOf(project, [{
+		...unit,
+		external: true,
+		origin
+	}]).map((c) => c.raw);
 }
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const tokensOf = (host) => [host.api.token, host.fallback?.token].filter((t) => !!t);
