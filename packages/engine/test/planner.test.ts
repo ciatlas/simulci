@@ -450,6 +450,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - id: comp
         uses: ./.github/actions/comp
         with:
@@ -478,11 +479,50 @@ runs:
 `,
       },
     );
-    const [comp, gated] = plan.workflows[0]!.jobs[0]!.legs[0]!.steps!;
+    const [, comp, gated] = plan.workflows[0]!.jobs[0]!.legs[0]!.steps!;
     expect(comp!.composite).toMatchObject({ path: '.github/actions/comp' });
     expect(comp!.composite!.steps.map((s) => s.runs.verdict)).toEqual(['yes', 'yes']);
     expect(comp!.outputs.greeting).toEqual({ known: true, value: 'hello world' });
     expect(gated!.runs.verdict).toBe('yes');
+  });
+
+  it('fails a local ./ action before a checkout, as GitHub does, and expands it after one (lab R3)', () => {
+    const plan = (before: string) =>
+      wf(
+        `
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:${before}
+      - uses: ./.github/actions/comp
+      - run: echo after
+`,
+        { event: 'push' },
+        {
+          '.github/actions/comp/action.yml':
+            'runs:\n  using: composite\n  steps: [{ run: echo, shell: bash }]\n',
+        },
+      );
+    const steps = (p: RunPlan) => p.workflows[0]!.jobs[0]!.legs[0]!.steps!;
+    for (const before of ['', '\n      - uses: actions/checkout@v4\n        if: false']) {
+      const p = plan(before);
+      const [comp, after] = steps(p).slice(-2);
+      expect(comp!.composite).toBeUndefined();
+      expect(comp!.outcome).toEqual({ known: true, value: 'failure' });
+      expect(after!.runs.verdict).toBe('no');
+      expect(results(p)).toEqual({ build: 'failure' });
+    }
+    // After a checkout, or a step that may fill the workspace, the working copy's action is planned.
+    for (const before of [
+      '\n      - uses: actions/checkout@v4',
+      '\n      - run: gh repo clone "$GITHUB_REPOSITORY" .',
+    ]) {
+      const [, comp, after] = steps(plan(before));
+      expect(comp!.composite).toMatchObject({ path: '.github/actions/comp' });
+      expect(comp!.outcome).toEqual({ known: true, value: 'success' });
+      expect(after!.runs.verdict).toBe('yes');
+    }
   });
 
   it('reports a dynamic matrix as one placeholder leg and the unknown behind it', () => {
@@ -527,6 +567,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: \${{ inputs.env }}
     steps:
+      - uses: actions/checkout@v4
       - id: s
         if: github.actor == 'octocat'
         uses: ./.github/actions/greet
@@ -558,12 +599,12 @@ runs:
     const plan = simulate({ files, scenario: { event: 'workflow_dispatch', branch: 'main' } });
     const job = plan.workflows[0]!.jobs[0]!;
     expect(job.loc).toEqual({ file: '.github/workflows/ci.yml', line: 9, column: 3 });
-    const step = job.legs[0]!.steps![0]!;
-    expect(step.loc).toMatchObject({ file: '.github/workflows/ci.yml', line: 13 });
+    const step = job.legs[0]!.steps![1]!;
+    expect(step.loc).toMatchObject({ file: '.github/workflows/ci.yml', line: 14 });
     const ifReason = step.runs.chain.find((r) => r.kind === 'if')!;
     expect(ifReason.kind === 'if' && ifReason.loc).toMatchObject({
       file: '.github/workflows/ci.yml',
-      line: 14,
+      line: 15,
     });
     expect(step.composite!.steps[0]!.loc).toMatchObject({ file: '.github/actions/greet/action.yml' });
   });
@@ -585,7 +626,7 @@ runs:
 
   it('carries the inputs a composite action reads: the with: over the defaults', () => {
     const plan = simulate({ files, scenario: { event: 'workflow_dispatch', branch: 'main' } });
-    const composite = plan.workflows[0]!.jobs[0]!.legs[0]!.steps![0]!.composite!;
+    const composite = plan.workflows[0]!.jobs[0]!.legs[0]!.steps![1]!.composite!;
     expect(composite.inputs).toEqual({
       who: { known: true, value: 'world' },
       loud: { known: true, value: 'false' },

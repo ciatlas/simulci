@@ -75,6 +75,7 @@ jobs:
       matrix:
         os: [linux]
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/comp
 `,
   '.github/workflows/callee.yml': `
@@ -140,7 +141,7 @@ describe('assume pins for step and job unknowns', () => {
     expect(slashed.producer).toBe(`${CI}#call[target=b/c]>.github/workflows/callee.yml#x/steps.d`);
     expect(slashed.pin).toBeUndefined();
     const inner = p.unknowns.find((u) => u.id.endsWith('/steps.probe.outputs.hit'))!;
-    expect(inner.pin?.fragment).toEqual({ step: 'comp[os=linux].#1/probe', outputs: { hit: '' } });
+    expect(inner.pin?.fragment).toEqual({ step: 'comp[os=linux].#2/probe', outputs: { hit: '' } });
     expectEveryPinApplies(nested);
   });
 
