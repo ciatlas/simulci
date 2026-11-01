@@ -76,6 +76,7 @@ import {
   pinFor as remotePin,
   REMOTES_LOCK_FILE,
   type RemoteInputs,
+  type RemotePinned,
   type RemotesMode,
 } from './remotes/lock';
 import {
@@ -85,6 +86,7 @@ import {
   namedByOrigin,
   pinContextOf,
   type RemoteLookup,
+  readRef,
   remoteRefOf,
 } from './remotes/state';
 import { parseScenario, type Scenario, type ScenarioInput } from './scenario';
@@ -200,6 +202,8 @@ interface Scope {
 interface RemoteTarget extends RemoteLookup {
   ref: RemoteRef;
   display: string;
+  /** What decides its commit for this use. */
+  context: PinContext;
 }
 
 /** A remote the plan uses: where, and the pin context of the `uses:` that says most about its commit. */
@@ -875,7 +879,7 @@ class Planner {
   ): void {
     const { job } = ctx;
     const { callee, remote } = this.resolveCallee(job, ctx.scope);
-    if (remote) this.useRemote(remote, leg, ctx.scope, job.uses!);
+    if (remote) this.useRemote(remote, leg);
     if (!callee) {
       this.unsupportedCall(leg, job, remote);
       return;
@@ -915,11 +919,13 @@ class Planner {
     return unit?.kind === 'workflow' && unit.call ? { callee: unit, remote } : { remote };
   }
 
+  /** A remote `uses:`, looked up where the host read it for this running file (an `actions.lock` pin's commit, R9). */
   private remoteTarget(scope: Scope, uses: UsesRef): RemoteTarget | undefined {
     const ref = remoteRefOf(scope.unit, uses);
     if (!ref) return undefined;
     const display = namedByOrigin(scope.unit, uses) ? atRefName(ref, scope.refName) : ref.raw;
-    return { ...lookupRemote(this.loaded, ref), ref, display };
+    const context = pinContextOf(this.loaded, scope.unit, uses, ref, scope.running ? [scope.running] : []);
+    return { ...lookupRemote(this.loaded, readRef(ref, context)), ref, display, context };
   }
 
   /** The secrets `secrets: inherit` passes: all of them, but only `GITHUB_TOKEN` to another owner's workflow (lab R6). */
@@ -933,18 +939,13 @@ class Planner {
 
   /**
    * Records a use. Uses are one row per fetch key and shown ref: a `./` inside a remote is shown like a direct ref to
-   * the same file at the parent's ref name, but is another remote. The pin context kept is the one that says most: an
+   * the same file at the parent's ref name, but is another remote, and so is an action `actions.lock` pins for one
+   * running file and not for another (lab R9). The pin context kept is the one that says most: an
    * `actions.lock` pin, else a use in this repository, else one in a remote.
    */
-  private useRemote(target: RemoteTarget, at: LegPlan | NodeId, scope: Scope, uses: UsesRef): void {
+  private useRemote(target: RemoteTarget, at: LegPlan | NodeId): void {
     const row = `${target.key}\n${remoteKey(target.display)}`;
-    const context = pinContextOf(
-      this.loaded,
-      scope.unit,
-      uses,
-      target.ref,
-      scope.running ? [scope.running] : [],
-    );
+    const { context } = target;
     const site = this.remoteUses.get(row);
     if (!site) this.remoteUses.set(row, { target, at: [at], context });
     else {
@@ -961,10 +962,10 @@ class Planner {
     const out: RemoteUse[] = [];
     for (const site of this.remoteUses.values()) {
       const at = [...new Set(site.at.map((a) => (typeof a === 'string' ? a : a.id)))].sort(byCodeUnit);
-      const { issue } = remotePin(site.target.ref, site.context);
-      if (issue) this.diagnostics.push({ ...issue, node: at[0]! });
+      const pin = remotePin(site.target.ref, site.context);
+      if (pin.issue) this.diagnostics.push({ ...pin.issue, node: at[0]! });
       if (site.target.ref.kind === 'workflow' || site.target.state !== 'not-fetched')
-        out.push(remoteUseOf(site.target, at));
+        out.push(remoteUseOf(site.target, at, pin.pinned));
     }
     const { lockError, mode } = this.loaded.remotes;
     if (lockError !== undefined && mode !== 'off') {
@@ -1139,7 +1140,7 @@ class Planner {
     if (!step.uses) return {};
     const remote = this.remoteTarget(scope, step.uses);
     if (!remote) return this.localStep(step, sid, withValues, scope);
-    this.useRemote(remote, sid, scope, step.uses);
+    this.useRemote(remote, sid);
     return this.remoteAction(remote, sid, withValues);
   }
 
@@ -1674,11 +1675,15 @@ const atRefName = (ref: RemoteRef, refName: string | undefined): string =>
 
 const refNameOf = (display: string): string => display.slice(display.lastIndexOf('@') + 1);
 
-function remoteUseOf(target: RemoteTarget, at: NodeId[]): RemoteUse {
+/**
+ * A row of `RunPlan.remotes`. Its `pinned` is the use's own when the ref or its context names the commit (a full SHA,
+ * `actions.lock`, a `./`'s parent): one file at one commit may be read for a use of each kind (`pinnedRef`, lab R9).
+ */
+function remoteUseOf(target: RemoteTarget, at: NodeId[], pinned: RemotePinned | undefined): RemoteUse {
   const use: RemoteUse = { ref: target.display, kind: target.ref.kind, state: target.state, at };
   if (target.source) {
     use.sha = target.source.sha;
-    use.pinned = target.source.pinned;
+    use.pinned = pinned && pinned !== 'lockfile' && pinned !== 'resolved' ? pinned : target.source.pinned;
     if (target.source.host !== undefined) use.host = target.source.host;
   }
   if (target.failure) use.failure = target.failure.failure;

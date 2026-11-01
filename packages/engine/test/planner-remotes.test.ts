@@ -709,7 +709,7 @@ dependencies:
     };
     const local = loadFiles(files);
     expect(remotesNeeded(local, 'fetch')).toEqual([
-      { ref: 'octo/act@v1', kind: 'action', depth: 1, pin: { sha: SHA_B, pinned: 'actions-lock' } },
+      { ref: `octo/act@${SHA_B}`, kind: 'action', depth: 1, pin: { sha: SHA_B, pinned: 'actions-lock' } },
       {
         ref: DEPLOY,
         kind: 'workflow',
@@ -793,26 +793,88 @@ describe('one row per remote, with the use that says most about its pin', () => 
     expect(planWith({ sources: [] }, files).remotes!.map((r) => r.at)).toEqual([[`${CI}#a`, `${CI}#b`]]);
   });
 
-  it('pins an action a covered workflow uses although an uncovered one uses it first', () => {
+  it('reads an action at its pin for the covered workflow and live for the uncovered one (lab R9)', () => {
+    const A = '.github/workflows/a.yml';
+    const files = { [A]: usingAct, [CI]: usingAct, '.github/workflows/actions.lock': actionsLock([CI]) };
+    const pinned = {
+      ref: `octo/act@${SHA_B}`,
+      kind: 'action',
+      depth: 1,
+      pin: { sha: SHA_B, pinned: 'actions-lock' },
+    };
+    expect(remotesNeeded(loadFiles(files), 'lock')).toEqual([pinned]);
+    expect(remotesNeeded(loadFiles(files), 'fetch')).toEqual([
+      pinned,
+      {
+        ref: 'octo/act@v1',
+        kind: 'action',
+        depth: 1,
+        issue: expect.objectContaining({ code: 'remote-unpinned' }),
+      },
+    ]);
+    const act = (sha: string, pin: RemoteSourceInput['pinned'], at = 'v1'): RemoteSourceInput => ({
+      ...source(`octo/act@${at}`, 'runs:\n  using: node24\n  main: x.js\n', sha, 'action'),
+      pinned: pin,
+    });
+    const sources = [act(SHA_B, 'actions-lock', SHA_B), act(SHA, 'resolved')];
+    const loaded = loadFiles(files, { remotes: { sources }, mode: 'fetch' });
+    expect(remotesNeeded(loaded, 'fetch')).toEqual([]);
+    const plan = simulate({ project: loaded, scenario: SCENARIO });
+    expect(plan.remotes!.map((r) => [r.ref, r.sha, r.pinned, r.at])).toEqual([
+      ['octo/act@v1', SHA, 'resolved', [`${A}#x/~octo-act`]],
+      ['octo/act@v1', SHA_B, 'actions-lock', [`${CI}#x/~octo-act`]],
+    ]);
+  });
+
+  it('labels each row by its own use when a full-SHA ref and a pin read one file, whatever the input order', () => {
+    const A = '.github/workflows/a.yml';
     const files = {
-      '.github/workflows/a.yml': usingAct,
+      [A]: usingAct.replace('octo/act@v1', `octo/act@${SHA_B}`),
       [CI]: usingAct,
       '.github/workflows/actions.lock': actionsLock([CI]),
     };
-    expect(remotesNeeded(loadFiles(files), 'lock')).toEqual([
-      { ref: 'octo/act@v1', kind: 'action', depth: 1, pin: { sha: SHA_B, pinned: 'actions-lock' } },
+    const one = (pinned: RemoteSourceInput['pinned']): RemoteSourceInput => ({
+      ...source(`octo/act@${SHA_B}`, 'runs:\n  using: node24\n  main: x.js\n', SHA_B, 'action'),
+      pinned,
+    });
+    const plans = [
+      [one('sha-ref'), one('actions-lock')],
+      [one('actions-lock'), one('sha-ref')],
+    ].map((sources) => simulate({ files, scenario: SCENARIO, remotes: { sources }, remotesMode: 'fetch' }));
+    expect(JSON.stringify(plans[0])).toBe(JSON.stringify(plans[1]));
+    expect(plans[0]!.remotes!.map((r) => [r.ref, r.pinned])).toEqual([
+      [`octo/act@${SHA_B}`, 'sha-ref'],
+      ['octo/act@v1', 'actions-lock'],
+    ]);
+  });
+
+  it('reads a covered workflow’s local callee live: it is its own running file (lab R9)', () => {
+    const called = '.github/workflows/callee.yml';
+    const files = {
+      [CI]: `on: push\njobs:\n  call:\n    uses: ./${called}\n`,
+      [called]: usingAct.replace('on: push', 'on: workflow_call'),
+      '.github/workflows/actions.lock': actionsLock([CI]),
+    };
+    expect(remotesNeeded(loadFiles(files), 'fetch').map((n) => [n.ref, n.pin])).toEqual([
+      ['octo/act@v1', undefined],
     ]);
   });
 
   it('pins an action of a local composite under the workflow that runs it', () => {
+    const locked = (ref: string) =>
+      `  ${ref}:\n    sha: ${SHA}\n    kind: action\n    file: action.yml\n    digest: sha256-${'A'.repeat(43)}=\n`;
     const files = {
       [CI]: 'on: push\njobs:\n  x:\n    runs-on: x\n    steps: [{ uses: ./.github/actions/a }]\n',
+      '.github/workflows/a.yml':
+        'on: push\njobs:\n  y:\n    runs-on: x\n    steps: [{ uses: ./.github/actions/a }]\n',
       '.github/actions/a/action.yml': 'runs:\n  using: composite\n  steps: [{ uses: octo/act@v1 }]\n',
       '.github/workflows/actions.lock': actionsLock([CI]),
-      [LOCK]: `version: 1\nremotes:\n  octo/act@v1:\n    sha: ${SHA}\n    kind: action\n    file: action.yml\n    digest: sha256-${'A'.repeat(43)}=\n`,
+      // The ref as written is the uncovered workflow's live read; the pin is locked under its own commit.
+      [LOCK]: `version: 1\nremotes:\n${locked('octo/act@v1')}${locked(`octo/act@${SHA_B}`)}`,
     };
-    expect(remotesNeeded(loadFiles(files), 'lock').map((r) => r.pin)).toEqual([
-      { sha: SHA_B, pinned: 'actions-lock' },
+    expect(remotesNeeded(loadFiles(files), 'lock').map((r) => [r.ref, r.pin])).toEqual([
+      [`octo/act@${SHA_B}`, { sha: SHA_B, pinned: 'actions-lock' }],
+      ['octo/act@v1', { sha: SHA, pinned: 'lockfile' }],
     ]);
     const p = planWith({ sources: [] }, files);
     expect(p.diagnostics.map((d) => [d.code, d.node])).toEqual([

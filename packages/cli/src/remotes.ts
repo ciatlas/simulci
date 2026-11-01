@@ -18,6 +18,7 @@ import {
   loadFiles,
   lockIssues,
   pinContextOf,
+  pinnedRef,
   REMOTES_LOCK_FILE,
   remotesNeeded,
   type RemoteFailureInput,
@@ -143,9 +144,7 @@ export async function readRemotes(
     options: { ...options, remotes: read.remotes },
     read,
     access,
-    unreadable: read.lock
-      ? reachedUnreadable(read.lock, lockUses(local, read.lock), read.remotes.failed)
-      : [],
+    unreadable: read.lock ? reachedUnreadable(read.lock, lockUses(local), read.remotes.failed) : [],
     lockErrors: usedLockErrors(read.lockErrors, local),
   };
 }
@@ -439,7 +438,7 @@ export async function runRemotesCheck(a: CheckArgs, io: RemotesCommandIo): Promi
  * not missing), and an `actions.lock` that cannot be used, whose pins `update` could not have followed.
  */
 function staleLines(lock: RemotesLock, local: LoadedProject, read: RemotesLoad, text: string): string[] {
-  const uses = lockUses(local, lock);
+  const uses = lockUses(local);
   const limited = new Set((read.remotes.limited ?? []).map(remoteKey));
   const issues = lockIssues(lock, uses).filter(
     (i) => !(i.code === 'remote-not-locked' && limited.has(remoteKey(i.ref))),
@@ -507,27 +506,23 @@ function where(text: string, ref: string): string {
 }
 
 /**
- * Each remote ref the checkout's own workflows and actions name, once per workflow that runs it, with the commit that
- * workflow's `actions.lock` pins it to; once without a workflow for an action no workflow runs. Loaded without the
- * repository, as `update` reads them: a full ref to this repository is a remote too (lab R10). An action that a locked
- * remote also uses is not compared with `actions.lock`: its entry is the remote's commit (`update` keeps the pin the
- * lockfile is for), and the checkout's own use is pinned by `actions.lock` whatever the entry says.
+ * Each remote ref the checkout's own workflows and actions name, once per workflow that runs it; once without a
+ * workflow for an action no workflow runs. An action that workflow's `actions.lock` pins is read and locked under the
+ * pin's commit (`owner/repo[/path]@<commit>`, lab R9), with that commit to compare its entry with. Loaded without the
+ * repository, as `update` reads them: a full ref to this repository is a remote too (lab R10).
  */
-function lockUses(loaded: LoadedProject, lock?: RemotesLock): LockUseInput[] {
+function lockUses(loaded: LoadedProject): LockUseInput[] {
   const project = loaded.index.project;
-  const called = new Set(Object.values(lock?.remotes ?? {}).flatMap((e) => (e.calls ?? []).map(remoteKey)));
   return [...project.workflows.values(), ...project.actions.values()].flatMap((unit) => {
     const running = runningWorkflows(loaded, unit);
     return usesOf(unit).flatMap((uses) => {
       const ref = remoteRefOf(unit, uses);
       if (!ref) return [];
       if (!running.length) return [{ ref: ref.raw, kind: ref.kind }];
-      const compared = !called.has(remoteKey(ref.raw));
       return running.map((workflow): LockUseInput => {
-        const use: LockUseInput = { ref: ref.raw, kind: ref.kind, workflow };
         const { actionsLock } = pinContextOf(loaded, unit, uses, ref, [workflow]);
-        if (actionsLock && compared) use.actionsLock = actionsLock;
-        return use;
+        if (actionsLock === undefined) return { ref: ref.raw, kind: ref.kind, workflow };
+        return { ref: pinnedRef(ref, actionsLock), kind: ref.kind, workflow, actionsLock };
       });
     });
   });

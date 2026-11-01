@@ -15,9 +15,11 @@ import {
 } from '@ciatlas/core';
 import type { WorkflowSettings } from '../settings';
 import {
+  type PinContext,
   type PinIssue,
   parseRemotesLock,
   pinFor,
+  pinnedRef,
   REMOTES_LOCK_FILE,
   type RemoteFailureInput,
   type RemoteInputs,
@@ -81,7 +83,13 @@ const sortFailures = (failed: readonly RemoteFailureInput[]): RemoteFailureInput
 const sortSources = (sources: readonly RemoteSourceInput[]): RemoteSourceInput[] =>
   sources
     .map((s) => ({ s, key: remoteKey(s.ref) }))
-    .sort((a, b) => byCodeUnit(a.key, b.key) || byCodeUnit(a.s.ref, b.s.ref) || byCodeUnit(a.s.sha, b.s.sha))
+    .sort(
+      (a, b) =>
+        byCodeUnit(a.key, b.key) ||
+        byCodeUnit(a.s.ref, b.s.ref) ||
+        byCodeUnit(a.s.sha, b.s.sha) ||
+        byCodeUnit(a.s.pinned, b.s.pinned),
+    )
     .map(({ s }) => s);
 
 /**
@@ -178,6 +186,12 @@ export function lookupRemote(loaded: LoadedProject, ref: RemoteRef): RemoteLooku
   return { key, state: limited.has(key) ? 'limit' : 'not-fetched' };
 }
 
+/** The ref a use is read at: its `actions.lock` pin's commit (`pinnedRef`, lab R9), else as written. */
+export const readRef = (ref: RemoteRef, context: Omit<PinContext, 'mode'>): RemoteRef =>
+  context.actionsLock === undefined
+    ? ref
+    : { ...ref, ref: context.actionsLock, raw: pinnedRef(ref, context.actionsLock) };
+
 /**
  * The pin context of a remote `uses:` in `unit`. `running` are the workflows of this repository that run the unit
  * (itself, or those that use a local action directly or through other local actions); the caller's `actions.lock`
@@ -224,7 +238,10 @@ export function runningWorkflows(loaded: LoadedProject, unit: UnitDecl): string[
 }
 
 export interface NeededRemote {
-  /** The ref to read: as written, or `owner/repo/path@<parent sha>` for a `./` inside a remote unit. */
+  /**
+   * The ref to read, as the host passes it back in `RemoteSourceInput.ref`: as written; `owner/repo/path@<parent sha>`
+   * for a `./` inside a remote unit; `owner/repo[/path]@<commit>` where `actions.lock` pins an action (lab R9).
+   */
   ref: string;
   kind: RemoteKind;
   /** 1 for the project's own refs, one more per remote unit in between. */
@@ -255,8 +272,8 @@ export function remotesNeeded(loaded: LoadedProject, mode: RemotesMode): NeededR
 
 /**
  * One level of `remotesNeeded`: the refs its units use, a remote read once; returns the remote units read, to go on
- * with. A ref not read is needed at its shallowest depth, with a pin if any of its uses has one (an action one
- * workflow's `actions.lock` pins and another's does not).
+ * with. A ref not read is needed at its shallowest depth, with a pin if any of its uses has one. An action is read once
+ * per running file whose `actions.lock` pins it apart: at the lock's commit, and as written where none pins it (R9).
  */
 function neededAt(
   loaded: LoadedProject,
@@ -264,27 +281,37 @@ function neededAt(
   at: { depth: number; level: UnitDecl[]; seen: Set<string>; out: Map<string, NeededRemote> },
 ): UnitDecl[] {
   const next: UnitDecl[] = [];
-  for (const { unit, uses, ref } of refsOf(at.level)) {
-    const found = lookupRemote(loaded, ref);
-    if (found.state === 'simulated' && !at.seen.has(found.key)) next.push(found.unit!);
-    at.seen.add(found.key);
-    if (found.state === 'not-fetched') needOnce(loaded, mode, at, { unit, uses, ref, key: found.key });
-  }
+  for (const { unit, uses, ref } of refsOf(at.level))
+    for (const context of contextsOf(loaded, unit, uses, ref)) {
+      const read = readRef(ref, context);
+      const found = lookupRemote(loaded, read);
+      if (found.state === 'simulated' && !at.seen.has(found.key)) next.push(found.unit!);
+      at.seen.add(found.key);
+      if (found.state === 'not-fetched') needOnce(at, found.key, read, pinFor(ref, { ...context, mode }));
+    }
   return next;
+}
+
+/** A use's pin contexts, one per commit its running files' `actions.lock` gives it (none: as written). */
+function contextsOf(loaded: LoadedProject, unit: UnitDecl, uses: UsesRef, ref: RemoteRef) {
+  const running = runningWorkflows(loaded, unit);
+  const contexts = (running.length ? running : ['']).map((r) =>
+    pinContextOf(loaded, unit, uses, ref, r ? [r] : []),
+  );
+  return [...new Map(contexts.map((c) => [c.actionsLock, c])).values()];
 }
 
 /** A ref not read, needed once at its shallowest depth, with the pin of any use that has one. */
 function needOnce(
-  loaded: LoadedProject,
-  mode: RemotesMode,
   at: { depth: number; out: Map<string, NeededRemote> },
-  use: { unit: UnitDecl; uses: UsesRef; ref: RemoteRef; key: string },
+  key: string,
+  read: RemoteRef,
+  pin: ReturnType<typeof pinFor>,
 ): void {
-  const was = at.out.get(use.key);
+  const was = at.out.get(key);
   if (was?.pin) return;
-  const context = pinContextOf(loaded, use.unit, use.uses, use.ref, runningWorkflows(loaded, use.unit));
-  const need = needed(use.ref, was?.depth ?? at.depth, pinFor(use.ref, { ...context, mode }));
-  if (need && (!was || need.pin)) at.out.set(use.key, need);
+  const need = needed(read, was?.depth ?? at.depth, pin);
+  if (need && (!was || need.pin)) at.out.set(key, need);
 }
 
 function* refsOf(units: UnitDecl[]): Generator<{ unit: UnitDecl; uses: UsesRef; ref: RemoteRef }> {

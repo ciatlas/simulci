@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  checksOf,
   loadFiles,
   type NeededRemote,
   remotesNeeded,
   type RemoteSourceInput,
+  type RunPlan,
   simulate,
 } from '@simulci/engine';
 import {
@@ -199,25 +201,33 @@ function workflowIssues(run: RemoteRun, sources: readonly RemoteSourceInput[]): 
   });
 }
 
-/** Where an action of the lab's remotes a job downloaded (`actions`, by `owner/repo@ref`) was fed at another commit. */
-function actionIssues(job: RemoteRun['jobs'][number], sources: readonly RemoteSourceInput[]): string[] {
+/**
+ * Where an action of the lab's remotes a job downloaded (`actions`, by `owner/repo@ref`) is planned from another commit:
+ * each of the plan's remotes the job's steps use, by the ref as written. One ref can be read at two commits, an
+ * `actions.lock` pin's and the live one (R9), so the plan's own rows say which the job ran.
+ */
+function actionIssues(run: RemoteRun, job: RemoteRun['jobs'][number], plan: RunPlan): string[] {
+  const leg = checksOf(plan).find((c) => c.name === job.name && c.node.startsWith(`${run.workflow}#`))?.node;
   return Object.entries(job.actions).flatMap(([action, sha]) => {
     const { repo, at } = splitRef(action);
     if (!REMOTES.has(repo)) return [];
-    const fed = sources.filter(
-      (s) => s.kind === 'action' && `${splitRef(s.ref).repo}@${splitRef(s.ref).at}` === `${repo}@${at}`,
+    const rows = (plan.remotes ?? []).filter(
+      (r) =>
+        r.kind === 'action' &&
+        `${splitRef(r.ref).repo}@${splitRef(r.ref).at}` === `${repo}@${at}` &&
+        r.at.some((a) => a.startsWith(`${leg}/`)),
     );
-    if (!fed.length) return [`${action}: not fed`];
-    return fed
-      .filter((s) => s.sha !== sha)
-      .map((s) => `${s.ref}: fed ${s.sha}, ${job.name} downloaded ${sha}`);
+    if (!rows.length) return [`${action}: not fed`];
+    return rows
+      .filter((r) => r.sha !== sha)
+      .map((r) => `${r.ref}: fed ${r.sha}, ${job.name} downloaded ${sha}`);
   });
 }
 
 /** Where a commit GitHub recorded for the run is not the one fed in. */
-const inputIssues = (run: RemoteRun, sources: readonly RemoteSourceInput[]): string[] => [
+const inputIssues = (run: RemoteRun, sources: readonly RemoteSourceInput[], plan: RunPlan): string[] => [
   ...workflowIssues(run, sources),
-  ...run.jobs.flatMap((job) => actionIssues(job, sources)),
+  ...run.jobs.flatMap((job) => actionIssues(run, job, plan)),
 ];
 
 // --- Grading --------------------------------------------------------------------------------------------------------
@@ -252,9 +262,9 @@ export function measureRemote(): { accuracy: RemoteAccuracy; wrong: string[]; in
   const inputs: string[] = [];
   for (const run of remoteRuns) {
     const { tree, sources } = treeFor(run.ref, movedFor(run));
-    for (const issue of inputIssues(run, sources))
+    const plan = gradeRun(t, comparable(run), tree, GIVEN);
+    for (const issue of inputIssues(run, sources, plan))
       inputs.push(`${run.workflow} [${run.ref} ${run.sha.slice(0, 7)}] ${issue}`);
-    gradeRun(t, comparable(run), tree, GIVEN);
   }
   for (const r of refusals) gradeRefusal(t, r);
   return {

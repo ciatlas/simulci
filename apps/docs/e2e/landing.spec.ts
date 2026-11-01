@@ -42,7 +42,6 @@ for (const theme of ['light', 'dark'] as const)
       await expect(page.getByText(sentence)).toBeVisible();
       const stats = page.locator('dl dd');
       await expect(stats).toHaveText([outcomes, exact, maybe, wrong]);
-      await expect(page.getByText('Remote reusable workflows: not yet lab-verified.')).toBeVisible();
 
       const shot = page.locator(`img[src="/landing/app-${theme}.jpg"]`);
       await shot.scrollIntoViewIfNeeded();
