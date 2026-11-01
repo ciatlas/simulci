@@ -149,6 +149,7 @@ describe('the verdict gutter', () => {
           '  greet:',
           '    runs-on: ubuntu-latest',
           '    steps:',
+          '      - uses: actions/checkout@v4',
           '      - uses: ./.github/actions/greet',
           '        with: { who: a }',
           '      - uses: ./.github/actions/greet',
