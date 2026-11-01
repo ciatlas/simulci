@@ -21,8 +21,8 @@
       "steps": 101,
       "probes": 120
     },
-    "exact": 443,
+    "exact": 445,
     "maybe": 9,
-    "wrong": 6
+    "wrong": 4
   }
 }
