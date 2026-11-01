@@ -33,8 +33,9 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm build
-      # Dogfood: the route tests under .github/simulci/tests, run with the bundle that was just built.
-      - run: node packages/cli/dist/index.js test
+      # Dogfood: the route tests under .github/simulci/tests, run with the bundle that was just built. Without remotes
+      # until this repository commits a remotes.lock.yml (D0): its actions are pinned by SHA, which `lock` reads.
+      - run: node packages/cli/dist/index.js test --remotes off
       # The published package holds exactly its bundle, README and licence, and no dependencies.
       - run: node ../../scripts/check-pack.mjs
         working-directory: packages/cli

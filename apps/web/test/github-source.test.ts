@@ -375,6 +375,30 @@ describe('opening a repository', () => {
   });
 });
 
+describe('opening a repository and its remotes', () => {
+  it('lets the page read remotes for the repository opened only, never for a refused one or the files after it', async () => {
+    const opened: RepoRead = { source: repo(), walked: { files: FILES, meta: {}, skipped: [] }, requests: 6 };
+    const readRepository = vi
+      .fn()
+      .mockResolvedValueOnce({ ...opened, walked: { files: {}, meta: {}, skipped: [] } })
+      .mockResolvedValueOnce(opened);
+    const { store, sources } = page(memoryStore(), { readRepository });
+    store.getState().setFiles(FILES, { kind: 'folder', name: 'repo', readAt: 0 });
+    // Refused: the folder stays, and so does its chip.
+    expect((await sources.openGitHub({ owner: 'octo', repo: 'ship' })).ok).toBe(false);
+    expect(store.getState().source.kind).toBe('folder');
+    expect(store.getState().remotes.consent).toBe('none');
+    expect((await sources.openGitHub({ owner: 'octo', repo: 'ship' })).ok).toBe(true);
+    expect(store.getState().remotes.consent).toBe('source');
+    store.getState().setFiles(FILES, { kind: 'folder', name: 'repo', readAt: 0 });
+    expect(store.getState().remotes.consent).toBe('none');
+    // The chip's Fetch holds for the page's life, whatever opens next.
+    store.getState().consentRemotes('page');
+    store.getState().setFiles(FILES, { kind: 'sample', name: 'starter' });
+    expect(store.getState().remotes.consent).toBe('page');
+  });
+});
+
 describe('what the page says of a GitHub source', () => {
   it('names its patch, its first line and the commands that apply it', () => {
     const source = repo();

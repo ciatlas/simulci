@@ -23,7 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { renderModels } from '../../../packages/cli/src/models';
 import { planArgs, planCommand, planOutput } from '../../../packages/cli/src/plan';
-import { runTestCommand, testCommand } from '../../../packages/cli/src/test';
+import { remotesCommand } from '../../../packages/cli/src/remotes';
+import { runTestCommand, type TestIo, testCommand } from '../../../packages/cli/src/test';
 import { APP_URL } from '../lib/site';
 
 /**
@@ -76,6 +77,8 @@ const docFlags = (mdx: string): Set<string> => new Set(mdx.match(/(?<![\w-])--[a
 describe('the CLI pages', () => {
   const plan = commandFlags(planCommand.args as Args);
   const test = commandFlags(testCommand.args as Args);
+  const subCommands = remotesCommand.subCommands as Record<string, { args: Args }>;
+  const remotes = Object.values(subCommands).flatMap((c) => commandFlags(c.args));
 
   it('name every flag of simulci plan, and no other', () => {
     expect(sorted(docFlags(page('cli/plan')))).toEqual(sorted(plan));
@@ -88,8 +91,21 @@ describe('the CLI pages', () => {
       for (const alias of [a.alias ?? []].flat()) expect(mdx).toContain(`\`-${alias}\``);
   });
 
+  it('name every flag of simulci remotes, with the subcommands that take it', () => {
+    const mdx = page('cli/remotes');
+    const rows = table(mdx, '## Flags');
+    expect(sorted(rows.map((r) => r[0]!))).toEqual(sorted(new Set(remotes)));
+    expect(Object.keys(subCommands)).toEqual(['update', 'check']);
+    for (const [flag, , command] of rows) {
+      const takes = Object.entries(subCommands)
+        .filter(([, c]) => commandFlags(c.args).includes(flag!))
+        .map(([name]) => name);
+      expect(command, flag).toBe(takes.length === 2 ? 'both' : takes.join(', '));
+    }
+  });
+
   it('name no flag the commands lack anywhere', () => {
-    const known = new Set([...plan, ...test, '--save-dev']);
+    const known = new Set([...plan, ...test, ...remotes, '--save-dev']);
     const pages = readdirSync(new URL('apps/docs/content/docs', root), { recursive: true, encoding: 'utf8' });
     for (const file of pages.filter((f) => f.endsWith('.mdx')))
       for (const flag of docFlags(page(file.replace(/\.mdx$/, ''))))
@@ -200,6 +216,14 @@ describe('the Action page', () => {
 });
 
 describe('the getting-started example', () => {
+  /** No network and no `gh`: the example has no remote to read. */
+  const io = (out: { text: string }): TestIo => ({
+    stdout: (t) => (out.text += t),
+    stderr: (t) => (out.text += t),
+    env: {},
+    fetch: () => Promise.reject(new Error('no network')),
+    gh: () => undefined,
+  });
   const mdx = page('index');
   const all = blocks(mdx);
   const dir = mkdtempSync(join(tmpdir(), 'simulci-docs-'));
@@ -207,35 +231,35 @@ describe('the getting-started example', () => {
   mkdirSync(join(dir, '.github/simulci/tests'), { recursive: true });
   writeFileSync(join(dir, '.github/workflows/ci.yml'), all.find((b) => b.lang === 'yaml')!.text);
 
-  it('prints the plans the page shows', () => {
+  it('prints the plans the page shows', async () => {
     const runs = all.flatMap((b, i) => {
       const command = /^npx simulci plan (.*)$/.exec(b.text.trim());
       return command ? [{ args: command[1]!, shown: all[i + 1]!.text }] : [];
     });
     expect(runs).toHaveLength(3);
-    for (const run of runs)
-      expect(planOutput(planArgs(['--dir', dir, ...run.args.split(' ')])).text, run.args).toBe(run.shown);
+    for (const run of runs) {
+      const out = await planOutput(planArgs(['--dir', dir, ...run.args.split(' ')]), io({ text: '' }));
+      expect(out.text, run.args).toBe(run.shown);
+    }
   });
 
-  it('passes the test the page writes, as the page shows', () => {
+  it('passes the test the page writes, as the page shows', async () => {
     const test = all.find((b) => b.text.startsWith('workflow: ci.yml'))!;
     writeFileSync(join(dir, '.github/simulci/tests/ci.test.yml'), test.text);
-    let out = '';
-    const code = runTestCommand({ dir }, { stdout: (t) => (out += t), stderr: (t) => (out += t), env: {} });
-    expect(code).toBe(0);
-    expect(out).toBe(all[all.indexOf(test) + 2]!.text);
+    const out = { text: '' };
+    expect(await runTestCommand({ dir }, io(out))).toBe(0);
+    expect(out.text).toBe(all[all.indexOf(test) + 2]!.text);
   });
 
-  it('fails the way the page shows when the first case also expects deploy', () => {
+  it('fails the way the page shows when the first case also expects deploy', async () => {
     const test = all.find((b) => b.text.startsWith('workflow: ci.yml'))!;
     expect(mdx).toContain('Had the first case said `run: [test, deploy]`');
     writeFileSync(
       join(dir, '.github/simulci/tests/ci.test.yml'),
       test.text.replace('run: [test]', 'run: [test, deploy]'),
     );
-    let out = '';
-    const code = runTestCommand({ dir }, { stdout: (t) => (out += t), stderr: (t) => (out += t), env: {} });
-    expect(code).toBe(1);
-    expect(out).toContain(all.at(-1)!.text);
+    const out = { text: '' };
+    expect(await runTestCommand({ dir }, io(out))).toBe(1);
+    expect(out.text).toContain(all.at(-1)!.text);
   });
 });

@@ -1,4 +1,4 @@
-import { isKeptFile, snapshotFiles } from '../input/filter';
+import { isKeptFile, readOnlyFiles } from '../input/filter';
 import type { Walked } from '../input/limits';
 import { asWritten, type FileMeta, textMeta } from '../input/read';
 import type { Choices, DiskConflict, DiskFile } from '../input/save';
@@ -39,7 +39,7 @@ export function reloadPlan(files: Files, read: Pick<Walked, 'files' | 'meta' | '
     take: [],
     conflicts: [],
     from: {},
-    readonly: snapshotFiles(read.files),
+    readonly: readOnlyFiles(read.files),
   };
   const left = new Set(read.skipped.map((s) => s.path));
   const here = [...Object.keys(files.base), ...Object.keys(files.byPath)].filter(

@@ -10,5 +10,19 @@
   },
   "exact": 1756,
   "maybe": 88,
-  "wrong": 0
+  "wrong": 0,
+  "remote": {
+    "runs": 24,
+    "refused": 13,
+    "compared": {
+      "triggers": 37,
+      "checks": 100,
+      "jobs": 100,
+      "steps": 101,
+      "probes": 120
+    },
+    "exact": 443,
+    "maybe": 9,
+    "wrong": 6
+  }
 }

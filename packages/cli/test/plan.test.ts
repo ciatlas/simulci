@@ -141,23 +141,29 @@ describe('planArgs', () => {
 });
 
 describe('planOutput', () => {
-  const plan = (...flags: string[]) => planOutput(planArgs(['--dir', lab, ...flags]));
+  const io = {
+    stderr: () => {},
+    env: {},
+    fetch: () => Promise.reject(new Error('no network')),
+    gh: () => undefined,
+  };
+  const plan = (...flags: string[]) => planOutput(planArgs(['--dir', lab, '--remotes', 'off', ...flags]), io);
 
-  it('exits 2 with a line saying what is wrong with the input', () => {
-    expect(plan('--branch', 'a', '--tag', 'b')).toEqual({
+  it('exits 2 with a line saying what is wrong with the input', async () => {
+    expect(await plan('--branch', 'a', '--tag', 'b')).toEqual({
       text: 'give one of ref, branch or tag\n',
       code: 2,
     });
-    expect(plan('--as-test', '--workflow', 'nope.yml')).toEqual({
+    expect(await plan('--as-test', '--workflow', 'nope.yml')).toEqual({
       text: '--workflow nope.yml: no .github/workflows/nope.yml in the checkout\n',
       code: 2,
     });
-    expect(plan('--assume-file', 'nope.yml')).toEqual({
+    expect(await plan('--assume-file', 'nope.yml')).toEqual({
       text: '--assume-file nope.yml: no such file\n',
       code: 2,
     });
-    expect(plan('--assume-file', lab).text).toMatch(/^--assume-file .*: EISDIR: [^\n]*\n$/);
-    expect(plan('--as-test', '--workflow', '.github/workflows/case-filter-paths.yml')).toMatchObject({
+    expect((await plan('--assume-file', lab)).text).toMatch(/^--assume-file .*: EISDIR: [^\n]*\n$/);
+    expect(await plan('--as-test', '--workflow', '.github/workflows/case-filter-paths.yml')).toMatchObject({
       text: expect.stringMatching(/^workflow: case-filter-paths.yml\n/) as string,
       code: 0,
     });
@@ -207,6 +213,8 @@ describe('simulci plan', () => {
         'plan',
         '--dir',
         lab,
+        '--remotes',
+        'off',
         '--event',
         'push',
         '--branch',
