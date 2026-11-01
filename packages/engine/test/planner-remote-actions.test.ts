@@ -257,6 +257,7 @@ ${before}      - id: a
       '      - uses: actions/checkout@v4\n        with: { ref: main }\n',
       "      - if: github.event.head_commit.message == 'y'\n        uses: actions/checkout@v4\n",
       '      - run: git clone https://example.com/x .\n',
+      '      - uses: actions/checkout@v4\n        with: { sparse-checkout: src }\n',
     ]) {
       const p = run(before);
       expect(stepA(p).outcome, before).toEqual({
@@ -266,6 +267,18 @@ ${before}      - id: a
       });
       expect(p.unknowns.map((u) => u.id)).toContain(`${CI}#call>${CALLEE}#j/steps.a.outcome`);
     }
+  });
+
+  it('cannot tell after a checkout that fails', () => {
+    const before = '      - continue-on-error: true\n        uses: actions/checkout@v4\n';
+    const a = stepA(run(before, [{ uses: 'actions/checkout@v4', outcome: 'failure' }]));
+    expect(a.outcome.known).toBe(false);
+  });
+
+  it('keeps the caller’s files through a default checkout that may be skipped', () => {
+    const twice =
+      "      - uses: actions/checkout@v4\n      - if: github.event.head_commit.message == 'y'\n        uses: actions/checkout@v4\n";
+    expect(stepA(run(twice)).composite?.path).toBe('.github/actions/x');
   });
 
   it('takes a mocked outcome', () => {
