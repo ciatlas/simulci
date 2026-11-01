@@ -318,6 +318,78 @@ describe('loadRemotes: where each commit comes from (§ 2.5)', () => {
     ]);
   });
 
+  it('row 2 reads past the closure as core would: the cap, the depth, the digest, what the lockfile lacks', async () => {
+    const step = (uses: string[]) =>
+      `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n${uses.map((u) => `      - uses: ${u}\n`).join('')}`;
+    const composite = (uses: string) => `runs:\n  using: composite\n  steps:\n    - uses: ${uses}\n`;
+    const covered = (refs: string[], commit: string) =>
+      actionsLock({ '.github/workflows/ci.yml': refs }, Object.fromEntries(refs.map((r) => [r, commit])));
+
+    // 200 reads at most, the reads after the closure included.
+    const keys = Array.from({ length: 120 }, (_, i) => `octo/k${i}@v1`);
+    const many: Record<string, Repo> = Object.fromEntries(
+      keys.map((k) => [
+        k.split('@')[0]!,
+        {
+          refs: { v1: SHA_C },
+          files: { [SHA_C]: { 'action.yml': ACTION_YML }, [SHA_D]: { 'action.yml': ACTION_YML } },
+        },
+      ]),
+    );
+    const capped = await loadRemotes(
+      checkout({ '.github/workflows/actions.lock': covered(keys, SHA_D) }),
+      { '.github/workflows/ci.yml': step(keys), '.github/workflows/other.yml': step(keys) },
+      host('fetch', fakeGitHub(many).fetch),
+    );
+    expect(capped.remotes.sources.length).toBe(200);
+    expect(capped.remotes.limited?.length).toBe(40);
+
+    // What a tenth-level read calls is past the limit, as core says of its own.
+    const chain: Record<string, Repo> = {
+      'octo/act': {
+        refs: { v1: SHA_C },
+        files: { [SHA_C]: { 'action.yml': composite('octo/c2@v1') }, [SHA_D]: { 'action.yml': ACTION_YML } },
+      },
+    };
+    for (let i = 2; i <= 11; i++)
+      chain[`octo/c${i}`] = {
+        refs: { v1: SHA_A },
+        files: { [SHA_A]: { 'action.yml': i < 11 ? composite(`octo/c${i + 1}@v1`) : ACTION_YML } },
+      };
+    const deep = await loadRemotes(
+      checkout({ '.github/workflows/actions.lock': covered([ACT], SHA_D) }),
+      { '.github/workflows/ci.yml': step([ACT]), '.github/workflows/other.yml': step([ACT]) },
+      host('fetch', fakeGitHub(chain).fetch),
+    );
+    expect(deep.remotes.limited).toEqual(['octo/c11@v1']);
+
+    // A lockfile from before pins locked the covered ref as written: its digest still holds for the pin's commit.
+    const repos = REPOS();
+    repos['octo/act']!.files[SHA_D] = { 'action.yml': 'tampered\n' };
+    const old = await loadRemotes(
+      checkout({
+        [REMOTES_LOCK_FILE]: lockText({ [ACT]: entry(SHA_D, 'action', 'action.yml', `${ACTION_YML}# v2\n`) }),
+        '.github/workflows/actions.lock': covered([ACT], SHA_D),
+      }),
+      { '.github/workflows/ci.yml': step([ACT]) },
+      host('lock', fakeGitHub(repos).fetch),
+    );
+    expect(old.remotes.failed?.map((f) => [f.ref, f.kind, f.failure])).toEqual([
+      [`octo/act@${SHA_D}`, 'action', 'digest'],
+    ]);
+
+    // The workflow the lock does not cover reads the ref as written, so the lockfile's lack of it is said.
+    const unlocked = await loadRemotes(
+      checkout({
+        [REMOTES_LOCK_FILE]: lockText({}),
+        '.github/workflows/actions.lock': covered([ACT], SHA_D),
+      }),
+      { '.github/workflows/ci.yml': step([ACT]), '.github/workflows/other.yml': step([ACT]) },
+      host('lock', fakeGitHub(REPOS()).fetch),
+    );
+    expect(unlocked.issues.map((i) => i.message)).toEqual([`${ACT} is not in ${REMOTES_LOCK_FILE}`]);
+  });
+
   it('row 2 never pins a reusable workflow, and a broken actions.lock is named and not used', async () => {
     const gh = fakeGitHub(REPOS());
     const lock = actionsLock({ '.github/workflows/ci.yml': [DEPLOY] }, { 'octo/ship@v1': SHA_B });
