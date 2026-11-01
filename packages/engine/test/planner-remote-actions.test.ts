@@ -124,7 +124,10 @@ runs:
     expect(codes(p)).toEqual(['unsupported']);
     const local = simulate({
       files: {
-        [CI]: reading('./.github/actions/a', 'x'),
+        [CI]: reading('./.github/actions/a', 'x').replace(
+          '      - id: a',
+          '      - uses: actions/checkout@v4\n      - id: a',
+        ),
         '.github/actions/a/action.yml':
           'runs:\n  using: composite\n  steps: [{ uses: ./.github/actions/a }]\n',
       },
@@ -133,7 +136,7 @@ runs:
     expect(local.diagnostics.map((d) => d.message)).toEqual([
       '.github/actions/a: a composite action that uses itself is not planned',
     ]);
-    expect(steps(local)[0]!.composite!.steps[0]!.composite).toBeUndefined();
+    expect(steps(local)[1]!.composite!.steps[0]!.composite).toBeUndefined();
   });
 });
 

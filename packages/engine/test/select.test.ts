@@ -29,9 +29,9 @@ jobs:
   use:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - id: u
         uses: ./.github/actions/comp
-      - uses: actions/checkout@v4
   gated:
     if: false
     runs-on: ubuntu-latest
@@ -90,7 +90,7 @@ describe('selectNodes', () => {
     ]);
     expect(paths(p, 'test[OS=ubuntu-latest].#2')).toEqual([['step', 'test[os=ubuntu-latest].#2']]);
     expect(paths(p, 'ci:use')).toEqual([['job', 'use']]);
-    expect(paths(p, 'use.#2')).toEqual([['step', 'use.#2']]);
+    expect(paths(p, 'use.#1')).toEqual([['step', 'use.#1']]);
     expect(selectNodes(p, 'test.unit', 'ci').nodes[0]!.step!.stepId).toBe('unit');
   });
 
@@ -126,7 +126,7 @@ describe('selectNodes', () => {
     );
     expect(fails(p, 'use[os=x]')).toBe("T204 'use' has no matrix; drop the [os=x]");
     expect(fails(p, 'test.lint')).toBe("T204 no step 'lint' in 'test[os=ubuntu-latest]' (steps: unit, #2)");
-    expect(fails(p, 'use.#5')).toBe("T204 no step #5 in 'use' (steps: u, #2)");
+    expect(fails(p, 'use.#5')).toBe("T204 no step #5 in 'use' (steps: #1, u)");
     expect(fails(p, 'test/x')).toBe(
       "T204 'test' does not call a reusable workflow; / descends into a called workflow (write test.x for a step)",
     );
@@ -137,8 +137,8 @@ describe('selectNodes', () => {
     expect(fails(p, 'test.unit/x')).toBe(
       "T204 'test[os=ubuntu-latest].unit' is a run step; / descends into a composite action's steps",
     );
-    expect(fails(p, 'use.#2/x')).toBe(
-      "T204 'use.#2' uses actions/checkout@v4, which is not a composite action in the project; its steps are not in the plan",
+    expect(fails(p, 'use.#1/x')).toBe(
+      "T204 'use.#1' uses actions/checkout@v4, which is not a composite action in the project; its steps are not in the plan",
     );
     expect(fails(p, 'use.u/nope')).toBe("T204 no step 'nope' in 'use.u' (steps: inner, #2)");
     expect(fails(p, 'release.yml:test')).toBe(
@@ -160,7 +160,7 @@ describe('selectNodes', () => {
     expect(unitPathOfId(`${callee.jobs[0]!.legs[0]!.steps![0]!.id}.outputs.version`, map)).toBe(
       'call/x.v.outputs.version',
     );
-    const inner = wf.jobs[2]!.legs[0]!.steps![0]!.composite!.steps[1]!;
+    const inner = wf.jobs[2]!.legs[0]!.steps![1]!.composite!.steps[1]!;
     expect(unitPathOfId(`${inner.id}.outcome`, map)).toBe('use.u/#2.outcome');
     expect(unitPathOfId('vars.DEPLOY', map)).toBe('vars.DEPLOY');
   });

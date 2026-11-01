@@ -863,10 +863,11 @@ describe('one row per remote, with the use that says most about its pin', () => 
   it('pins an action of a local composite under the workflow that runs it', () => {
     const locked = (ref: string) =>
       `  ${ref}:\n    sha: ${SHA}\n    kind: action\n    file: action.yml\n    digest: sha256-${'A'.repeat(43)}=\n`;
+    // A clone fills the workspace without a remote the covered workflow's lock would have to pin.
+    const steps = 'steps: [{ run: gh repo clone "$GITHUB_REPOSITORY" . }, { uses: ./.github/actions/a }]';
     const files = {
-      [CI]: 'on: push\njobs:\n  x:\n    runs-on: x\n    steps: [{ uses: ./.github/actions/a }]\n',
-      '.github/workflows/a.yml':
-        'on: push\njobs:\n  y:\n    runs-on: x\n    steps: [{ uses: ./.github/actions/a }]\n',
+      [CI]: `on: push\njobs:\n  x:\n    runs-on: x\n    ${steps}\n`,
+      '.github/workflows/a.yml': `on: push\njobs:\n  y:\n    runs-on: x\n    ${steps}\n`,
       '.github/actions/a/action.yml': 'runs:\n  using: composite\n  steps: [{ uses: octo/act@v1 }]\n',
       '.github/workflows/actions.lock': actionsLock([CI]),
       // The ref as written is the uncovered workflow's live read; the pin is locked under its own commit.

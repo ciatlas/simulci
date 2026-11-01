@@ -1144,15 +1144,19 @@ class Planner {
     return this.remoteAction(remote, sid, withValues);
   }
 
-  /** A step whose `uses:` names no remote: this repository's action, a remote's `./` in the workspace, else a model or nothing. */
+  /**
+   * A step whose `uses:` names no remote: this repository's action, a remote's `./` in the workspace, else a model or
+   * nothing. Any `./` before a checkout fails, this repository's too (lab R3).
+   */
   private localStep(
     step: StepDecl,
     sid: NodeId,
     withValues: Record<string, Value<string>>,
     scope: Scope,
   ): StepTarget {
-    const path = scope.unit.external ? step.uses!.workspacePath : undefined;
-    if (path !== undefined) return this.workspaceAction(path, sid);
+    const path = step.uses!.workspacePath;
+    if (path !== undefined && (scope.unit.external || this.workspace === 'empty'))
+      return this.workspaceAction(path, sid);
     const action = scope.unit.external ? undefined : this.index.actionOf(step);
     if (!action || this.cyclic(action, sid)) return this.modelTarget(step.uses!.raw, sid, withValues);
     return { action, scope: { unit: action, ...(scope.running ? { running: scope.running } : {}) } };

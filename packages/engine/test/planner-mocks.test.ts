@@ -454,6 +454,7 @@ jobs:
   comp:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - id: c
         uses: ./.github/actions/comp
       - if: steps.c.outcome == 'failure'
@@ -474,13 +475,13 @@ jobs:
     const [call, comp] = plan.workflows.find((w) => w.path === '.github/workflows/ci.yml')!.jobs;
     expect(call!.result).toEqual({ known: true, value: 'failure' });
     expect(call!.legs[0]!.call!.jobs[0]!.result).toEqual({ known: true, value: 'failure' });
-    const c = comp!.legs[0]!.steps![0]!;
+    const c = comp!.legs[0]!.steps![1]!;
     expect(c.composite!.steps.map((s) => [s.runs.verdict, s.outcome])).toEqual([
       ['yes', { known: true, value: 'failure' }],
       ['yes', { known: true, value: 'success' }],
     ]);
     expect(c.outcome).toEqual({ known: true, value: 'failure' });
-    expect(comp!.legs[0]!.steps![1]!.runs.verdict).toBe('no');
+    expect(comp!.legs[0]!.steps![2]!.runs.verdict).toBe('no');
     expect(codes(plan)).toEqual([]);
   });
 });
