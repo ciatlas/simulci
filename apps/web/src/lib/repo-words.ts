@@ -40,7 +40,11 @@ export const isTarget = (source: Source, t: RepoTarget): boolean =>
   source.kind === 'github' &&
   source.owner.toLowerCase() === t.owner.toLowerCase() &&
   source.repo.toLowerCase() === t.repo.toLowerCase() &&
-  source.ref === (t.ref ?? source.defaultBranch);
+  sameRef(source.ref, t.ref ?? source.defaultBranch);
+
+/** Two refs alike: a full SHA in any letter case (a source keeps it in lower case), any other name exactly. */
+const sameRef = (a: string, b: string): boolean =>
+  a === b || (/^[0-9a-f]{40}$/i.test(a) && a.toLowerCase() === b.toLowerCase());
 
 /** The patch of a source with no repository to name. */
 export const PATCH_NAME = 'simulci-changes.patch';
@@ -51,9 +55,11 @@ export const shortSha = (sha: string): string => sha.slice(0, 7);
 export const repoName = (source: Pick<GitHubSource, 'owner' | 'repo'>): string =>
   `${source.owner}/${source.repo}`;
 
-/** `octo/ship @ main (3f2a9c1)`: the status line's name of a GitHub source. */
+/** `octo/ship @ main (3f2a9c1)`, or `octo/ship @ 3f2a9c1` when the ref is the commit: the status line's name of it. */
 export const repoAt = (source: GitHubSource): string =>
-  `${repoName(source)} @ ${source.ref} (${shortSha(source.sha)})`;
+  source.ref === source.sha
+    ? `${repoName(source)} @ ${shortSha(source.sha)}`
+    : `${repoName(source)} @ ${source.ref} (${shortSha(source.sha)})`;
 
 /** `octo-ship-3f2a9c1.patch`, or `simulci-changes.patch`. */
 export const patchName = (source: Source): string =>

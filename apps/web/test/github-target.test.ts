@@ -23,7 +23,15 @@ describe('the repository field', () => {
       ],
       ['https://github.com/octo/ship/issues', { owner: 'octo', repo: 'ship' }],
     ];
-    for (const [input, target] of cases) expect(parseRepoInput(input), input).toEqual({ ok: true, target });
+    for (const [input, target] of cases) {
+      const parsed = parseRepoInput(input);
+      expect(parsed.ok && parsed.target, input).toEqual(target);
+    }
+    // A tree's or a file's path is kept from the ref on: a branch may have a `/` in its name.
+    expect(parseRepoInput('https://github.com/octo/ship/tree/dev/.github')).toMatchObject({
+      segments: ['dev', '.github'],
+    });
+    expect(parseRepoInput('octo/ship@dev')).not.toHaveProperty('segments');
   });
 
   it('says why a pull request or another host does not open, and nothing of what is typed halfway', () => {
@@ -43,6 +51,7 @@ describe('the repository field', () => {
       '-octo/ship',
       'octo/..',
       'https://github.com/octo',
+      'https://github.com/octo/ship/tree/%zz',
     ])
       expect(parseRepoInput(input), input).toEqual({ ok: false });
   });

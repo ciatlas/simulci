@@ -189,7 +189,7 @@ describe('reading a public repository', () => {
     );
     const info = await repoInfo(client, { owner: 'octo', repo: 'ship' });
     await expect(commitOf(client, info, 'nope')).rejects.toThrow(
-      'Octo/Ship has no branch, tag or commit named nope',
+      'Octo/Ship has no branch, tag or commit named “nope”.',
     );
   });
 

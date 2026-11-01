@@ -16,11 +16,13 @@ import { clockOf } from '../state/snapshot';
  * cache is left out (`no-store`), so Fetch again never sees an answer up to a minute old. Nothing here holds a token.
  */
 
-/** A response kept for revalidation: its ETag, its body and its media type. */
+/** A response kept for revalidation: its ETag, its body, its media type and its pages' `Link`. */
 export interface Kept {
   etag: string;
   body: Uint8Array;
   type: string | null;
+  /** A 304 need not repeat it, and a list's next page is named there. */
+  link?: string;
 }
 
 /** How many responses are kept for revalidation; the oldest goes first. */
@@ -39,6 +41,7 @@ const noStore = (init: Parameters<FetchLike>[1]): Parameters<FetchLike>[1] =>
 function fromKept(res: Response, kept: Kept): Response {
   const headers = new Headers(res.headers);
   if (kept.type) headers.set('content-type', kept.type);
+  if (kept.link && !headers.has('link')) headers.set('link', kept.link);
   headers.delete('content-length');
   return new Response(kept.body.slice(), { status: 200, headers });
 }
@@ -72,7 +75,8 @@ export function revalidating(fetch: FetchLike, kept: Revalidation = new Map(), m
     const etag = keepable(res);
     if (!etag) return res;
     const body = new Uint8Array(await res.arrayBuffer());
-    keep(key, { etag, body, type: res.headers.get('content-type') });
+    const link = res.headers.get('link');
+    keep(key, { etag, body, type: res.headers.get('content-type'), ...(link ? { link } : {}) });
     return new Response(body.slice(), { status: res.status, headers: res.headers });
   };
 }
