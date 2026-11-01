@@ -623,6 +623,64 @@ describe('the limits GitHub refuses a run at (lab R7)', () => {
   });
 });
 
+describe('a workflow its actions.lock covers, with a step the lock lacks (lab R9)', () => {
+  const lockFor = (path: string) => `version: v0.0.3
+workflows:
+  ${path}:
+    - octo/act@v1
+dependencies:
+  octo/act@v1:
+    commit: sha1-${SHA}
+`;
+  const ACTION = '.github/actions/local/action.yml';
+  const files = (steps: string, lock = lockFor(CI)) => ({
+    [CI]: `on: push\njobs:\n  a:\n    runs-on: x\n    steps:\n${steps}`,
+    [ACTION]: 'runs:\n  using: composite\n  steps: [{ uses: octo/other@v2 }]\n',
+    '.github/workflows/actions.lock': lock,
+  });
+  const plan = (f: Record<string, string>) => simulate({ files: f, scenario: SCENARIO });
+
+  it('refuses it at dispatch, naming the pin', () => {
+    const p = plan(files('      - uses: octo/act@v1\n      - uses: octo/act/sub@main\n'));
+    const wf = p.workflows[0]!;
+    expect(wf.triggered.verdict).toBe('no');
+    expect(decidingReason(wf.triggered.chain, 'no')).toEqual({ kind: 'limit', limit: 'actions-lock' });
+    expect(wf.jobs).toEqual([]);
+    expect(p.diagnostics.map((d) => [d.code, d.message, d.node])).toEqual([
+      [
+        'refused',
+        `GitHub does not start ${CI}: its .github/workflows/actions.lock has no pin for octo/act@main`,
+        CI,
+      ],
+    ]);
+  });
+
+  it('runs it when every remote action of its own steps is pinned, whatever its path and case', () => {
+    const p = plan(
+      files(
+        '      - uses: Octo/Act/sub@v1\n      - uses: ./.github/actions/local\n      - uses: docker://x\n',
+      ),
+    );
+    expect(p.workflows[0]!.triggered.verdict).toBe('yes');
+    expect(codes(p)).not.toContain('refused');
+  });
+
+  it('runs the same steps in a workflow the lock does not cover', () => {
+    const p = plan(files('      - uses: octo/act@main\n', lockFor('.github/workflows/other.yml')));
+    expect(p.workflows[0]!.triggered.verdict).toBe('yes');
+  });
+
+  it('does not judge the steps of a local action or of a called workflow', () => {
+    const called = '.github/workflows/callee.yml';
+    const p = plan({
+      ...files('      - uses: ./.github/actions/local\n'),
+      [CI]: `on: push\njobs:\n  a:\n    runs-on: x\n    steps: [{ uses: ./.github/actions/local }]\n  b:\n    uses: ./${called}\n`,
+      [called]: 'on: workflow_call\njobs:\n  c:\n    runs-on: x\n    steps: [{ uses: octo/act@main }]\n',
+    });
+    expect(p.workflows.find((w) => w.path === CI)!.triggered.verdict).toBe('yes');
+  });
+});
+
 describe('remotes and the lockfiles', () => {
   const LOCK = '.github/simulci/remotes.lock.yml';
   const lockFile = (refs: Record<string, string>) =>

@@ -6,7 +6,7 @@ import { measureRemote, NOT_COMPARED, refusals, remoteRuns } from './lab-remote'
  * Conformance against the routes lab's remote cases (fixtures/routes-lab/cases.md, R1-R10): every outcome GitHub
  * reported for a run calling ciatlas/simulci-lab-remote, and every dispatch it refused, graded against the plan with
  * the remote files fed in as a host reads them. scripts/lab-accuracy.ts writes the counts to accuracy.json's
- * `remote` block. The engine predicts six outcomes wrongly; they are pinned here by case, so a fix or a new miss
+ * `remote` block. The engine predicts four outcomes wrongly; they are pinned here by case, so a fix or a new miss
  * fails this test until accuracy.json and this list are updated (~/.claude/plans/simulci/m4-pass/wave3/l3.md).
  */
 
@@ -35,7 +35,7 @@ const CASES: Record<string, string[]> = {
 
 const wf = (file: string) => `.github/workflows/${file}`;
 
-/** The engine's six wrong predictions, by case (the PR that added this test lists what GitHub did in each). */
+/** The engine's four wrong predictions, by case (the PR that added this test lists what GitHub did in each). */
 const KNOWN_WRONG = [
   // R3: a remote step's `./` is the job's workspace: empty without a checkout, the caller's files after one.
   `probes ${wf('case-remote-workspace-action.yml')} [workflow_dispatch refs/heads/main] call / bare probe ` +
@@ -47,9 +47,6 @@ const KNOWN_WRONG = [
     'predicted {"known":true,"value":"a"}, was b',
   `probes ${wf('case-remote-actions-lock-local-callee.yml')} [workflow_dispatch refs/heads/main] call / a probe ` +
     'r9-action: predicted {"known":true,"value":"a"}, was b',
-  // R9: a covered workflow with a `uses:` its lock lacks is refused at dispatch.
-  `triggers ${wf('case-remote-actions-lock-missing.yml')} [refused refs/heads/main 2035977]: predicted yes, refused`,
-  `triggers ${wf('case-remote-actions-lock-missing.yml')} [refused refs/heads/main 4061055]: predicted yes, refused`,
 ];
 
 /** The commits GitHub ran that a host following `remotesNeeded` does not read: R9's uncovered uses after the move. */
@@ -92,7 +89,7 @@ describe('routes lab, remote cases', () => {
     expect(measured.inputs).toEqual(KNOWN_INPUTS);
   });
 
-  it('predicts wrongly only the six known outcomes of R3 and R9', () => {
+  it('predicts wrongly only the four known outcomes of R3 and R9', () => {
     expect(measured.wrong).toEqual(KNOWN_WRONG);
     expect(measured.accuracy.wrong).toBe(KNOWN_WRONG.length);
   });

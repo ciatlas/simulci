@@ -1,5 +1,7 @@
 import {
+  ACTIONS_LOCK_FILE,
   type ActionDecl,
+  actionsLockKey,
   type Binding,
   type Combination,
   calledFunctions,
@@ -450,30 +452,49 @@ class Planner {
 
   /**
    * GitHub refuses to start a run whose reusable workflows nest more than `maxDepth` deep or that names more than 50 of
-   * them, whatever its `if:`s say (lab R7): the workflow does not start, no job fails.
+   * them, whatever its `if:`s say (lab R7), or whose `actions.lock` lacks a pin (lab R9): the workflow does not start,
+   * no job fails.
    */
   private refusal(wf: WorkflowDecl, id: NodeId, triggered: Decision): Decision {
     if (triggered.verdict === 'no') return triggered;
-    const keys = new Set<string>();
-    const depth = this.callDepth(wf, new Map(), new Set(), keys);
-    let limit: string;
-    let why: string;
-    if (depth > this.maxDepth) {
-      limit = 'nesting';
-      why = Number.isFinite(depth)
-        ? `its reusable workflows nest ${depth} deep, more than ${this.maxDepth}`
-        : 'its reusable workflows call each other in a cycle';
-    } else if (keys.size > MAX_CALLED_WORKFLOWS) {
-      limit = 'workflows';
-      why = `it names ${keys.size} reusable workflows, more than ${MAX_CALLED_WORKFLOWS}`;
-    } else return triggered;
+    const refused = this.callLimit(wf) ?? this.unpinnedAction(wf);
+    if (!refused) return triggered;
     this.diagnostics.push({
       severity: 'warning',
       code: 'refused',
-      message: `GitHub does not start ${wf.path}: ${why}`,
+      message: `GitHub does not start ${wf.path}: ${refused.why}`,
       node: id,
     });
-    return { verdict: 'no', chain: [...triggered.chain, { kind: 'limit', limit }] };
+    return { verdict: 'no', chain: [...triggered.chain, { kind: 'limit', limit: refused.limit }] };
+  }
+
+  private callLimit(wf: WorkflowDecl): Refused | undefined {
+    const keys = new Set<string>();
+    const depth = this.callDepth(wf, new Map(), new Set(), keys);
+    if (depth > this.maxDepth) {
+      const why = Number.isFinite(depth)
+        ? `its reusable workflows nest ${depth} deep, more than ${this.maxDepth}`
+        : 'its reusable workflows call each other in a cycle';
+      return { limit: 'nesting', why };
+    }
+    if (keys.size > MAX_CALLED_WORKFLOWS)
+      return {
+        limit: 'workflows',
+        why: `it names ${keys.size} reusable workflows, more than ${MAX_CALLED_WORKFLOWS}`,
+      };
+    return undefined;
+  }
+
+  /**
+   * A workflow `actions.lock` covers, one of whose own steps uses a remote action the lock does not list for it (lab
+   * R9, HTTP 422 at dispatch). Not judged here: the steps of the actions it uses, and the workflows it calls.
+   */
+  private unpinnedAction(wf: WorkflowDecl): Refused | undefined {
+    const pins = this.loaded.remotes.actionsLock?.workflows.get(wf.path);
+    const key = pins && !wf.external ? ownActionKeys(wf).find((k) => !pins.has(k)) : undefined;
+    return key === undefined
+      ? undefined
+      : { limit: 'actions-lock', why: `its ${ACTIONS_LOCK_FILE} has no pin for ${key}` };
   }
 
   /**
@@ -1547,6 +1568,22 @@ function stepShell(
 
 /** GitHub's limit on the reusable workflows one run names (lab R7). */
 const MAX_CALLED_WORKFLOWS = 50;
+
+/** The remote actions the steps of a workflow's own jobs use, as `actions.lock` keys them. */
+function ownActionKeys(wf: WorkflowDecl): string[] {
+  return Object.values(wf.jobs).flatMap(({ steps }) =>
+    steps.flatMap(({ uses }) => {
+      const ref = uses && remoteRefOf(wf, uses);
+      return ref?.kind === 'action' ? [actionsLockKey(ref.owner, ref.repo, ref.ref)] : [];
+    }),
+  );
+}
+
+/** Why GitHub does not start a workflow: the limit (`LimitReason.limit`) and the words. */
+interface Refused {
+  limit: string;
+  why: string;
+}
 
 /** How much a `uses:`'s pin context says about a remote's commit: an `actions.lock` pin, a local use, a remote one. */
 const contextRank = (c: PinContext): number => (c.actionsLock !== undefined ? 2 : c.inRemote ? 0 : 1);
