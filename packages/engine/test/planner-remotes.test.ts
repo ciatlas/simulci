@@ -826,6 +826,28 @@ describe('one row per remote, with the use that says most about its pin', () => 
     ]);
   });
 
+  it('labels each row by its own use when a full-SHA ref and a pin read one file, whatever the input order', () => {
+    const A = '.github/workflows/a.yml';
+    const files = {
+      [A]: usingAct.replace('octo/act@v1', `octo/act@${SHA_B}`),
+      [CI]: usingAct,
+      '.github/workflows/actions.lock': actionsLock([CI]),
+    };
+    const one = (pinned: RemoteSourceInput['pinned']): RemoteSourceInput => ({
+      ...source(`octo/act@${SHA_B}`, 'runs:\n  using: node24\n  main: x.js\n', SHA_B, 'action'),
+      pinned,
+    });
+    const plans = [
+      [one('sha-ref'), one('actions-lock')],
+      [one('actions-lock'), one('sha-ref')],
+    ].map((sources) => simulate({ files, scenario: SCENARIO, remotes: { sources }, remotesMode: 'fetch' }));
+    expect(JSON.stringify(plans[0])).toBe(JSON.stringify(plans[1]));
+    expect(plans[0]!.remotes!.map((r) => [r.ref, r.pinned])).toEqual([
+      [`octo/act@${SHA_B}`, 'sha-ref'],
+      ['octo/act@v1', 'actions-lock'],
+    ]);
+  });
+
   it('reads a covered workflow’s local callee live: it is its own running file (lab R9)', () => {
     const called = '.github/workflows/callee.yml';
     const files = {

@@ -76,6 +76,7 @@ import {
   pinFor as remotePin,
   REMOTES_LOCK_FILE,
   type RemoteInputs,
+  type RemotePinned,
   type RemotesMode,
 } from './remotes/lock';
 import {
@@ -961,10 +962,10 @@ class Planner {
     const out: RemoteUse[] = [];
     for (const site of this.remoteUses.values()) {
       const at = [...new Set(site.at.map((a) => (typeof a === 'string' ? a : a.id)))].sort(byCodeUnit);
-      const { issue } = remotePin(site.target.ref, site.context);
-      if (issue) this.diagnostics.push({ ...issue, node: at[0]! });
+      const pin = remotePin(site.target.ref, site.context);
+      if (pin.issue) this.diagnostics.push({ ...pin.issue, node: at[0]! });
       if (site.target.ref.kind === 'workflow' || site.target.state !== 'not-fetched')
-        out.push(remoteUseOf(site.target, at));
+        out.push(remoteUseOf(site.target, at, pin.pinned));
     }
     const { lockError, mode } = this.loaded.remotes;
     if (lockError !== undefined && mode !== 'off') {
@@ -1674,11 +1675,15 @@ const atRefName = (ref: RemoteRef, refName: string | undefined): string =>
 
 const refNameOf = (display: string): string => display.slice(display.lastIndexOf('@') + 1);
 
-function remoteUseOf(target: RemoteTarget, at: NodeId[]): RemoteUse {
+/**
+ * A row of `RunPlan.remotes`. Its `pinned` is the use's own when the ref or its context names the commit (a full SHA,
+ * `actions.lock`, a `./`'s parent): one file at one commit may be read for a use of each kind (`pinnedRef`, lab R9).
+ */
+function remoteUseOf(target: RemoteTarget, at: NodeId[], pinned: RemotePinned | undefined): RemoteUse {
   const use: RemoteUse = { ref: target.display, kind: target.ref.kind, state: target.state, at };
   if (target.source) {
     use.sha = target.source.sha;
-    use.pinned = target.source.pinned;
+    use.pinned = pinned && pinned !== 'lockfile' && pinned !== 'resolved' ? pinned : target.source.pinned;
     if (target.source.host !== undefined) use.host = target.source.host;
   }
   if (target.failure) use.failure = target.failure.failure;

@@ -83,7 +83,13 @@ const sortFailures = (failed: readonly RemoteFailureInput[]): RemoteFailureInput
 const sortSources = (sources: readonly RemoteSourceInput[]): RemoteSourceInput[] =>
   sources
     .map((s) => ({ s, key: remoteKey(s.ref) }))
-    .sort((a, b) => byCodeUnit(a.key, b.key) || byCodeUnit(a.s.ref, b.s.ref) || byCodeUnit(a.s.sha, b.s.sha))
+    .sort(
+      (a, b) =>
+        byCodeUnit(a.key, b.key) ||
+        byCodeUnit(a.s.ref, b.s.ref) ||
+        byCodeUnit(a.s.sha, b.s.sha) ||
+        byCodeUnit(a.s.pinned, b.s.pinned),
+    )
     .map(({ s }) => s);
 
 /**

@@ -382,8 +382,9 @@ function closurePin(
 
 /**
  * The closure's failures, with an `actions.lock` read's under its pinned ref, as the engine looks it up (lab R9). Core
- * records one failure per ref: when the pin's commit was not read, the failure is the pin's; it stays the ref's own too
- * only when a remote body also uses the ref and no other commit of it was read.
+ * records one failure per ref, the deepest level's: when the pin's commit was not read and a remote body did not also
+ * ask for the ref, or did and read it, the failure is the pin's. When both failed it is the remote body's, and
+ * `readNeeded` reads the pin again for its own.
  */
 function pinnedFailures(
   closure: Awaited<ReturnType<typeof fetchRemoteClosure>>,
@@ -395,7 +396,7 @@ function pinnedFailures(
     const read = closure.sources.filter((s) => remoteKey(s.ref.raw) === key);
     if (sha === undefined || read.some((s) => s.sha === sha)) return [f];
     const at = { ...f, ref: pinnedRef(parseRemoteRef(f.ref, 'action')!, sha) };
-    return pinned.inRemote.has(key) && !read.length ? [at, f] : [at];
+    return pinned.inRemote.has(key) && !read.length ? [f] : [at];
   });
 }
 

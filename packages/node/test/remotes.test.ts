@@ -390,6 +390,24 @@ describe('loadRemotes: where each commit comes from (§ 2.5)', () => {
     expect(unlocked.issues.map((i) => i.message)).toEqual([`${ACT} is not in ${REMOTES_LOCK_FILE}`]);
   });
 
+  it('row 2 keeps a pin’s failure apart from a remote body’s failure of the same ref', async () => {
+    // ci.yml's pin of octo/act is to E, which octo/act lacks; deploy.yml's octo/act@v1 is locked at C, whose body differs.
+    const SHA_E = 'e'.repeat(40);
+    const root = checkout({
+      [REMOTES_LOCK_FILE]: lockText({
+        [DEPLOY]: entry(SHA_A, 'workflow', '.github/workflows/deploy.yml', DEPLOY_YML),
+        [BUILD_AT_A]: entry(SHA_A, 'workflow', '.github/workflows/build.yml', BUILD_YML),
+        [ACT]: entry(SHA_C, 'action', 'action.yml', 'another body\n'),
+      }),
+      '.github/workflows/actions.lock': actionsLock({ '.github/workflows/ci.yml': [ACT] }, { [ACT]: SHA_E }),
+    });
+    const load = await loadRemotes(root, FILES, host('lock', fakeGitHub(REPOS()).fetch));
+    expect(load.remotes.failed?.map((f) => [f.ref, f.kind, f.failure])).toEqual([
+      [`octo/act@${SHA_E}`, 'action', 'not-found'],
+      [ACT, 'action', 'digest'],
+    ]);
+  });
+
   it('row 2 never pins a reusable workflow, and a broken actions.lock is named and not used', async () => {
     const gh = fakeGitHub(REPOS());
     const lock = actionsLock({ '.github/workflows/ci.yml': [DEPLOY] }, { 'octo/ship@v1': SHA_B });
