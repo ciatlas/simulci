@@ -49810,13 +49810,8 @@ async function closureOf(root, files, host, pinning) {
 			...pinContext(r, parent, local)
 		});
 		if (p.issue) run.issues.set(`${p.issue.code} ${p.issue.message}`, p.issue);
-		const issue = !parent && "sha" in p && p.pinned === "actions-lock" && uncovered.has(remoteKey(r.raw)) ? pinFor$1(r, {
-			mode: pinning.mode,
-			...pinning.lock ? { lock: pinning.lock } : {}
-		}).issue : void 0;
-		if (issue) run.issues.set(`${issue.code} ${issue.message}`, issue);
+		if (!parent && p.pinned === "actions-lock") topPin(run, pinning, r, p.sha, uncovered.has(remoteKey(r.raw)));
 		notePin(pinned, r, parent, p);
-		if (!parent && p.pinned === "actions-lock") run.kinds.set(remoteKey(pinnedRef(r, p.sha)), r.kind);
 		return "sha" in p ? closurePin(run, pinning.lock, r, p) : void 0;
 	};
 	const options = fetchOptions(host);
@@ -49835,6 +49830,19 @@ async function closureOf(root, files, host, pinning) {
 		actionsLock
 	}, host, options);
 	return done;
+}
+/**
+* A pin of one of the checkout's own refs: its pinned ref's kind, for its failures; and, since core asks once per ref,
+* the as-written pin's issue when a workflow the lock does not cover reads the same ref as written (lab R9).
+*/
+function topPin(run, pinning, r, sha, uncovered) {
+	run.kinds.set(remoteKey(pinnedRef(r, sha)), r.kind);
+	if (!uncovered) return;
+	const { issue } = pinFor$1(r, {
+		mode: pinning.mode,
+		...pinning.lock ? { lock: pinning.lock } : {}
+	});
+	if (issue) run.issues.set(`${issue.code} ${issue.message}`, issue);
 }
 function notePin(pinned, r, parent, p) {
 	if (parent) {

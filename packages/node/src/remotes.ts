@@ -323,14 +323,9 @@ async function closureOf(
       ...pinContext(r, parent, local),
     });
     if (p.issue) run.issues.set(`${p.issue.code} ${p.issue.message}`, p.issue);
-    // Core asks once per ref; a workflow the lock does not cover reads the same ref as written (lab R9).
-    const live = !parent && 'sha' in p && p.pinned === 'actions-lock' && uncovered.has(remoteKey(r.raw));
-    const issue = live
-      ? pinFor(r, { mode: pinning.mode, ...(pinning.lock ? { lock: pinning.lock } : {}) }).issue
-      : undefined;
-    if (issue) run.issues.set(`${issue.code} ${issue.message}`, issue);
+    if (!parent && p.pinned === 'actions-lock')
+      topPin(run, pinning, r, p.sha, uncovered.has(remoteKey(r.raw)));
     notePin(pinned, r, parent, p);
-    if (!parent && p.pinned === 'actions-lock') run.kinds.set(remoteKey(pinnedRef(r, p.sha)), r.kind);
     return 'sha' in p ? closurePin(run, pinning.lock, r, p) : undefined;
   };
   // One map of unreachable hosts for the closure and the reads after it, so a host down is asked once.
@@ -343,6 +338,17 @@ async function closureOf(
   const done: Run = { ...run, ...closure, failed: pinnedFailures(closure, pinned) };
   await readNeeded(done, sorted, { lock: pinning.lock, actionsLock }, host, options);
   return done;
+}
+
+/**
+ * A pin of one of the checkout's own refs: its pinned ref's kind, for its failures; and, since core asks once per ref,
+ * the as-written pin's issue when a workflow the lock does not cover reads the same ref as written (lab R9).
+ */
+function topPin(run: Run, pinning: Pinning, r: RemoteRef, sha: string, uncovered: boolean): void {
+  run.kinds.set(remoteKey(pinnedRef(r, sha)), r.kind);
+  if (!uncovered) return;
+  const { issue } = pinFor(r, { mode: pinning.mode, ...(pinning.lock ? { lock: pinning.lock } : {}) });
+  if (issue) run.issues.set(`${issue.code} ${issue.message}`, issue);
 }
 
 /** The `actions.lock` commit each of the checkout's own refs was read at, and the refs a remote body uses too. */
