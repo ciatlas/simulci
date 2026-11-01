@@ -253,7 +253,9 @@ export interface WorkflowPlan {
 }
 
 /**
- * A remote workflow or action the plan uses. `simulated`: read and planned from its file; `invalid`: read, but its file
+ * A remote workflow or action the plan uses, once per commit it is read at: an action `actions.lock` pins in some
+ * workflows and not in others has two rows with one `ref` (lab R9), sorted by their first `at`. `simulated`: read and
+ * planned from its file; `invalid`: read, but its file
  * does not parse, so it is planned as not read; `failed`: the host could not read it (`failure` says why); `limit`: past
  * a host's cap; `not-fetched`: the host did not try. Every workflow the plan calls is listed; an action only when the
  * host read it or tried to.

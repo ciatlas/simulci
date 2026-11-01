@@ -35,7 +35,10 @@ export type RemotePinned = 'sha-ref' | 'actions-lock' | 'parent' | 'lockfile' | 
 
 /** A remote's file as a host read it, at the commit `pinned` says it came from. */
 export interface RemoteSourceInput {
-  /** The `uses:` as written, or `owner/repo/path@<parent sha>` for a `./` inside a remote unit. */
+  /**
+   * The `uses:` as written; `owner/repo/path@<parent sha>` for a `./` inside a remote unit; `owner/repo[/path]@<commit>`
+   * for an action `actions.lock` pins (`pinned: 'actions-lock'`, `pinnedRef`), read apart from the same ref read live.
+   */
   ref: string;
   kind: RemoteKind;
   sha: string;
@@ -161,6 +164,13 @@ export interface RemoteRefInput {
   ref: string;
 }
 
+/**
+ * Where a host reads an action `actions.lock` pins: `owner/repo[/path]@<commit>`. GitHub runs the pin only in the
+ * workflows the lock covers, and the ref as written everywhere else (lab R9), so one ref can be read at two commits.
+ */
+export const pinnedRef = (ref: RemoteRefInput, sha: string): string =>
+  `${ref.owner}/${ref.repo}${ref.path ? `/${ref.path}` : ''}@${sha}`;
+
 /** What decides a remote's commit besides the ref itself. Hosts compute the `actions.lock` commit with core. */
 export interface PinContext {
   mode: RemotesMode;
@@ -222,7 +232,8 @@ function earlyPin(ref: RemoteRefInput, ctx: PinContext): EarlyPin | undefined {
 
 function withMismatch(ref: RemoteRefInput, ctx: PinContext, pin: EarlyPin): RemotePin {
   if (ctx.mode === 'off') return pin;
-  const key = keyIn(ctx.lock?.remotes, ref.raw);
+  // An `actions.lock` pin is locked under its own commit's ref; the ref as written is another read (lab R9).
+  const key = keyIn(ctx.lock?.remotes, pin.pinned === 'actions-lock' ? pinnedRef(ref, pin.sha) : ref.raw);
   const locked = key === undefined ? undefined : ctx.lock!.remotes[key]!.sha;
   if (locked === undefined || locked === pin.sha) return pin;
   const by = pin.pinned === 'sha-ref' ? 'its ref' : pin.pinned === 'parent' ? 'its parent' : 'actions.lock';

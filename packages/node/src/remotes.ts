@@ -9,10 +9,12 @@ import {
   createParseContext,
   type FetchLike,
   fetchRemoteClosure,
+  fetchRemoteSourceAt,
   GITHUB_COM_API,
   type GitHubApi,
   memoryRemoteCache,
   parseActionFile,
+  parseRemoteRef,
   parseWorkflowFile,
   type Project,
   type ProjectIndex,
@@ -25,13 +27,17 @@ import {
   type RemoteSourceCache,
   remoteKey,
   remoteRefsOf,
+  resolveRemoteCommit,
   type UnitDecl,
 } from '@ciatlas/core';
 import {
+  type LoadedProject,
   loadFiles,
+  type NeededRemote,
   type PinIssue,
   parseRemotesLock,
   pinFor,
+  pinnedRef,
   type RemoteFailureInput,
   type RemoteInputs,
   type RemotePinned,
@@ -39,6 +45,7 @@ import {
   type RemotesLock,
   type RemotesLockEntry,
   type RemotesMode,
+  remotesNeeded,
   serializeRemotesLock,
 } from '@simulci/engine';
 
@@ -273,6 +280,8 @@ interface Run {
   failed: { ref: string; kind: RemoteFetchError['kind']; error: string }[];
   limited: string[];
   pinned: Map<string, RemotePinned>;
+  /** The pin of each source `readNeeded` read, which names its ref already (one commit can be two reads, R9). */
+  readAs: Map<RemoteSource, RemotePinned>;
   kinds: Map<string, RemoteRef['kind']>;
   issues: Map<string, PinIssue>;
 }
@@ -300,10 +309,12 @@ async function closureOf(
     failed: [],
     limited: [],
     pinned: new Map(),
+    readAs: new Map(),
     kinds: new Map(),
     issues: new Map(),
   };
   const local = localActionsLock(index, actionsLock);
+  const pinned: TopPins = { top: new Map(), inRemote: new Set() };
   const pin = (r: RemoteRef, parent?: RemoteSource): CorePin | undefined => {
     run.kinds.set(remoteKey(r.raw), r.kind);
     const p = pinFor(r, {
@@ -312,18 +323,153 @@ async function closureOf(
       ...pinContext(r, parent, local),
     });
     if (p.issue) run.issues.set(`${p.issue.code} ${p.issue.message}`, p.issue);
-    if (!('sha' in p)) return undefined;
-    const at = `${remoteKey(r.raw)}@${p.sha}`;
-    const before = run.pinned.get(at);
-    if (before === undefined || RANK[p.pinned] < RANK[before]) run.pinned.set(at, p.pinned);
-    const digest = lockedDigest(pinning.lock, r.raw, p.sha);
-    return { sha: p.sha, ...(digest === undefined ? {} : { digest }) };
+    notePin(pinned, r, parent, p);
+    return 'sha' in p ? closurePin(run, pinning.lock, r, p) : undefined;
   };
+  // One map of unreachable hosts for the closure and the reads after it, so a host down is asked once.
+  const options = fetchOptions(host);
+  options.unreachableHosts ??= new Map();
   const closure = await fetchRemoteClosure(index.project, pin, {
-    ...fetchOptions(host),
+    ...options,
     resolveUnpinned: pinning.mode === 'fetch',
   });
-  return { ...run, ...closure };
+  const done: Run = { ...run, ...closure, failed: pinnedFailures(closure, pinned) };
+  await readNeeded(done, sorted, { lock: pinning.lock, actionsLock }, host, options);
+  return done;
+}
+
+/** The `actions.lock` commit each of the checkout's own refs was read at, and the refs a remote body uses too. */
+interface TopPins {
+  top: Map<string, string>;
+  inRemote: Set<string>;
+}
+
+function notePin(
+  pinned: TopPins,
+  r: RemoteRef,
+  parent: RemoteSource | undefined,
+  p: ReturnType<typeof pinFor>,
+) {
+  if (parent) pinned.inRemote.add(remoteKey(r.raw));
+  else if (p.pinned === 'actions-lock') pinned.top.set(remoteKey(r.raw), p.sha);
+}
+
+/** The commit the closure reads a ref at, ranked by the table's order, with the lockfile's digest when it is for it. */
+function closurePin(
+  run: Run,
+  lock: RemotesLock | undefined,
+  r: RemoteRef,
+  p: { pinned: RemotePinned; sha: string },
+): CorePin {
+  const at = `${remoteKey(r.raw)}@${p.sha}`;
+  const before = run.pinned.get(at);
+  if (before === undefined || RANK[p.pinned] < RANK[before]) run.pinned.set(at, p.pinned);
+  // An `actions.lock` pin is locked under its own commit's ref (lab R9).
+  const digest = lockedDigest(lock, p.pinned === 'actions-lock' ? pinnedRef(r, p.sha) : r.raw, p.sha);
+  return { sha: p.sha, ...(digest === undefined ? {} : { digest }) };
+}
+
+/**
+ * The closure's failures, with an `actions.lock` read's under its pinned ref, as the engine looks it up (lab R9). Core
+ * records one failure per ref: when the pin's commit was not read, the failure is the pin's; it stays the ref's own too
+ * only when a remote body also uses the ref and no other commit of it was read.
+ */
+function pinnedFailures(
+  closure: Awaited<ReturnType<typeof fetchRemoteClosure>>,
+  pinned: TopPins,
+): Run['failed'] {
+  return closure.failed.flatMap((f) => {
+    const key = remoteKey(f.ref);
+    const sha = pinned.top.get(key);
+    const read = closure.sources.filter((s) => remoteKey(s.ref.raw) === key);
+    if (sha === undefined || read.some((s) => s.sha === sha)) return [f];
+    const at = { ...f, ref: pinnedRef(parseRemoteRef(f.ref, 'action')!, sha) };
+    return pinned.inRemote.has(key) && !read.length ? [at, f] : [at];
+  });
+}
+
+/** How many sources a run reads at most, the closure's and `readNeeded`'s together (core's `maxUnits`). */
+const MAX_UNITS = 200;
+
+/**
+ * What core's closure leaves unread that the engine needs: it reads one commit per ref, but an action `actions.lock`
+ * pins is read at the lock's commit for the workflows it covers and as written for the others (lab R9). So, after it,
+ * whatever the engine's `remotesNeeded` names for the files with what was read so far, until it names nothing new.
+ */
+async function readNeeded(
+  run: Run,
+  files: Record<string, string>,
+  locks: Locks,
+  host: RemotesHost,
+  options: RemoteFetchOptions,
+): Promise<void> {
+  const asked = new Set<string>();
+  for (;;) {
+    const loaded = loadedWith(files, inputsOf(run, host), locks);
+    const needs = remotesNeeded(loaded, host.mode).filter((n) => !asked.has(remoteKey(n.ref)));
+    if (!needs.length) break;
+    for (const n of needs) asked.add(remoteKey(n.ref));
+    await Promise.all(needs.map((n) => readOne(run, n, locks.lock, options)));
+  }
+  run.sources.sort((a, b) => compare(remoteKey(a.ref.raw), remoteKey(b.ref.raw)) || compare(a.sha, b.sha));
+  run.failed.sort((a, b) => compare(remoteKey(a.ref), remoteKey(b.ref)));
+  run.limited.sort((a, b) => compare(remoteKey(a), remoteKey(b)));
+}
+
+/** The lockfiles the run pins by: `remotes.lock.yml` (none for `update`, which resolves) and `actions.lock`. */
+interface Locks {
+  lock: RemotesLock | undefined;
+  actionsLock: ActionsLock | undefined;
+}
+
+/**
+ * The files as the closure loaded them (no repository), with what was read so far, pinned by the run's lockfiles rather
+ * than any among the files (`update` reads past the old lockfile; `actions.lock` may be read from disk).
+ */
+function loadedWith(files: Record<string, string>, remotes: RemoteInputs, locks: Locks): LoadedProject {
+  const { [REMOTES_LOCK_FILE]: _lock, [ACTIONS_LOCK_FILE]: _actions, ...rest } = files;
+  const loaded = loadFiles(rest, { remotes });
+  const { lock, actionsLock } = locks;
+  return {
+    ...loaded,
+    remotes: { ...loaded.remotes, ...(lock ? { lock } : {}), ...(actionsLock ? { actionsLock } : {}) },
+  };
+}
+
+/** One need read at its pin, or resolved live, past the cap or not; a failure is recorded as the closure records one. */
+async function readOne(
+  run: Run,
+  need: NeededRemote,
+  lock: RemotesLock | undefined,
+  options: RemoteFetchOptions,
+): Promise<void> {
+  const r = parseRemoteRef(need.ref, need.kind)!;
+  run.kinds.set(remoteKey(r.raw), r.kind);
+  if (need.issue) run.issues.set(`${need.issue.code} ${need.issue.message}`, need.issue);
+  if (run.sources.length + run.failed.length >= MAX_UNITS) run.limited.push(r.raw);
+  else await readAt(run, r, need.pin, lock, options);
+}
+
+async function readAt(
+  run: Run,
+  r: RemoteRef,
+  pin: NeededRemote['pin'],
+  lock: RemotesLock | undefined,
+  options: RemoteFetchOptions,
+): Promise<void> {
+  try {
+    const sha = pin?.sha ?? (await resolveRemoteCommit(r, options));
+    const digest = lockedDigest(lock, r.raw, sha);
+    const source = await fetchRemoteSourceAt(r, sha, {
+      ...options,
+      ...(digest ? { expectDigest: digest } : {}),
+    });
+    run.sources.push(source);
+    run.readAs.set(source, pin?.pinned ?? 'resolved');
+  } catch (e) {
+    if (!(e instanceof RemoteFetchError)) throw e;
+    run.failed.push({ ref: r.raw, kind: e.kind, error: e.message });
+  }
 }
 
 /** The table's order: when two pins give one commit, the one that comes first names it. */
@@ -478,14 +624,18 @@ function inputsOf(run: Run, host: Pick<RemotesHost, 'api' | 'fallback'>): Remote
     message: redact(f.error, secrets),
   }));
   return {
-    sources: run.sources.map((s) => ({
-      ref: s.ref.raw,
-      kind: s.ref.kind,
-      sha: s.sha,
-      text: s.text,
-      pinned: pinnedOf(run, s),
-      ...(s.host.toLowerCase() === runHost ? {} : { host: s.host }),
-    })),
+    sources: run.sources.map((s) => {
+      const pinned = pinnedOf(run, s);
+      return {
+        // An `actions.lock` pin is read apart from the same ref read live (lab R9), under its commit.
+        ref: pinned === 'actions-lock' ? pinnedRef(s.ref, s.sha) : s.ref.raw,
+        kind: s.ref.kind,
+        sha: s.sha,
+        text: s.text,
+        pinned,
+        ...(s.host.toLowerCase() === runHost ? {} : { host: s.host }),
+      };
+    }),
     ...(failed.length ? { failed } : {}),
     ...(run.limited.length ? { limited: run.limited } : {}),
   };
@@ -494,6 +644,7 @@ function inputsOf(run: Run, host: Pick<RemotesHost, 'api' | 'fallback'>): Remote
 /** The pin that gave a source's commit; none means the closure took the ref's own SHA, or resolved it. */
 function pinnedOf(run: Run, s: RemoteSource): RemotePinned {
   return (
+    run.readAs.get(s) ??
     run.pinned.get(`${remoteKey(s.ref.raw)}@${s.sha}`) ??
     (/^[0-9a-f]{40}$/i.test(s.ref.ref) ? 'sha-ref' : 'resolved')
   );

@@ -85,6 +85,7 @@ import {
   namedByOrigin,
   pinContextOf,
   type RemoteLookup,
+  readRef,
   remoteRefOf,
 } from './remotes/state';
 import { parseScenario, type Scenario, type ScenarioInput } from './scenario';
@@ -200,6 +201,8 @@ interface Scope {
 interface RemoteTarget extends RemoteLookup {
   ref: RemoteRef;
   display: string;
+  /** What decides its commit for this use. */
+  context: PinContext;
 }
 
 /** A remote the plan uses: where, and the pin context of the `uses:` that says most about its commit. */
@@ -875,7 +878,7 @@ class Planner {
   ): void {
     const { job } = ctx;
     const { callee, remote } = this.resolveCallee(job, ctx.scope);
-    if (remote) this.useRemote(remote, leg, ctx.scope, job.uses!);
+    if (remote) this.useRemote(remote, leg);
     if (!callee) {
       this.unsupportedCall(leg, job, remote);
       return;
@@ -915,11 +918,13 @@ class Planner {
     return unit?.kind === 'workflow' && unit.call ? { callee: unit, remote } : { remote };
   }
 
+  /** A remote `uses:`, looked up where the host read it for this running file (an `actions.lock` pin's commit, R9). */
   private remoteTarget(scope: Scope, uses: UsesRef): RemoteTarget | undefined {
     const ref = remoteRefOf(scope.unit, uses);
     if (!ref) return undefined;
     const display = namedByOrigin(scope.unit, uses) ? atRefName(ref, scope.refName) : ref.raw;
-    return { ...lookupRemote(this.loaded, ref), ref, display };
+    const context = pinContextOf(this.loaded, scope.unit, uses, ref, scope.running ? [scope.running] : []);
+    return { ...lookupRemote(this.loaded, readRef(ref, context)), ref, display, context };
   }
 
   /** The secrets `secrets: inherit` passes: all of them, but only `GITHUB_TOKEN` to another owner's workflow (lab R6). */
@@ -933,18 +938,13 @@ class Planner {
 
   /**
    * Records a use. Uses are one row per fetch key and shown ref: a `./` inside a remote is shown like a direct ref to
-   * the same file at the parent's ref name, but is another remote. The pin context kept is the one that says most: an
+   * the same file at the parent's ref name, but is another remote, and so is an action `actions.lock` pins for one
+   * running file and not for another (lab R9). The pin context kept is the one that says most: an
    * `actions.lock` pin, else a use in this repository, else one in a remote.
    */
-  private useRemote(target: RemoteTarget, at: LegPlan | NodeId, scope: Scope, uses: UsesRef): void {
+  private useRemote(target: RemoteTarget, at: LegPlan | NodeId): void {
     const row = `${target.key}\n${remoteKey(target.display)}`;
-    const context = pinContextOf(
-      this.loaded,
-      scope.unit,
-      uses,
-      target.ref,
-      scope.running ? [scope.running] : [],
-    );
+    const { context } = target;
     const site = this.remoteUses.get(row);
     if (!site) this.remoteUses.set(row, { target, at: [at], context });
     else {
@@ -1133,7 +1133,7 @@ class Planner {
     if (!step.uses) return {};
     const remote = this.remoteTarget(scope, step.uses);
     if (!remote) return this.localStep(step, sid, withValues, scope);
-    this.useRemote(remote, sid, scope, step.uses);
+    this.useRemote(remote, sid);
     return this.remoteAction(remote, sid, withValues);
   }
 

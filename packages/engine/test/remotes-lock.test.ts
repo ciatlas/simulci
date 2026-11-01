@@ -5,6 +5,7 @@ import {
   type PinContext,
   parseRemotesLock,
   pinFor,
+  pinnedRef,
   REMOTE_FAILURE_KINDS,
   type RemoteFailureKind,
   type RemoteKind,
@@ -190,13 +191,25 @@ describe('pinFor: the precedence table', () => {
       const got = pin('actions/cache@v4', 'action', { mode, actionsLock: SHA_D.toUpperCase() });
       expect(got.pinned).toBe('actions-lock');
       expect(got.pinned && 'sha' in got && got.sha).toBe(SHA_D);
-      // The lockfile records SHA_B: off reads no lockfile, so it reports nothing.
-      expect(got.issue?.code).toBe(mode === 'off' ? undefined : 'remote-pin-mismatch');
+      // The lockfile's actions/cache@v4 (SHA_B) is the ref read live where no actions.lock pins it (lab R9).
+      expect(got.issue).toBeUndefined();
     }
     expect(pin('actions/cache@v4', 'action', { actionsLock: SHA_B })).toEqual({
       pinned: 'actions-lock',
       sha: SHA_B,
     });
+  });
+
+  it('row 2 is read and locked under the pin’s own commit, which its entry must record', () => {
+    expect(pinnedRef(ref('Octo/Kit/run@v1', 'action'), SHA_D)).toBe(`Octo/Kit/run@${SHA_D}`);
+    expect(pinnedRef(ref('actions/cache@v4', 'action'), SHA_D)).toBe(`actions/cache@${SHA_D}`);
+    const lock: RemotesLock = {
+      ...LOCK,
+      remotes: { ...LOCK.remotes, [`actions/cache@${SHA_D}`]: entry(SHA_C, 'action', 'action.yml') },
+    };
+    expect(pin('actions/cache@v4', 'action', { lock, actionsLock: SHA_D }).issue?.message).toBe(
+      `actions/cache@v4 runs ${SHA_D} (actions.lock), but .github/simulci/remotes.lock.yml records ${SHA_C}`,
+    );
   });
 
   it('row 2 never pins a reusable workflow, even when actions.lock would match it', () => {

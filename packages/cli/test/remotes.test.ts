@@ -586,6 +586,9 @@ describe('the review findings', () => {
     const dir = project({ '.github/workflows/actions.lock': actionsLock });
     expect(await runRemotesUpdate({ dir }, io(undefined, fakeGitHub(served)))).toBe(0);
     expect(lockOf(dir)).toContain(`  ${BUILD}:\n`);
+    // The pin is locked under its own commit, apart from build.yml's octo/act@v1 (lab R9).
+    expect(lockOf(dir)).toContain(`  octo/act@${B}:\n    sha: ${B}\n`);
+    expect(lockOf(dir)).toContain(`  ${ACT}:\n`);
     const check = io(undefined, fakeGitHub(served));
     expect(await runRemotesCheck({ dir }, check), text([...check.out, ...check.err])).toBe(0);
     expect(text(check.out)).toContain('up to date');

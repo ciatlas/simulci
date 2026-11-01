@@ -377,7 +377,8 @@ function gradeJob(
  * A captured run against the plan of its workflow in `tree`: its trigger, checks, jobs, steps and probes. `given` is
  * what the run's repository had besides its files (the remote cases' secret).
  */
-export function gradeRun(t: Tally, run: LabRun, tree: LabTree, given: Partial<ScenarioInput> = {}) {
+/** Grades a run against its plan, and returns the plan. */
+export function gradeRun(t: Tally, run: LabRun, tree: LabTree, given: Partial<ScenarioInput> = {}): RunPlan {
   const scenario = { ...scenarioOf(run), ...given };
   const plan = simulate({ project: tree.project, scenario, assume: assumeFor(run.workflow) });
   const where = `${run.workflow} [${run.event} ${run.ref}]`;
@@ -409,6 +410,7 @@ export function gradeRun(t: Tally, run: LabRun, tree: LabTree, given: Partial<Sc
   // A check the plan names that GitHub did not create is wrong too.
   for (const name of predicted.keys())
     t.add('checks', 'wrong', `${where} ${name}`, () => 'predicted, not created');
+  return plan;
 }
 
 /** The job id of a leg, from its node id `<file>#<job>`, `<file>#<job>[<leg>]` or `<caller>><file>#<job>`. */
