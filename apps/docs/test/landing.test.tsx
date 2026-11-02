@@ -2,14 +2,15 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { planArgs } from '../../../packages/cli/src/plan';
-import { type Accuracy, figure } from '../app/(home)/accuracy';
+import { type Accuracy, figure, PAGE_VALUES, remoteFigure } from '../app/(home)/accuracy';
 import HomePage from '../app/(home)/page';
+import { remarkAccuracy } from '../lib/remark-accuracy';
 
 /**
- * The landing against what it claims: the accuracy figure is the one accuracy.json holds, and no number of it is
- * typed into the page; the remote caveat stays while the lab's remote cases have a wrong prediction; its links go to
- * pages the site has; the command it shows is one `simulci plan` reads; and the Action's ref is the release the
- * repository is at.
+ * The landing and the accuracy page against what they claim: the figures are the ones accuracy.json holds, the remote
+ * cases' apart, and no number of them is typed into either; the remote caveat stays while the lab's remote cases have
+ * a wrong prediction; the landing's links go to pages the site has; the command it shows is one `simulci plan` reads;
+ * and the Action's ref is the release the repository is at.
  */
 
 const root = new URL('../../../', import.meta.url);
@@ -42,18 +43,42 @@ describe('the accuracy figure', () => {
     for (const n of [f.outcomes, f.exact, f.maybe, f.wrong]) expect(html).toContain(`>${n}</dd>`);
   });
 
-  it('is never typed into the landing', () => {
+  it('counts every compared remote outcome once, apart from the headline', () => {
+    const r = measured.remote;
+    const compared = Object.values(r.compared).reduce((a, b) => a + b, 0);
+    expect(r.exact + r.maybe + r.wrong).toBe(compared);
+    const rf = remoteFigure(measured);
+    expect(rf.sentence).toBe(
+      `On ${rf.outcomes} observed outcomes from ${r.runs} real GitHub runs and ${r.refused} refused dispatches of ` +
+        `remote reusable workflows and actions, simulci predicted ${rf.exact} exactly, ${rf.maybe} as “might” while ` +
+        `naming the unknown, and ${r.wrong} wrongly.`,
+    );
+    expect(rf.outcomes).toBe(compared.toLocaleString('en-US'));
+  });
+
+  it('is never typed into the landing or the accuracy page', () => {
     const dir = new URL('apps/docs/app/(home)/', root);
-    const sources = readdirSync(dir).map((file) => readFileSync(new URL(file, dir), 'utf8'));
+    const sources = [
+      ...readdirSync(dir).map((file) => readFileSync(new URL(file, dir), 'utf8')),
+      read('apps/docs/content/docs/accuracy.mdx'),
+      read('apps/docs/lib/remark-accuracy.ts'),
+    ];
+    const { remote } = measured;
     // Two digits and more: a 0 or a 4 is in any source.
     const numbers = [
       measured.runs,
       measured.exact,
       measured.maybe,
       ...Object.values(measured.compared),
+      remote.runs,
+      remote.refused,
+      remote.exact,
+      remote.maybe,
+      ...Object.values(remote.compared),
     ].flatMap((n) => (n >= 10 ? [String(n), n.toLocaleString('en-US')] : []));
+    // Not a part of a name, a version, an issue or a path (the page links pull requests by URL).
     for (const source of sources)
-      for (const n of numbers) expect(source).not.toMatch(new RegExp(`(?<![\\w.#-])${n}(?![\\w.-])`));
+      for (const n of numbers) expect(source).not.toMatch(new RegExp(`(?<![\\w.#/-])${n}(?![\\w.-])`));
     expect(sources.join()).not.toContain(measured.capture.slice(0, 7));
   });
 
@@ -61,6 +86,49 @@ describe('the accuracy figure', () => {
     expect(html.includes('>Remote reusable workflows: not yet lab-verified.<')).toBe(
       measured.remote.wrong > 0,
     );
+  });
+});
+
+describe('the accuracy page', () => {
+  const mdx = read('apps/docs/content/docs/accuracy.mdx');
+  const names = [...mdx.matchAll(/\{([a-z]+(?:\.[a-z]+)+)\}/g)].map((m) => m[1]!);
+
+  it('names only values accuracy.ts gives, every count among them', () => {
+    expect(names.filter((n) => !(n in PAGE_VALUES))).toEqual([]);
+    for (const n of [
+      'accuracy.sentence',
+      'accuracy.exact',
+      'accuracy.maybe',
+      'accuracy.wrong',
+      'remote.sentence',
+    ])
+      expect(names).toContain(n);
+    for (const kind of Object.keys(measured.compared)) {
+      expect(names).toContain(`compared.${kind}`);
+      expect(names).toContain(`remote.compared.${kind}`);
+    }
+  });
+
+  it('gets its values written in when the site builds, and refuses a name it does not have', () => {
+    const text = (value: string) => ({ type: 'mdxTextExpression', value });
+    const tree = {
+      type: 'root',
+      children: [
+        { type: 'mdxFlowExpression', value: 'accuracy.sentence' },
+        { type: 'paragraph', children: [text('remote.exact'), text('/* a comment */')] },
+      ],
+    };
+    remarkAccuracy()(tree, { path: 'accuracy.mdx', data: {} } as never);
+    expect(tree.children).toEqual([
+      { type: 'paragraph', children: [{ type: 'text', value: figure(measured).sentence }] },
+      {
+        type: 'paragraph',
+        children: [{ type: 'text', value: remoteFigure(measured).exact }, text('/* a comment */')],
+      },
+    ]);
+    expect(() =>
+      remarkAccuracy()({ type: 'root', children: [text('accuracy.typo')] }, { data: {} } as never),
+    ).toThrow('{accuracy.typo}: no such value');
   });
 });
 

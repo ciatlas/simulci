@@ -1,0 +1,174 @@
+---
+title: Remote workflows and actions
+description: What simulci reads from other repositories, at which commit, and with which token.
+---
+
+A job that calls another repository's reusable workflow (`uses: octo/ship/.github/workflows/deploy.yml@v1`) or a
+step that uses another repository's action (`uses: actions/cache@v4`) is planned from that file, read from GitHub at
+a pinned commit. Without the file the call stays open: its result, its outputs and the checks it adds are unknown.
+
+## What is fetched
+
+- **The file the `uses:` names, at one commit:** the reusable workflow, or the action's `action.yml` (else
+  `action.yaml`). Nothing else of the repository: no checkout, no scripts, no code a JavaScript or Docker action
+  runs. Such an action's outputs are the ones its `action.yml` declares, their values unknown; a composite action
+  is planned step by step.
+- **What that file uses**, workflows and actions alike, as far as GitHub's ten levels of nesting, with at most 200
+  remote files in one run and 1,000,000 bytes per file.
+- **`./` inside a remote workflow** that calls `./.github/workflows/y.yml` is read from the remote's repository, at
+  the commit the remote was read at, as GitHub runs it.
+- **A full ref to your own repository** (`you/app/.github/workflows/x.yml@main`) is read at that ref, not from your
+  working copy: GitHub runs it from there.
+
+A remote step's `uses: ./action` is not read from the remote's repository. It runs what the job's workspace holds,
+as on GitHub: with nothing checked out it fails; after a plain `actions/checkout` of this repository it runs your
+repository's action; after any other checkout (another `repository`, a `path`, a `ref`), or a step that may have
+filled the workspace, it might succeed or fail.
+Your own steps' `./` follow the same rule: a `uses: ./…` step before anything checked the repository out fails, as
+the runner finds no action there.
+
+## The four states
+
+Each remote a plan reaches is listed under it with its state:
+
+| State       | In text                        | Planned                                                     | Warns                                              |
+| ----------- | ------------------------------ | ----------------------------------------------------------- | -------------------------------------------------- |
+| simulated   | the commit and what pinned it  | from the file read: its jobs, steps, outputs and checks     |                                                    |
+| failed      | `not read: <why>`              | open                                                        | `remote-fetch-failed`, with why: `access`, `not-found`, … |
+| past a cap  | `not read: past a limit`       | open                                                        | `remote-limit`                                     |
+| not fetched | `not fetched`                  | open: nothing pinned it, or remotes are `off`               | `unsupported`, on a call                           |
+
+A file that was read but does not parse is listed as `does not parse`, with its parse errors, and planned as one not
+read. An open call's job might succeed, fail or skip, and its outputs are unknown, never `''`; an open action's step
+is opaque, and any output a mock gives it is accepted. A [mock](/docs/reference/mocks) on the `uses:`
+(`uses: octo/ship/.github/workflows/deploy.yml`) settles them.
+
+## Which commit
+
+A remote's commit comes from the first of these that has one:
+
+1. **The ref is a full commit SHA.**
+2. **`.github/workflows/actions.lock`**, for an action (never a reusable workflow), in the workflows the lock lists:
+   their own steps, and the steps of the local composite actions they run. As on GitHub, a pin applies per running
+   file: a workflow the lock does not list runs the ref as written, so one plan can read the same `uses:` at two
+   commits, and a reusable workflow called from a listed one is judged under its own path. A listed workflow whose own
+   step uses a remote action the lock has no pin for does not start: GitHub refuses it, and the plan shows it not
+   triggered, with a `refused` warning.
+3. **A `./` inside a remote workflow:** the commit of the workflow that calls it.
+4. **`.github/simulci/remotes.lock.yml`**, the lockfile simulci writes.
+5. **The ref resolved now**, with `--remotes fetch` only.
+
+Your `actions.lock` never pins the actions inside a remote workflow, and simulci does not read the remote
+repository's own `actions.lock` yet, so those are pinned by rows 1 and 3–5 like any other ref. When an earlier match
+disagrees with the lockfile's entry, the earlier match wins and the plan warns `remote-pin-mismatch`.
+
+## The lockfile
+
+`.github/simulci/remotes.lock.yml` holds, per remote, the commit its ref resolved to, the file read there and a
+sha256 digest of it. You commit it; simulci writes it:
+
+```sh
+npx simulci remotes update   # resolve every remote and write the lockfile
+npx simulci remotes check    # exit 1 when it is not current
+```
+
+```yaml title=".github/simulci/remotes.lock.yml"
+# Generated by simulci. Run `simulci remotes update` to update it.
+# The commit each remote workflow and action this repository uses resolved to, and a digest of the file read there.
+version: 1
+remotes:
+  octo/ship/.github/workflows/deploy.yml@v1:
+    sha: 4a7c0e1d9f2b6c8a3e5f7d9b1c2e4a6f8d0b2c4e
+    kind: workflow
+    file: .github/workflows/deploy.yml
+    digest: sha256-…
+    calls:
+      - actions/cache@v4
+```
+
+- Keys are the `uses:` as written. A `./` inside a remote is keyed `owner/repo/path@<commit>`, and an action
+  `actions.lock` pins is locked under its pinned commit, apart from the ref as written.
+- `calls` lists the remotes inside each file, so `check` can follow them without the network.
+- `host` appears only on an entry served by github.com for a run on GitHub Enterprise Server.
+- `unreadable` lists what the last update could not read, with why. `plan` warns about those; `test` refuses them.
+- The file holds no bodies. The digest checks a body read again; one that differs is not used.
+
+Moving a remote is then a one-line diff, and the same commit of your repository always gives the same plans.
+`update` is idempotent; `check` also verifies each file's digest, unless `--offline`. See
+[simulci remotes](/docs/cli/remotes) for the details and exit codes.
+
+## Modes
+
+`--remotes` on [`plan`](/docs/cli/plan#remotes) and [`test`](/docs/cli/test), and the Action's `remotes` input,
+say what is read:
+
+| Mode    | Reads                                                                 | Network                                      |
+| ------- | --------------------------------------------------------------------- | -------------------------------------------- |
+| `lock`  | the commits rows 1–4 pin (the default)                               | each pinned file, once per run               |
+| `fetch` | as `lock`, and resolves every other ref to its commit now (row 5)    | as `lock`, and one lookup per ref resolved   |
+| `off`   | nothing: every remote call stays open                                 | none                                         |
+
+- In `lock` mode a remote the lockfile lacks is not fetched, with a `remote-not-locked` warning. Without a lockfile,
+  only full-SHA refs, `actions.lock` pins and `./` inside a remote are read.
+- `fetch` is refused by `simulci test --ci` and the Action's test mode: a tag that moves would change the verdict of
+  the same commit. Pin with `simulci remotes update` and use `lock`.
+- `simulci test` exits `2` before any case runs when a pinned remote cannot be read or its digest differs: the plans
+  would differ from the ones the snapshots hold. `plan` warns and leaves the call open.
+- `--offline` (or `SIMULCI_OFFLINE=1`) reads only the cache. The cache lives in memory for now, so offline a run
+  reads nothing it has not read itself.
+
+## Tokens
+
+The CLI reads with `GH_TOKEN`, else `GITHUB_TOKEN`, else `gh auth token` (asked only when something is to be read);
+with none, it reads public repositories anonymously. On GitHub Enterprise Server it reads `GH_ENTERPRISE_TOKEN` or
+`GITHUB_ENTERPRISE_TOKEN`, and a runner's `GITHUB_TOKEN` when `--api-url` is the runner's own `GITHUB_API_URL`. A
+token goes only to the API it belongs to, and into no message.
+
+### The Action's token
+
+The Action reads remotes with its `token` input, `${{ github.token }}` by default, and with no token from the
+environment. It sends it only to `api-url`, which must be `https://` when a token is set; an empty `token` reads
+anonymously. To read private remotes, mint a token that can read them before the simulci step, and pass it:
+
+```yaml
+- uses: actions/create-github-app-token@v3
+  id: app
+  with:
+    client-id: ${{ vars.APP_CLIENT_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
+    owner: octo
+    repositories: ship
+    permission-contents: read
+```
+
+Then give the [simulci step](/docs/action) `token: ${{ steps.app.outputs.token }}`.
+
+### What `GITHUB_TOKEN` can read
+
+- **This repository and public ones.** It cannot read another private or internal repository, even one whose
+  Actions access setting lets your workflows use its actions and reusable workflows: that setting gives the runner
+  a download token, not API access. Pass a token that can read it as `token`: an installation token from
+  `actions/create-github-app-token`, or a fine-grained token with read access to its contents. A remote it cannot
+  read fails as `access`, or as `not-found` (GitHub answers 404 for a private repository a token cannot see), and
+  the log says which repository needs the token.
+- **1,000 requests an hour per repository.** A run in `lock` mode asks about once per remote file it reads.
+- **Nothing on untrusted events.** On `pull_request_target`, `workflow_run` and `issue_comment` the Action reads no
+  remote at all, whatever `remotes` says: those runs hold this repository's token while a pull request may have
+  chosen the workflows. Locked calls then show as not fetched, so plans and snapshots differ from other events. Run
+  route tests on `pull_request`.
+
+## GitHub Enterprise Server
+
+`--api-url` (or `GITHUB_API_URL`, which a runner sets) points simulci at the server's API,
+`https://HOST/api/v3`. Public actions often reach a server's runners from github.com through GitHub Connect, so the
+server's API does not have them. To read those:
+
+- the CLI's `--github-com` asks github.com for what the server answers `not-found`, with `GITHUB_COM_TOKEN` when it
+  is set, else anonymously;
+- the Action's `github-com-token` does the same with that token; empty, it never asks github.com.
+
+The fallback is off by default, because it sends the names of your remotes to github.com. Your server's token never
+goes there. The lockfile records `host: github.com` for what github.com served.
+
+GitHub Enterprise Server support is not lab-verified: the [accuracy figures](/docs/accuracy) are measured on
+github.com.
