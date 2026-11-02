@@ -1,6 +1,6 @@
 import type { FileMeta } from '../input/read';
 import { type KeyValueStore, openKeyValue } from '../lib/idb';
-import type { BaseDiff, GitHubSource, Source } from './store';
+import type { BaseDiff, GitHubSource, PullFacts, Source } from './store';
 
 /**
  * The source survives a reload in IndexedDB: paste buffers as they are (the crash snapshot), a folder as its handle
@@ -145,7 +145,20 @@ function isGitHubSource(value: unknown): value is GitHubSource {
     GITHUB_STRINGS.every((k) => typeof v[k] === 'string') &&
     typeof v.private === 'boolean' &&
     typeof v.readAt === 'number' &&
-    (v.pull === undefined || typeof v.pull === 'number')
+    (v.pull === undefined || isPull(v.pull))
+  );
+}
+
+function isPull(value: unknown): value is PullFacts {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.number === 'number' &&
+    typeof v.base === 'string' &&
+    typeof v.head === 'string' &&
+    typeof v.fork === 'boolean' &&
+    typeof v.files === 'number' &&
+    (v.changed === undefined || Array.isArray(v.changed))
   );
 }
 

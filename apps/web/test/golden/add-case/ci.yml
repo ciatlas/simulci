@@ -1,5 +1,5 @@
   - name: added from the page
     when: { event: push, branch: main }
     then:
-      run: [test, fallow, workflows, zizmor, schemas, action-dist, action-dogfood, browser-bundle, web-e2e, docs, ci-passed]
+      run: [test, fallow, workflows, zizmor, schemas, action-dist, action-dogfood, browser-bundle, web-e2e, docs, image, ci-passed]
       conclusion: success

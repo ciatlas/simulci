@@ -11,10 +11,10 @@ import { type Parsed, parseRepoInput } from './target';
 /**
  * Open a GitHub repository (M4 synthesis § 5.5): a name or a github.com link, what GitHub says of the repository once
  * the name is whole (one request, half a second after the last key), the branch, tag or commit to read (`RefPicker`,
- * the default branch until another is typed or picked), then Open, which reads its files with their count as it goes
- * and a Cancel that stops it. The page's sources open what was read (`input/sources.ts`), asking
- * first when edits would be lost; this view, in the `github-*` chunk, gets them as a prop, so the chunk shares no
- * store or provider module with the page.
+ * the default branch until another is typed or picked; a pull request's link reads its head commit instead, § 5.8),
+ * then Open, which reads its files with their count as it goes and a Cancel that stops it. The page's sources open
+ * what was read (`input/sources.ts`), asking first when edits would be lost; this view, in the `github-*` chunk, gets
+ * them as a prop, so the chunk shares no store or provider module with the page.
  */
 export interface OpenRepoProps {
   open: (target: RepoTarget, options: ReadOptions) => Promise<GitHubOpened>;
@@ -27,6 +27,9 @@ export interface OpenRepoProps {
 const DESCRIBE_AFTER_MS = 500;
 
 type Described = { for: string; info?: RepoInfo; line: string; failed?: true };
+
+/** What Open reads, or why it reads nothing (no message: the author cancelled). */
+type Chosen = { ok: true; target: RepoTarget; pull?: number } | { ok: false; message?: string };
 
 export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
   const dialog = useModal(onClose);
@@ -46,19 +49,28 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
     if (message) setFailure(message);
   };
 
+  /** What Open reads: a pull request as its link names it, else the repository at the ref the field resolves to. */
+  const chosenOf = async (signal: AbortSignal): Promise<Chosen> => {
+    if (!parsed.ok) return { ok: false };
+    if (parsed.pull !== undefined) return { ok: true, target: parsed.target, pull: parsed.pull };
+    const chosen = await ref.resolve(signal);
+    return chosen.ok ? { ok: true, target: atRefOf(parsed.target, chosen.ref) } : chosen;
+  };
+
   const submit = async (e: FormEvent): Promise<void> => {
     e.preventDefault();
     if (!parsed.ok || reading) return;
     const stop = new AbortController();
     setFailure(undefined);
     setReading({ done: 0, total: 0, stop });
-    const chosen = await ref.resolve(stop.signal);
+    const chosen = await chosenOf(stop.signal);
     if (stop.signal.aborted) return;
     if (!chosen.ok) return settle(chosen.message);
-    const opened = await open(atRefOf(parsed.target, chosen.ref), {
+    const opened = await open(chosen.target, {
       signal: stop.signal,
       onProgress: (done, total) => setReading((r) => (r?.stop === stop ? { ...r, done, total } : r)),
       ...(info ? { known: info } : {}),
+      ...(chosen.pull === undefined ? {} : { pull: chosen.pull }),
     });
     settle(opened.ok ? undefined : opened.message);
     if (opened.ok) dialog.current?.close();
@@ -97,13 +109,10 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
         <p id="github-about" className="min-h-5 text-muted text-sm">
           {aboutLine(parsed, described)}
         </p>
-        <RefPicker
-          value={ref.text}
+        <ReadAt
+          parsed={parsed}
+          field={ref}
           defaultBranch={info?.defaultBranch}
-          refs={ref.refs}
-          picked={ref.picked}
-          onOpen={() => void ref.load()}
-          onChange={ref.onChange}
           disabled={!parsed.ok || reading !== undefined}
         />
         <p id="github-reads" className="text-sm">
@@ -134,6 +143,37 @@ export function OpenRepo({ open, onClose, initial = '' }: OpenRepoProps) {
         </div>
       </form>
     </dialog>
+  );
+}
+
+/** What Open reads at: the branch, tag or commit the picker holds, or a pull request's head commit. */
+function ReadAt({
+  parsed,
+  field,
+  defaultBranch,
+  disabled,
+}: {
+  parsed: Parsed;
+  field: ReturnType<typeof useRefField>;
+  defaultBranch: string | undefined;
+  disabled: boolean;
+}) {
+  if (parsed.ok && parsed.pull !== undefined)
+    return (
+      <p className="text-sm">
+        Pull request #{parsed.pull}: Open reads it at its head commit, with the files it changes.
+      </p>
+    );
+  return (
+    <RefPicker
+      value={field.text}
+      defaultBranch={defaultBranch}
+      refs={field.refs}
+      picked={field.picked}
+      onOpen={() => void field.load()}
+      onChange={field.onChange}
+      disabled={disabled}
+    />
   );
 }
 

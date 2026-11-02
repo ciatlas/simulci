@@ -1,0 +1,66 @@
+[
+  {
+    "sha": "59acda129566f43eb79ce7baa30e96677676936b",
+    "filename": "README.md",
+    "status": "modified",
+    "additions": 2,
+    "deletions": 1,
+    "changes": 3
+  },
+  {
+    "sha": "f03b587e0c4f8aff97d63386407ad0e595361b86",
+    "filename": "__test__/git-command-manager.test.ts",
+    "status": "modified",
+    "additions": 35,
+    "deletions": 0,
+    "changes": 35
+  },
+  {
+    "sha": "323c9ed9efc37b20dba87795c0a24b5cd456a5fc",
+    "filename": "__test__/input-helper.test.ts",
+    "status": "modified",
+    "additions": 41,
+    "deletions": 0,
+    "changes": 41
+  },
+  {
+    "sha": "78875c36a878c33b16ce67e88d076437b3c2120a",
+    "filename": "action.yml",
+    "status": "modified",
+    "additions": 2,
+    "deletions": 1,
+    "changes": 3
+  },
+  {
+    "sha": "8caa57519ff7e684b19d9c3bf8c436831a9c64b0",
+    "filename": "dist/index.js",
+    "status": "modified",
+    "additions": 14,
+    "deletions": 9,
+    "changes": 23
+  },
+  {
+    "sha": "dad5d3584e0d30909025fdd214a3acbd3dbab819",
+    "filename": "src/git-source-provider.ts",
+    "status": "modified",
+    "additions": 0,
+    "deletions": 2,
+    "changes": 2
+  },
+  {
+    "sha": "eab36688c9a7978b539fd8bec6b386593aec848b",
+    "filename": "src/git-source-settings.ts",
+    "status": "modified",
+    "additions": 2,
+    "deletions": 1,
+    "changes": 3
+  },
+  {
+    "sha": "b57150de5a6b20f6709b9413dcf8a44f9fe57731",
+    "filename": "src/input-helper.ts",
+    "status": "modified",
+    "additions": 14,
+    "deletions": 8,
+    "changes": 22
+  }
+]

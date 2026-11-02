@@ -11,8 +11,9 @@ import {
   type RepoClient,
   type Revalidation,
 } from './client';
+import { changedOf, pullOf } from './pull';
 import { listRefs, refChoice, type RefLists } from './refs';
-import { commitOf, readAt, repoInfo, type RepoInfo, type RepoTarget } from './repo';
+import { commitOf, type ReadContext, readAt, repoInfo, type RepoInfo, type RepoTarget } from './repo';
 
 /**
  * Reading a repository (M4 synthesis § 5.5): what the page's sources (`input/sources.ts`) call, through the chunk's
@@ -26,6 +27,8 @@ export interface ReadOptions {
   onProgress?: (done: number, total: number) => void;
   /** What the dialog already read of the repository: its `GET /repos` is not asked again. */
   known?: RepoInfo;
+  /** A pull request of the repository: it is read at its head commit, whatever the target's ref. */
+  pull?: number;
 }
 
 /** A repository read: the source it is, its files as a walk gives them, and what it cost. */
@@ -80,23 +83,57 @@ const sourceOf = (info: RepoInfo, host: string, ref: string, sha: string): GitHu
   readAt: Date.now(),
 });
 
-/** The repository, a ref of it (its default branch when none is named), and its files at that ref's commit. */
+/**
+ * The repository, a ref of it (its default branch when none is named), and its files at that ref's commit; or, for a
+ * pull request, its files at the head commit, with what GitHub says of the pull request (`pull.ts`).
+ */
 export async function readRepository(target: RepoTarget, options: ReadOptions = {}): Promise<RepoRead> {
   const { client, host, cache: c } = contextOf(options);
+  const ctx: ReadContext = { client, cache: c, host, ...pick(options) };
+  const infoOf = async (): Promise<RepoInfo> =>
+    isKnown(options.known, target) ? options.known : await repoInfo(client, target);
   return reading(
     client,
     async () => {
-      // A link's ref comes here without the picker: it is checked the same way, before a request.
-      const choice = refChoice(target.ref ?? '');
-      if (!choice.ok) throw new Error(choice.message);
-      const info = isKnown(options.known, target) ? options.known : await repoInfo(client, target);
-      const ref = choice.ref ?? info.defaultBranch;
-      const sha = await commitOf(client, info, ref);
-      const walked = await readAt({ client, cache: c, host, ...pick(options) }, info, sha);
-      return { source: sourceOf(info, host, ref, sha), walked, requests: client.requests(), ...rate(client) };
+      const read =
+        options.pull === undefined
+          ? await atRef(ctx, target, infoOf)
+          : await atPull(ctx, await infoOf(), options.pull);
+      return { ...read, requests: client.requests(), ...rate(client) };
     },
     options.signal,
   );
+}
+
+/** A ref's commit (the default branch's when none is named) and the files there. */
+async function atRef(
+  ctx: ReadContext,
+  target: RepoTarget,
+  infoOf: () => Promise<RepoInfo>,
+): Promise<Pick<RepoRead, 'source' | 'walked'>> {
+  // A link's ref comes here without the picker: it is checked the same way, before a request.
+  const choice = refChoice(target.ref ?? '');
+  if (!choice.ok) throw new Error(choice.message);
+  const info = await infoOf();
+  const ref = choice.ref ?? info.defaultBranch;
+  const sha = await commitOf(ctx.client, info, ref);
+  return { source: sourceOf(info, ctx.host, ref, sha), walked: await readAt(ctx, info, sha) };
+}
+
+/** A pull request's head commit, the files there, and the files it changes. */
+async function atPull(
+  ctx: ReadContext,
+  info: RepoInfo,
+  number: number,
+): Promise<Pick<RepoRead, 'source' | 'walked'>> {
+  const { sha, pull } = await pullOf(ctx.client, info, number);
+  const walked = await readAt(ctx, info, sha);
+  // No workflow to simulate: the source is refused, so its files are not asked for.
+  const changed = Object.keys(walked.files).length ? await changedOf(ctx.client, info, pull) : undefined;
+  return {
+    source: { ...sourceOf(info, ctx.host, sha, sha), pull: changed ? { ...pull, changed } : pull },
+    walked,
+  };
 }
 
 /** What the repository says of itself, for the dialog before Open: one request. */

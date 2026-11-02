@@ -22,7 +22,9 @@
   // of what they export, are their API for the CLI, the Action, the web app and the server.
   "publicPackages": ["@simulci/engine", "@simulci/document", "@simulci/node"],
   // The licence map: packages/* are MIT, apps/* are FSL-1.1-MIT, ee/* is commercial. MIT code never imports the
-  // other two, and the document model (the builder's foundation) depends on nothing else in the repository.
+  // other two, and the document model (the builder's foundation) depends on nothing else in the repository. The server
+  // (apps/server) shares one file with the web app, its header table, and never the engine: it analyzes nothing. A file
+  // belongs to the first zone that matches it, so headers.ts, inside web's apps/web/**, is the headers zone's.
   "boundaries": {
     "zones": [
       { "name": "engine", "patterns": ["packages/engine/**"] },
@@ -30,7 +32,9 @@
       { "name": "node", "patterns": ["packages/node/**"] },
       { "name": "cli", "patterns": ["packages/cli/**"] },
       { "name": "action", "patterns": ["packages/action/**"] },
-      { "name": "web", "patterns": ["apps/**"] },
+      { "name": "headers", "patterns": ["apps/web/headers.ts"] },
+      { "name": "server", "patterns": ["apps/server/**"] },
+      { "name": "web", "patterns": ["apps/web/**", "apps/docs/**"] },
       { "name": "ee", "patterns": ["ee/**"] },
     ],
     "rules": [
@@ -41,7 +45,9 @@
       { "from": "action", "allow": ["engine", "node"] },
       // The web app's tests check parity with the Node host (file discovery); the bundle check keeps node out of the page.
       // The docs' tests run the CLI's commands, so the flags and outputs the docs show are the CLI's.
-      { "from": "web", "allow": ["engine", "document", "node", "cli"] },
+      { "from": "web", "allow": ["engine", "document", "node", "cli", "headers"] },
+      { "from": "headers", "allow": [] },
+      { "from": "server", "allow": ["headers"] },
       { "from": "ee", "allow": ["engine", "document", "web"] },
     ],
   },

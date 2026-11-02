@@ -4,6 +4,7 @@ import { type GitHubChunk, loadGitHub } from '../github/load';
 import { downloadText } from '../lib/download';
 import { fileLabel } from '../lib/file-label';
 import { repoName, shortSha } from '../lib/repo-words';
+import { pullScenario } from '../scenario/defaults';
 import type { SourceStore, StoredSource } from '../state/persist';
 import type { ReloadPlan } from '../state/reload';
 import {
@@ -489,6 +490,16 @@ export function createSources({
     }
   };
 
+  /**
+   * A repository just opened. Opening it was the network action, and the dialog or the card said what it reads: its
+   * remotes come too (§ 5.3), for this source only. A pull request was asked for: its scenario replaces any, as the
+   * page's own, which the load completes (§ 5.8).
+   */
+  const opened = (source: GitHubSource): void => {
+    actions.consentRemotes('source');
+    if (source.pull) actions.setScenario(pullScenario(source.pull, source.sha), { from: 'default' });
+  };
+
   return {
     canPickFolder: canPickFolder(),
 
@@ -576,11 +587,10 @@ export function createSources({
       if (!(await mayReplace(`Opening ${repoName(source)}`))) return { ok: false, requests };
       let refused: string | undefined;
       const where = `${repoName(source)} at ${shortSha(source.sha)}`;
+      // A refused one leaves the files on screen as they were, consent and all.
       if (!accept(walked, source, where, (m) => (refused = m)))
         return { ok: false, message: refused, requests };
-      // Opening the repository was the network action, and the dialog or the card said what it reads: its remotes come
-      // too (§ 5.3), for this source only. A refused one leaves the files on screen as they were, consent and all.
-      actions.consentRemotes('source');
+      opened(source);
       return { ok: true, requests, ...(read.rate === undefined ? {} : { rate: read.rate }) };
     },
 

@@ -7,7 +7,7 @@ import { Assumed, Chips, Field, type GroupProps, marked, monoControl, useFieldId
  * The files the push or pull request changes, one per line, `path (added)` or `path (renamed from old)` for a
  * status. Always in view for the events whose `paths` the engine reads (a tag push skips them), and on any other
  * while the scenario carries some, which a model reads there (`showsChanged`): empty means unknown, and `paths`
- * filters cannot decide. Each pattern's chip adds a file it selects.
+ * filters cannot decide; a pull request GitHub lists only part of says so. Each pattern's chip adds a file it selects.
  */
 export function ChangedFilesField({ f }: GroupProps) {
   const ids = useFieldIds();
@@ -18,6 +18,7 @@ export function ChangedFilesField({ f }: GroupProps) {
     if (!sameChanged(next, changed)) f.patch({ changed: parseChanged(next) });
   };
   const hint = f.model.hints.changed;
+  const note = changed === undefined ? f.unlisted : undefined;
   const issue = f.issue('changed');
   const assumed = f.assumed('changed');
   const count = Array.isArray(changed) ? changed.length : 0;
@@ -39,7 +40,7 @@ export function ChangedFilesField({ f }: GroupProps) {
           )}
         </>
       }
-      hint={hint?.text}
+      hint={[note, hint?.text].filter(Boolean).join(' ') || undefined}
       issue={issue}
     >
       <Assumed id={ids.assumed} on={assumed}>
@@ -50,7 +51,7 @@ export function ChangedFilesField({ f }: GroupProps) {
           placeholder={'src/index.ts\ndocs/readme.md (added)'}
           spellCheck={false}
           data-field="changed"
-          {...fieldAria(ids, { hint: hint?.text, issue, assumed })}
+          {...fieldAria(ids, { hint: note ?? hint?.text, issue, assumed })}
         />
       </Assumed>
       <Chips

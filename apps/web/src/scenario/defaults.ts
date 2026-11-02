@@ -1,5 +1,5 @@
 import type { ScenarioInput } from '@simulci/engine';
-import type { Source } from '../state/store';
+import type { PullFacts, Source } from '../state/store';
 import type { Outline, OutlineEvent, OutlineWorkflow } from '../worker/protocol';
 
 /**
@@ -65,6 +65,36 @@ export function defaultScenario(outline: Outline, defaultBranch = 'main'): Defau
   }
   if (event.types?.narrowed) add('action', event.types.allowed[0]);
   return { scenario, assumed: Array.from(new Set(assumed)), focus: workflow.path };
+}
+
+/**
+ * The page's own scenario for a source: a pull request's when the source was opened for one (M4 synthesis § 5.8), its
+ * facts as GitHub gave them, with no mark (the page chose none of them) but an activity type a narrowed `types:`
+ * needs; else the first workflow's, as `defaultScenario` picks it. The focus is the first workflow a pull request runs.
+ */
+export function sourceDefault(outline: Outline, source: Source): DefaultScenario {
+  const d = defaultScenario(outline, defaultBranchOf(source));
+  if (source.kind !== 'github' || !source.pull) return d;
+  const scenario = pullScenario(source.pull, source.sha);
+  const workflow =
+    outline.workflows.find((w) => !w.callable && w.events.some((e) => e.event === 'pull_request')) ??
+    outline.workflows.find((w) => w.events.some((e) => e.event === 'pull_request'));
+  const types = workflow?.events.find((e) => e.event === 'pull_request')?.types;
+  if (!types?.narrowed) return { scenario, assumed: [], focus: workflow?.path ?? d.focus };
+  return { scenario: { ...scenario, action: types.allowed[0] }, assumed: ['action'], focus: workflow?.path };
+}
+
+/** A pull request's scenario at its head commit: its number, its branches, the files it changes, its fork. */
+export function pullScenario(pull: PullFacts, sha: string): ScenarioInput {
+  return {
+    event: 'pull_request',
+    number: pull.number,
+    base: pull.base,
+    head: pull.head,
+    sha,
+    ...(pull.changed ? { changed: pull.changed } : {}),
+    ...(pull.fork ? { actor: { fork: true } } : {}),
+  };
 }
 
 /** The branch the defaults name for a branch push or a pull request's base: a GitHub repository's default branch. */

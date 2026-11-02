@@ -100,6 +100,11 @@
           "jsonpath": "$.version"
         },
         {
+          "type": "json",
+          "path": "apps/server/package.json",
+          "jsonpath": "$.version"
+        },
+        {
           "type": "generic",
           "path": "apps/docs/content/docs/action.mdx"
         },
