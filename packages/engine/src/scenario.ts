@@ -89,6 +89,10 @@ export const ScenarioInputSchema = z.strictObject({
   cron: z.string().min(1).optional(),
   /** For `workflow_run`: the run that triggers this one. */
   workflow_run: WorkflowRunSchema.optional(),
+  /**
+   * The GitHub the run is on. Under `ghes`, `$/` refs stay unresolved and the reusable-workflow limits are not
+   * GitHub Enterprise Server's own (none is lab-verified): the plan claims no GHES count.
+   */
   platform: PlatformSchema.default('dotcom'),
 });
 

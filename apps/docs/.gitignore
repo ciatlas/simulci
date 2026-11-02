@@ -2,3 +2,5 @@
 .next/
 out/
 next-env.d.ts
+# fumadocs-mdx: the code it generates from source.config.ts.
+.source/

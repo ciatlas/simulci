@@ -1,19 +1,22 @@
 import { expect, type Page, type Response, test } from '@playwright/test';
-import { headerRules, headersFor, VERCEL } from '../headers.ts';
+import { type HostMode, headerRules, headersFor, VERCEL } from '../headers.ts';
 
 /**
  * The deployment smoke: the app as a host serves it, the deployment BASE_URL names (the deployment smoke workflow
- * runs it for each Vercel deployment) or else the local preview, which serves Vercel's headers and rewrites too
- * (vercel-headers.ts). Every response the page loads carries the headers the header table (headers.ts) gives its path
- * in Vercel's mode: the CSP on all of them, the worker scripts included, so it binds the workers too; hashed assets
+ * runs it for each Vercel deployment, CI's image job for the container) or else the local preview, which serves
+ * Vercel's headers and rewrites too (vercel-headers.ts). Every response the page loads carries the headers the header
+ * table (headers.ts) gives its path in the host's mode, SIMULCI_HOST_MODE as JSON or else Vercel's: the CSP on all of them, the worker scripts included, so it binds the workers too; hashed assets
  * cached for good, everything else revalidated. A deep link is the page and a missing chunk a 404, never the page
  * under an asset's name. The starter sample's plan renders with both workers running, the YAML pane's chunk and the
- * fonts load, and neither the page nor a worker reports a CSP violation or an error.
+ * fonts load, the page runs in the mode the host's /config.js gives, and neither the page nor a worker reports a CSP
+ * violation or an error.
  */
+
+const MODE: HostMode = process.env.SIMULCI_HOST_MODE ? JSON.parse(process.env.SIMULCI_HOST_MODE) : VERCEL;
 
 /** The response headers the table sets, in the lower case Playwright reports them in. */
 const SET_BY_TABLE = new Set(
-  headerRules(VERCEL).flatMap((rule) => rule.headers.map((h) => h.key.toLowerCase())),
+  headerRules(MODE).flatMap((rule) => rule.headers.map((h) => h.key.toLowerCase())),
 );
 /** Vercel Authentication answers a redirect to vercel.com's login (or a 401), never the app. */
 const PROTECTED =
@@ -23,7 +26,7 @@ const PROTECTED =
 function headerProblems(response: Response): string[] {
   const { pathname } = new URL(response.url());
   const served = response.headers();
-  const expected = headersFor(pathname, VERCEL);
+  const expected = headersFor(pathname, MODE);
   const problems: string[] = [];
   for (const key of SET_BY_TABLE) {
     const want = expected.get(key);
@@ -73,6 +76,10 @@ test('the starter plan renders under the CSP, both workers, the YAML pane and th
   const response = await page.goto('/');
   expect(new URL(page.url()).origin, PROTECTED).toBe(origin);
   expect(response?.status(), PROTECTED).toBe(200);
+  const served = await page.evaluate(
+    () => (globalThis as { simulciConfig?: { mode?: string } }).simulciConfig?.mode,
+  );
+  expect(served).toBe(MODE.serve);
   await page.getByRole('button', { name: /^Starter/ }).click();
   await expect(page.locator('.react-flow__node-job').first()).toBeVisible();
   const workers = page.workers().map((w) => new URL(w.url()).pathname.replace(/-[\w-]+\.js$/, ''));
