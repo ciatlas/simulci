@@ -272,11 +272,70 @@ jobs:
           name: docs-playwright-traces
           path: apps/docs/test-results/
 
+  image:
+    # The container image (Dockerfile, apps/server), built for linux/amd64 (the release builds arm64 too) and run as a
+    # host would run it, read-only: /healthz answers, a bad variable stops the boot, and the deployment smoke
+    # (apps/web/e2e/deploy.spec.ts) passes against it on github.com and on a GHES, comparing every header with the
+    # image's row of the header table. Nothing is pushed.
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: docker build --platform linux/amd64 --tag simulci:ci .
+      - name: Image size
+        run: |
+          size=$(docker image inspect simulci:ci --format '{{.Size}}')
+          echo "simulci:ci is $((size / 1000000)) MB" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Run it on github.com and on a GHES
+        run: |
+          docker run --detach --name dotcom --read-only --publish 8080:8080 simulci:ci
+          docker run --detach --name ghes --read-only --publish 8081:8080 --env GITHUB_URL=https://ghes.example simulci:ci
+          for port in 8080 8081; do
+            test "$(curl --silent --show-error --fail --retry 10 --retry-connrefused --retry-delay 1 "http://localhost:$port/healthz")" = ok
+          done
+      - name: A bad variable stops the boot
+        run: |
+          status=0
+          timeout 30 docker run --rm --env GITHUB_URL=http://ghes.example simulci:ci || status=$?
+          test "$status" -eq 1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @simulci/web...
+      # The Chromium build the pinned @playwright/test drives, and the system libraries it needs.
+      - run: pnpm --filter @simulci/web exec playwright install --with-deps chromium
+      - name: Deployment smoke on github.com
+        run: pnpm --filter @simulci/web e2e
+        env:
+          BASE_URL: http://localhost:8080
+          SIMULCI_HOST_MODE: '{"serve":"static","github":"github.com","host":"image"}'
+      - name: Deployment smoke on a GHES
+        run: pnpm --filter @simulci/web e2e
+        env:
+          BASE_URL: http://localhost:8081
+          SIMULCI_HOST_MODE: '{"serve":"static","github":"ghes","host":"image"}'
+      - name: The server's log
+        if: always()
+        run: |
+          docker logs dotcom || true
+          docker logs ghes || true
+      - id: traces
+        # A failed test keeps its trace (playwright.config.ts); `pnpm exec playwright show-trace` replays it.
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-playwright-traces
+          path: apps/web/test-results/
+
   ci-passed:
     # The only required status check: add new jobs to `needs` instead of changing the branch rules.
     name: CI passed
     if: always()
-    needs: [test, fallow, workflows, zizmor, schemas, action-dist, action-dogfood, browser-bundle, web-e2e, docs]
+    needs: [test, fallow, workflows, zizmor, schemas, action-dist, action-dogfood, browser-bundle, web-e2e, docs, image]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded

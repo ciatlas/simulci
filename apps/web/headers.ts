@@ -1,8 +1,8 @@
 /**
  * The response headers of every host that serves the app, by path and mode: Vercel (vercel.ts), `vite preview`
- * (vercel-headers.ts) and the server. A host serves the files alone (`static`) or runs the server with a GitHub App
- * (`server`), and reads github.com or a GitHub Enterprise Server; only the CSP's `connect-src` and the server's own
- * paths differ between modes. Every `source` is written as a plain regular expression (`/assets/(.*)`, no `:name`
+ * (vercel-headers.ts) and the image (apps/server). A host serves the files alone (`static`) or runs the server with a
+ * GitHub App (`server`), and reads github.com or a GitHub Enterprise Server; only the CSP's `connect-src`, the server's
+ * own paths and the image's /config.js and HSTS differ between modes. Every `source` is written as a plain regular expression (`/assets/(.*)`, no `:name`
  * parameters), so Vercel and a regular expression read it alike, anchored at both ends. Nothing here reads a file or
  * the environment, so any host can import it.
  */
@@ -12,10 +12,18 @@ export interface HostMode {
   serve: 'static' | 'server';
   /** The GitHub the app reads: github.com, or a GitHub Enterprise Server. */
   github: 'github.com' | 'ghes';
+  /**
+   * Who serves the files: Vercel (and `vite preview` with it), where /config.js is a file under the catch-all rules
+   * and Vercel sends HSTS itself, or the image, which writes /config.js from its environment and sends HSTS when its
+   * `PUBLIC_URL` is https.
+   */
+  host: 'vercel' | 'image';
+  /** The image's `PUBLIC_URL` is https. */
+  https?: boolean;
 }
 
 /** The mode Vercel serves, and `vite preview` with it. */
-export const VERCEL: HostMode = { serve: 'static', github: 'github.com' };
+export const VERCEL: HostMode = { serve: 'static', github: 'github.com', host: 'vercel' };
 
 export interface HeaderRule {
   source: string;
@@ -87,6 +95,15 @@ export function headerRules(mode: HostMode): HeaderRule[] {
         { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
       ],
     });
+  if (mode.host === 'image') {
+    // The image's /config.js is its environment, which a restart may change: never a stale mode.
+    rules.push({ source: '/(config\\.js)', headers: [{ key: 'Cache-Control', value: 'no-store' }] });
+    if (mode.https)
+      rules.push({
+        source: '/(.*)',
+        headers: [{ key: 'Strict-Transport-Security', value: 'max-age=63072000' }],
+      });
+  }
   return rules;
 }
 
