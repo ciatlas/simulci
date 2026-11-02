@@ -362,4 +362,5 @@ jobs:
           simulci --version | grep -F "$VERSION"
           simulci models
           simulci plan --event push --branch main --changed packages/engine/src/x.ts | grep -F '● .github/workflows/ci.yml'
-          simulci test
+          # Without remotes, as CI's dogfood step runs them, until this repository commits a remotes.lock.yml (D0).
+          simulci test --remotes off
