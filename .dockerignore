@@ -1,0 +1,16 @@
+# The build context: the sources the image builds from, never what a checkout installed, built or recorded.
+.git
+.claude
+.vscode
+**/node_modules
+**/dist
+**/coverage
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+**/.DS_Store
+apps/docs/.next
+apps/docs/.source
+apps/docs/out
+Dockerfile
+.dockerignore

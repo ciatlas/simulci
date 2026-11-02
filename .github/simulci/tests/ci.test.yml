@@ -5,7 +5,7 @@ cases:
   - name: a push to main runs every job; coverage is uploaded from node 24 only
     when: { event: push, branch: main }
     then:
-      run: [test, fallow, workflows, zizmor, schemas, action-dist, action-dogfood, browser-bundle, web-e2e, docs, ci-passed]
+      run: [test, fallow, workflows, zizmor, schemas, action-dist, action-dogfood, browser-bundle, web-e2e, docs, image, ci-passed]
       conclusion: success
       checks:
         - Test (node 22)
@@ -19,16 +19,18 @@ cases:
         - Browser bundle
         - Web app in Chromium
         - Docs site
+        - Container image
         - CI passed
       units:
         'test[node=22].upload': { runs: no, because: if }
         'test[node=24].upload': { runs: yes }
         fallow.audit: { runs: no, because: if } # the fallow audit compares against the base of a pull request
         web-e2e.traces: { runs: no, because: if } # the traces are uploaded only when a spec fails
+        image.traces: { runs: no, because: if }
   - name: a pull request also runs the fallow audit against its base
     when: { event: pull_request, base: main, head: feat/x }
     then:
-      run: [test, fallow, workflows, zizmor, schemas, action-dist, action-dogfood, browser-bundle, web-e2e, docs, ci-passed]
+      run: [test, fallow, workflows, zizmor, schemas, action-dist, action-dogfood, browser-bundle, web-e2e, docs, image, ci-passed]
       units:
         fallow.audit: { runs: yes }
   - name: a push to another branch starts nothing

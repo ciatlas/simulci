@@ -26,11 +26,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 const MODES: Record<string, HostMode> = {
   'static, github.com': VERCEL,
-  'static, GHES': { serve: 'static', github: 'ghes' },
-  'server, github.com': { serve: 'server', github: 'github.com' },
-  'server, GHES': { serve: 'server', github: 'ghes' },
+  'static, GHES': { serve: 'static', github: 'ghes', host: 'image' },
+  'server, github.com': { serve: 'server', github: 'github.com', host: 'image', https: true },
+  'server, GHES': { serve: 'server', github: 'ghes', host: 'image' },
 };
-const SERVER: HostMode = { serve: 'server', github: 'github.com' };
+const SERVER: HostMode = { serve: 'server', github: 'github.com', host: 'image' };
+const IMAGE: HostMode = { serve: 'static', github: 'github.com', host: 'image' };
 
 const directives = (policy: string): Record<string, string> =>
   Object.fromEntries(
@@ -124,6 +125,23 @@ describe('the header table', () => {
       for (const path of ['/', '/index.html', '/theme.js', '/some/link'])
         expect(cache(path)).toBe('public, max-age=0, must-revalidate');
     }
+  });
+
+  it("never caches the image's /config.js, which is its environment, and revalidates Vercel's file", () => {
+    for (const mode of [IMAGE, SERVER, { ...IMAGE, https: true }])
+      expect(headersFor('/config.js', mode).get('cache-control')).toBe('no-store');
+    expect(headersFor('/config.js', VERCEL).get('cache-control')).toBe('public, max-age=0, must-revalidate');
+    for (const path of ['/', '/config.jsx', '/some/config.js'])
+      expect(headersFor(path, IMAGE).get('cache-control'), path).toBe('public, max-age=0, must-revalidate');
+  });
+
+  it('sends HSTS from an image behind https only; Vercel sends its own', () => {
+    for (const path of ['/', '/config.js', '/assets/index-a1.js', '/healthz'])
+      expect(headersFor(path, { ...IMAGE, https: true }).get('strict-transport-security'), path).toBe(
+        'max-age=63072000',
+      );
+    for (const mode of [IMAGE, SERVER, VERCEL])
+      expect(headersFor('/', mode).has('strict-transport-security')).toBe(false);
   });
 
   it("keeps a server's API and sign-in answers out of every cache and every other origin; a static host has neither", () => {
