@@ -43,7 +43,7 @@
     "@simulci/engine": "workspace:*",
     "@simulci/node": "workspace:*",
     "citty": "^0.2.2",
-    "tsdown": "0.23.1"
+    "tsdown": "0.23.4"
   },
   "engines": {
     "node": ">=22"
