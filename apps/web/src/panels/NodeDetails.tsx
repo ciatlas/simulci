@@ -92,6 +92,18 @@ function FactRow({ fact, index, current }: { fact: Fact; index: PlanIndex; curre
 function FactBody({ value, index }: { value: FactValue; index: PlanIndex }) {
   if (value.kind === 'text') return <span>{value.text}</span>;
   if (value.kind === 'value') return <ValueText value={value} />;
+  if (value.kind === 'link')
+    return (
+      <a
+        href={value.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline decoration-dotted underline-offset-2 hover:decoration-solid"
+      >
+        {value.text}
+        <span className="sr-only"> on GitHub (opens in a new tab)</span>
+      </a>
+    );
   if (value.kind === 'nodes')
     return (
       <span className="flex flex-wrap gap-x-2">

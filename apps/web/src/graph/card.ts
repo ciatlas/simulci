@@ -24,14 +24,15 @@ import {
 const VERDICTS: readonly Tri[] = ['yes', 'no', 'maybe'];
 
 /**
- * The accessible name of a job card: the verdict word, the label, the clause, a result that is not success and the
- * jobs it needs by label, so no fact of its hover card is there alone.
+ * The accessible name of a job card: the verdict word, the label, the clause, a result that is not success, the
+ * jobs it needs by label, so no fact of its hover card is there alone, and a remote callee's stub.
  */
 export function jobLabel(job: JobModel, needs: readonly string[] = []): string {
   const clause = job.clause ? ` — ${job.clause}` : '';
   const result = job.result ? `, result ${job.result}` : '';
   const after = needs.length ? `, needs ${needs.join(', ')}` : '';
-  return `${MARK_LABEL[job.verdict]} ${job.label}${clause}${result}${after}`;
+  const stub = job.stub ? `; calls ${job.stub.title}, ${job.stub.status}` : '';
+  return `${MARK_LABEL[job.verdict]} ${job.label}${clause}${result}${after}${stub}`;
 }
 
 /**
@@ -50,16 +51,21 @@ export function legTitle(leg: LegCell): string {
   return `${leg.label}: ${MARK_LABEL[leg.verdict]}${reason}${result}`;
 }
 
-export const scopeTitle = (scope: ScopeModel): string => scope.name ?? scope.path;
+/** A workflow's name, else its path; a remote one's repository, file and ref (`octo/ship · deploy.yml @ v1`). */
+export const scopeTitle = (scope: ScopeModel): string => scope.name ?? scope.remote?.title ?? scope.path;
 
 /** A callee past depth 2: it stays one line until the author opens it, and closes again on their word. */
 export const deepCallee = (scope: ScopeModel): boolean => scope.caller !== undefined && scope.depth > 2;
 
-/** The accessible name of a workflow: the verdict word, its title, its clause, and its caller when it is called. */
+/**
+ * The accessible name of a workflow: the verdict word, its title, the commit a remote one was read at, its clause, and
+ * its caller when it is called.
+ */
 export function scopeLabel(scope: ScopeModel, caller?: string): string {
   const clause = scope.clause ? ` — ${scope.clause}` : '';
   const by = caller === undefined ? '' : `, called by ${caller}`;
-  return `${MARK_LABEL[scope.verdict]} ${scopeTitle(scope)}${clause}${by}`;
+  const remote = scope.remote ? `, remote, read at ${scope.remote.sha}` : '';
+  return `${MARK_LABEL[scope.verdict]} ${scopeTitle(scope)}${remote}${clause}${by}`;
 }
 
 /** The parts of a card's subline, each absent when it has nothing to say. */

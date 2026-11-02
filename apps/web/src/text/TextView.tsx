@@ -36,7 +36,12 @@ export function TextView() {
 
 function Line({ line }: { line: string }) {
   const at = line.search(/[●○◐]/);
-  if (at === -1) return <span className="block">{line}</span>;
+  if (at === -1)
+    return (
+      <span className="block">
+        <Remote text={line} />
+      </span>
+    );
   const mark = line[at]!;
   return (
     <span className="block">
@@ -44,7 +49,24 @@ function Line({ line }: { line: string }) {
       <span className={MARK_CLASS[mark]} aria-hidden="true">
         {mark}
       </span>
-      {line.slice(at + 1)}
+      <Remote text={line.slice(at + 1)} />
     </span>
+  );
+}
+
+/**
+ * A remote's state after its ref (`(remote, 4a7c0e1)`, `(remote, not fetched)`, `(remote, not read: access)`), set
+ * apart in the muted colour, which keeps 4.5:1; the words are the CLI's.
+ */
+function Remote({ text }: { text: string }) {
+  const at = text.search(/ \(remote, [^)]*\)/);
+  if (at === -1) return text;
+  const end = text.indexOf(')', at) + 1;
+  return (
+    <>
+      {text.slice(0, at)}
+      <span className="text-muted">{text.slice(at, end)}</span>
+      {text.slice(end)}
+    </>
   );
 }

@@ -1,11 +1,14 @@
 import type {
   ActionPlan,
+  RemoteUse,
+  RunPlan,
   Json,
   JobPlan,
   LegPlan,
   MatrixPlan,
   MockRef,
   NodeId,
+  Result,
   StepPlan,
   Tri,
   Value,
@@ -13,6 +16,7 @@ import type {
 } from '@simulci/engine';
 import type { CheckVerdict } from '@simulci/engine/plan';
 import { formatValue } from '@simulci/engine/render';
+import { blobUrl, failureWords, pinnedWords, remoteAt, remoteName, shortSha } from '../graph/remote';
 import type { NodeKind, PlanIndex } from '../plan/index';
 import { type PlanNode, planNodes } from '../plan/nodes';
 import type { PlanState } from '../state/store';
@@ -40,9 +44,13 @@ export interface ValueFact {
   by?: MockRef;
 }
 
-/** What a fact says: words, a plan value, nodes to select, or a predicted check with its verdict and result. */
+/**
+ * What a fact says: words, a link that opens in a new tab, a plan value, nodes to select, or a predicted check with its
+ * verdict and result.
+ */
 export type FactValue =
   | { kind: 'text'; text: string }
+  | { kind: 'link'; text: string; href: string }
   | ValueFact
   | { kind: 'nodes'; nodes: NodeRef[] }
   | { kind: 'check'; verdict: Tri; result: ValueFact; node: NodeId };
@@ -77,17 +85,22 @@ const UNCERTAIN = 'only the run knows the exact name';
 type Maybe<T> = T | undefined | false;
 type Sections = Maybe<FactSection>[];
 
-/** What the facts are worded against: the unknowns' and nodes' unit paths. */
+/** What the facts are worded against: the unknowns' and nodes' unit paths, and the plan's remotes and unknowns. */
 interface Ctx {
   unitPaths: Record<NodeId, string>;
   unknownPaths: Record<string, string>;
+  plan: RunPlan;
 }
 
 /** The facts of a node, section by section; none for an id the plan does not have. */
 export function nodeFacts(plan: PlanState, index: PlanIndex, node: NodeId): FactSection[] {
   const found = planNodes(plan.plan).get(node);
   if (!found) return [];
-  const ctx: Ctx = { unitPaths: plan.derived.unitPaths, unknownPaths: plan.derived.unknownPaths };
+  const ctx: Ctx = {
+    unitPaths: plan.derived.unitPaths,
+    unknownPaths: plan.derived.unknownPaths,
+    plan: plan.plan,
+  };
   return [...factsOf(found, ctx), checksSection(index, node, ctx)].filter((s): s is FactSection => !!s);
 }
 
@@ -130,6 +143,7 @@ function workflowFacts(wf: WorkflowPlan, ctx: Ctx): Sections {
       say('concurrency group', concurrency?.group),
       concurrency?.cancelInProgress && val('cancel in progress', concurrency.cancelInProgress, ctx),
     ]),
+    wf.remote && readSection(wf.remote.ref, wf.remote.sha, readRow(wf, ctx)),
     values('Inputs', wf.inputs, ctx),
     values('Outputs', wf.outputs, ctx),
   ];
@@ -140,12 +154,89 @@ function jobFacts(job: JobPlan, ctx: Ctx): Sections {
   const bare = job.legs.find((leg) => leg.id === job.id);
   return [
     section('Job', [...jobHead(job, ctx), ...runner(bare, ctx)]),
+    callSection(job, ctx),
     job.matrix && matrixSection(job.matrix, job.legs.length, ctx),
     values('With', job.with, ctx),
     values('Secrets', job.secrets, ctx),
     values('Env', bare?.env, ctx),
     values('Outputs', job.outputs, ctx),
   ];
+}
+
+/**
+ * The remote workflow a job calls (M4 synthesis § 5.4), from its first leg: read, where it was read and how it was
+ * pinned; else what is known without it.
+ */
+function callSection(job: JobPlan, ctx: Ctx): Maybe<FactSection> {
+  const leg = job.legs[0];
+  if (!leg || job.uses === undefined) return undefined;
+  const remote = leg.call?.remote;
+  if (leg.call && remote) return readSection(remote.ref, remote.sha, readRow(leg.call, ctx));
+  const row = remoteAt(ctx.plan, leg.id);
+  return row && unreadCall(job.runs.verdict !== 'no', leg, row, ctx);
+}
+
+/**
+ * A call whose remote callee the plan does not simulate: its state, the result it might have and the mock that would
+ * pin it while it might run, and outputs that are unknown, never `''`, until it is read.
+ */
+function unreadCall(runs: boolean, leg: LegPlan, row: RemoteUse, ctx: Ctx): Maybe<FactSection> {
+  const pin = ctx.plan.unknowns.find((u) => u.id === `${leg.id}.call`)?.pin;
+  return section('Remote workflow', [
+    say('ref', row.ref),
+    say('state', stateWords(row)),
+    runs && say('might', mightWords(leg.result)),
+    pin && say('pin', `${pin.layer} ${JSON.stringify(pin.fragment)}`),
+    runs && say('outputs', 'unknown until it is read: any a mock sets'),
+  ]);
+}
+
+/** `not fetched`, `not read: access`, as the text view says it. */
+function stateWords(row: RemoteUse): string {
+  if (row.state === 'failed') return `not read: ${row.failure} (${failureWords(row.failure).words})`;
+  if (row.state === 'limit') return 'not read: past the limit on how many remote files a run reads';
+  if (row.state === 'invalid') return 'read, but its file does not parse';
+  return row.state === 'not-fetched' ? 'not fetched' : 'simulated';
+}
+
+/** `success, failure or skipped`: what a call the plan does not simulate might end as. */
+function mightWords(result: Value<Result>): string {
+  const options = result.known ? [result.value] : (result.oneOf ?? []);
+  if (options.length < 2) return options.join('') || 'only the run knows';
+  return `${options.slice(0, -1).join(', ')} or ${options.at(-1)}`;
+}
+
+/** The row a remote workflow was read under: the one at its caller, at its commit (one ref may be read at two). */
+function readRow(wf: WorkflowPlan, ctx: Ctx): RemoteUse | undefined {
+  const { remote, caller } = wf;
+  return ctx.plan.remotes?.find(
+    (r) => r.ref === remote?.ref && r.sha === remote.sha && (caller === undefined || r.at.includes(caller)),
+  );
+}
+
+/** Where a remote was read: its repository and file, the ref, the commit (a link to the file there), and its pin. */
+function readSection(
+  ref: string,
+  sha: string,
+  row: RemoteUse | undefined,
+  extra: Maybe<Fact>[] = [],
+): Maybe<FactSection> {
+  const name = remoteName(ref);
+  if (!name) return undefined;
+  const host = row?.host;
+  const commit: Fact = {
+    label: 'commit',
+    value: { kind: 'link', text: shortSha(sha), href: blobUrl(name, sha, undefined, host) },
+  };
+  return section(row?.kind === 'action' ? 'Remote action' : 'Remote workflow', [
+    say('repository', `${name.owner}/${name.repo}`),
+    say('path', name.path),
+    say('ref', name.ref),
+    commit,
+    say('pinned', pinnedWords(row?.pinned, ref)),
+    say('host', host),
+    ...extra,
+  ]);
 }
 
 function jobHead(job: JobPlan, ctx: Ctx): Maybe<Fact>[] {
@@ -196,12 +287,40 @@ function runner(leg: LegPlan | undefined, ctx: Ctx): Maybe<Fact>[] {
 function stepFacts(step: StepPlan, ctx: Ctx): Sections {
   return [
     section('Step', stepHead(step, ctx)),
+    actionSection(step, ctx),
     values('With', step.with, ctx),
     values('Env', step.env, ctx),
     values('Outputs', step.outputs, ctx),
     ...(step.composite ? actionFacts(step.composite, ctx) : []),
   ];
 }
+
+/**
+ * The remote action a step uses (M4 synthesis § 5.4): read, its pin and whether its outputs are closed or open; not
+ * read, its interface is unknown and any mock output is accepted. An action simulci models says nothing of it here.
+ */
+function actionSection(step: StepPlan, ctx: Ctx): Maybe<FactSection> {
+  if (step.uses === undefined || !remoteName(step.uses)) return undefined;
+  const row = remoteAt(ctx.plan, step.id);
+  if (row?.state === 'simulated' && row.sha !== undefined)
+    return readSection(row.ref, row.sha, row, [say('outputs', outputsWords(step))]);
+  if (!row && modelled(step, ctx)) return undefined;
+  return section('Remote action', [
+    say('ref', step.uses),
+    say('state', row ? stateWords(row) : 'not fetched'),
+    say('interface', 'unknown; any mock output is accepted'),
+  ]);
+}
+
+/** A composite's outputs are the ones its action.yml declares; a node or docker action's may be any. */
+const outputsWords = (step: StepPlan): string =>
+  step.composite
+    ? 'closed: a composite action sets the outputs its action.yml declares'
+    : 'open: a node or docker action may set more than its action.yml declares';
+
+/** A model of simulci's own plans the step: the action is not read, and need not be. */
+const modelled = (step: StepPlan, ctx: Ctx): boolean =>
+  ctx.plan.mocks.some((m) => m.at === step.id && (m.layer === 'builtin' || m.layer === 'shipped'));
 
 function stepHead(step: StepPlan, ctx: Ctx): Maybe<Fact>[] {
   return [

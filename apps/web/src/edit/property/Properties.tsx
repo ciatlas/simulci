@@ -8,6 +8,7 @@ import { storeLock } from '../dispatch';
 import { documents } from '../documents';
 import { gestures } from '../gestures';
 import { RefusalView } from '../Refusal';
+import { livesIn, remoteSelection } from '../remote';
 import { type Target, targetOf } from '../selection';
 import type { Refused } from '../types';
 import { MatrixEditor } from '../matrix/MatrixEditor';
@@ -35,14 +36,18 @@ export function Properties() {
   const marker = useSession((s) => (focus === undefined ? undefined : s.generated?.[focus]));
   const unlocked = useSession((s) => s.edit.unlocked);
   const target = useMemo(() => targetOf(store, focus, sel), [store, focus, sel, rev, marker, unlocked]);
-  if (!target)
+  if (!target) {
+    const remote = callsOut(sel) ? remoteSelection(store.getState()) : undefined;
     return (
       <EmptyNote>
-        {callsOut(sel)
-          ? 'This is a job of the workflow it calls: select it there to edit it.'
-          : 'Select a workflow, a job or a step of the focused workflow to edit it.'}
+        {remote
+          ? livesIn(remote.home)
+          : callsOut(sel)
+            ? 'This is a job of the workflow it calls: select it there to edit it.'
+            : 'Select a workflow, a job or a step of the focused workflow to edit it.'}
       </EmptyNote>
     );
+  }
   const doc = documents(store).of(store.getState(), target.file)!;
   return <Editor target={target} doc={doc} />;
 }

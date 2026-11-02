@@ -33,6 +33,7 @@ function jobShape(job: JobModel, calleeShapes: Readonly<Record<NodeId, string>>)
     job.count ?? '',
     job.uses ?? '',
     callee,
+    job.stub ? 'stub' : '',
     stripRows(job),
   ].join('\0');
 }

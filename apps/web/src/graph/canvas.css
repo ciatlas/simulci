@@ -899,3 +899,67 @@
 .react-flow__attribution a {
   color: var(--muted);
 }
+
+/* Remote workflows (M4 synthesis § 5.4): the glyph in a remote callee's title bar, and the dashed stub a call job
+   holds where a callee the plan does not simulate would be. */
+
+.sc-remote-glyph {
+  flex: none;
+  color: var(--muted);
+}
+
+.sc-stub {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  overflow: hidden;
+  border: 1px dashed var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 15px;
+}
+
+.sc-stub[data-state='failed'],
+.sc-stub[data-state='invalid'] {
+  border-color: var(--might);
+}
+
+.sc-stub-title {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.sc-stub-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-stub-words {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sc-stub-action {
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.sc-stub-action:hover {
+  background: var(--chrome);
+}

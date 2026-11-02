@@ -1,5 +1,5 @@
 import { debounce, type Timers } from '../lib/debounce';
-import { remotePoolKey, type SessionStore } from '../state/store';
+import { remotePoolKey, type SessionState, type SessionStore } from '../state/store';
 import type { RemoteNeed, RemotePool } from '../worker/protocol';
 
 /**
@@ -8,7 +8,8 @@ import type { RemoteNeed, RemotePool } from '../worker/protocol';
  * new pool the session loads again with; that load names the next level, until nothing is needed (the engine stops at
  * depth 10). Reads wait for 500 ms of quiet, so a burst of loads asks once, but the click that gives consent reads at
  * once. Each ref at its commit is read once for the page's life, whatever came of it: one in flight is never asked again,
- * and the loop cannot spin on a need the pool cannot meet.
+ * and the loop cannot spin on a need the pool cannot meet. Retry (`retryRemotes`) is the one way back: it takes the
+ * failures out of the store, which forgets that they were asked, and the load they cause names them again.
  */
 
 export type ReadRemotes = (needs: RemoteNeed[], signal: AbortSignal) => Promise<RemotePool>;
@@ -53,8 +54,14 @@ export function createRemoteReads({ store, read, timers, debounceMs = 500 }: Rem
       failed: todo.map((n) => notRead(n, e instanceof Error ? e.message : String(e))),
     }));
 
+  /** A failure the store let go of without a read in its place (Retry) may be asked again. */
+  const forgetRetried = (now: SessionState['remotes'], before: SessionState['remotes']['failed']): void => {
+    for (const key of Object.keys(before)) if (!(key in now.failed) && !(key in now.byKey)) asked.delete(key);
+  };
+
   const later = debounce(() => void readNeeded(), debounceMs, timers);
   const unsubscribe = store.subscribe((s, prev) => {
+    if (s.remotes.failed !== prev.remotes.failed) forgetRetried(s.remotes, prev.remotes.failed);
     if (s.remotes.consent !== 'none' && prev.remotes.consent === 'none') {
       later.cancel();
       void readNeeded();
@@ -75,3 +82,17 @@ const notRead = (need: RemoteNeed, message: string): RemotePool['failed'][number
   message,
   ...(need.pin ? { sha: need.pin.sha } : {}),
 });
+
+/**
+ * Retry on a stub: the failures of these refs leave the store, so the reads forget them, and the pool's change loads
+ * the same texts again, whose needs name them once more. Nothing happens without consent, as for any read.
+ */
+export function retryRemotes(store: SessionStore, refs: readonly string[]): void {
+  store.setState((s) => {
+    const failed = Object.fromEntries(
+      Object.entries(s.remotes.failed).filter(([, f]) => !refs.includes(f.ref)),
+    );
+    if (Object.keys(failed).length === Object.keys(s.remotes.failed).length) return s;
+    return { remotes: { ...s.remotes, failed } };
+  });
+}

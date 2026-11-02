@@ -5,7 +5,7 @@ import { gestures } from '../../edit/gestures';
 import { cardActions, cardAttrs, countParts, countsText, deepCallee, scopeTitle } from '../card';
 import type { WorkflowFlowNode } from '../flow';
 import { Mark } from '../Mark';
-import { CARD } from '../types';
+import { CARD, type ScopeModel } from '../types';
 import { HoverCard } from './HoverCard';
 
 /**
@@ -14,7 +14,8 @@ import { HoverCard } from './HoverCard';
  * job cards; collapsed, it is one line with its deciding clause: an untriggered workflow, or a callee past depth 2
  * that a click opens (and its Open button, for the keyboard: a tab stop while the workflow is selected). The
  * untriggered workflow being edited is laid out instead, dimmed, its jobs skipped under it. The workflow being edited
- * has + Add job in its title bar.
+ * has + Add job in its title bar. A remote callee's bar has the remote glyph and `octo/ship · deploy.yml @ v1
+ * (4a7c0e1)`: its repository, file and ref, and the commit it was read at.
  */
 function WorkflowNodeView({ data }: NodeProps<WorkflowFlowNode>) {
   const { store } = useApp();
@@ -39,6 +40,7 @@ function WorkflowNodeView({ data }: NodeProps<WorkflowFlowNode>) {
           onClick={deep ? () => act.toggleOpened(scope.id) : undefined}
         >
           <Mark verdict={scope.verdict} />
+          {scope.remote && <RemoteGlyph />}
           <span className="sc-scope-title">{scopeTitle(scope)}</span>
           <span className="sc-scope-clause font-mono">{scope.clause}</span>
           {deep && (
@@ -63,8 +65,7 @@ function WorkflowNodeView({ data }: NodeProps<WorkflowFlowNode>) {
     <div className="sc-scope" {...attrs}>
       <div className="sc-scope-bar" style={{ height: CARD.scopePadding.top - CARD.padding }}>
         <Mark verdict={scope.verdict} />
-        <span className="sc-scope-title">{scopeTitle(scope)}</span>
-        {scope.name !== undefined && <span className="sc-scope-path font-mono">{scope.path}</span>}
+        <ScopeName scope={scope} />
         <span className="sc-counts" aria-hidden="true">
           {countParts(scope.counts).map((p) => (
             <span key={p.verdict}>
@@ -91,6 +92,33 @@ function WorkflowNodeView({ data }: NodeProps<WorkflowFlowNode>) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The title bar's name: the workflow's name and its path; for a remote callee, the remote glyph, its name or
+ * `octo/ship · deploy.yml @ v1`, and the commit it was read at.
+ */
+function ScopeName({ scope }: { scope: ScopeModel }) {
+  const { remote } = scope;
+  const after = remote
+    ? `${scope.name === undefined ? '' : `${remote.title} `}(${remote.sha})`
+    : scope.name !== undefined && scope.path;
+  return (
+    <>
+      {remote && <RemoteGlyph />}
+      <span className="sc-scope-title">{scopeTitle(scope)}</span>
+      {after && <span className="sc-scope-path font-mono">{after}</span>}
+    </>
+  );
+}
+
+/** The mark of a workflow read from another repository; its title says which, so the glyph is not read aloud. */
+function RemoteGlyph() {
+  return (
+    <span className="sc-remote-glyph" aria-hidden="true" title="A workflow of another repository">
+      ↗
+    </span>
   );
 }
 

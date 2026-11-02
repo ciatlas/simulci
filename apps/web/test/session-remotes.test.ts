@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReadRemotes } from '../src/engine/remotes';
+import { type ReadRemotes, retryRemotes } from '../src/engine/remotes';
 import { createSession } from '../src/engine/session';
 import { createSessionStore, withTexts } from '../src/state/store';
 import type { EngineClient, LoadResult, SimulateResult } from '../src/worker/client';
@@ -167,6 +167,28 @@ describe('the remotes loop', () => {
     f.answer(f.loads.length - 1, [DEPLOY, ACT]);
     await vi.advanceTimersByTimeAsync(5000);
     expect(r.reads).toHaveLength(2);
+  });
+
+  it('asks again for a failure Retry took out of the store, once the load it causes names it', async () => {
+    const { store, f, r } = setUp();
+    store.getState().consentRemotes();
+    await vi.advanceTimersByTimeAsync(0);
+    f.answer(0, [DEPLOY]);
+    await vi.advanceTimersByTimeAsync(500);
+    r.reads[0]!.resolve({
+      sources: [],
+      failed: [{ ref: DEPLOY.ref, kind: 'workflow', failure: 'timeout', message: 't', sha: SHA }],
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    f.answer(f.loads.length - 1, [DEPLOY]);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(r.reads).toHaveLength(1);
+    retryRemotes(store, [DEPLOY.ref]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.loads.at(-1)!.body.remotes).toEqual({ sources: [], failed: [] });
+    f.answer(f.loads.length - 1, [DEPLOY]);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(r.reads.map((x) => x.needs)).toEqual([[DEPLOY], [DEPLOY]]);
   });
 
   it('loads what came back with the newest texts, an edit made while it was out included', async () => {
