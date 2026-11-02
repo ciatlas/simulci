@@ -471,7 +471,7 @@ class Planner {
    */
   private refusal(wf: WorkflowDecl, id: NodeId, triggered: Decision): Decision {
     if (triggered.verdict === 'no') return triggered;
-    const refused = this.callLimit(wf) ?? this.unpinnedAction(wf);
+    const refused = this.onPlatform(this.callLimit(wf)) ?? this.unpinnedAction(wf);
     if (!refused) return triggered;
     this.diagnostics.push({
       severity: 'warning',
@@ -497,6 +497,18 @@ class Planner {
         why: `it names ${keys.size} reusable workflows, more than ${MAX_CALLED_WORKFLOWS}`,
       };
     return undefined;
+  }
+
+  /**
+   * A call limit under `platform: ghes`, whose own counts no lab has verified (decision 11): past github.com's, the most
+   * GitHub allows anywhere, the run is still refused, but its limit is `unsupported`, not github.com's.
+   */
+  private onPlatform(refused: Refused | undefined): Refused | undefined {
+    if (!refused || this.scenario.platform !== 'ghes') return refused;
+    return {
+      limit: 'unsupported',
+      why: `${refused.why} (github.com's limit; GitHub Enterprise Server's is not modelled)`,
+    };
   }
 
   /**
@@ -912,11 +924,16 @@ class Planner {
    * names (`./` and `$/` inside a remote name that remote's files at its commit; lab R2), with the remote's state.
    */
   private resolveCallee(job: JobDecl, scope: Scope): { callee?: WorkflowDecl; remote?: RemoteTarget } {
-    if (!job.uses) return {};
+    if (!job.uses || this.unresolved(job.uses)) return {};
     const remote = this.remoteTarget(scope, job.uses);
     if (!remote) return scope.unit.external ? {} : { callee: this.index.calleeOf(job) };
     const unit = remote.state === 'simulated' ? remote.unit : undefined;
     return unit?.kind === 'workflow' && unit.call ? { callee: unit, remote } : { remote };
+  }
+
+  /** A `$/` ref under `platform: ghes`, which GitHub Enterprise Server does not have: it stays unresolved. */
+  private unresolved(uses: UsesRef): boolean {
+    return uses.self === true && this.scenario.platform === 'ghes';
   }
 
   /** A remote `uses:`, looked up where the host read it for this running file (an `actions.lock` pin's commit, R9). */
@@ -976,7 +993,9 @@ class Planner {
   }
 
   private unsupportedCall(leg: LegPlan, job: JobDecl, remote: RemoteTarget | undefined): void {
-    this.callDiagnostics(leg.id, job, remote);
+    if (job.uses && this.unresolved(job.uses))
+      this.diagnostics.push({ severity: 'warning', ...ghesProblem(job.uses.raw), node: leg.id });
+    else this.callDiagnostics(leg.id, job, remote);
     leg.result =
       leg.runs.verdict === 'no'
         ? known('skipped')
@@ -1138,6 +1157,10 @@ class Planner {
     scope: Scope,
   ): StepTarget {
     if (!step.uses) return {};
+    if (this.unresolved(step.uses)) {
+      this.diagnoseOnce({ severity: 'warning', ...ghesProblem(step.uses.raw), node: sid });
+      return {};
+    }
     const remote = this.remoteTarget(scope, step.uses);
     if (!remote) return this.localStep(step, sid, withValues, scope);
     this.useRemote(remote, sid);
@@ -1721,6 +1744,12 @@ function remoteProblem(shown: string, remote: RemoteLookup): { code: string; mes
     message: `${shown}: not read, past the limit on how many remote files a run reads`,
   };
 }
+
+/** A `$/` ref left unresolved under `platform: ghes`. */
+const ghesProblem = (shown: string): { code: string; message: string } => ({
+  code: 'ghes-unsupported',
+  message: `${shown}: GitHub Enterprise Server has no $/ refs, so it is not resolved`,
+});
 
 /** The diagnostic of a call that is not planned and whose file is not the problem. */
 function callProblem(
