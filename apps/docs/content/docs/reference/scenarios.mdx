@@ -33,7 +33,7 @@ JSON schema: [`schemas/scenario/v1.json`](https://ciatlas.github.io/simulci/sche
 | `environments`  | the deployment environments that exist; no effect on the plan yet                          |
 | `cron`          | for `schedule`: the cron that fired                                                         |
 | `workflow_run`  | for `workflow_run`: `{ name, branch, conclusion }` of the run that triggers this one        |
-| `platform`      | `dotcom` (default) or `ghes`; no effect on the plan yet                                    |
+| `platform`      | `dotcom` (default) or `ghes`, where `$/` refs stay unresolved and no GHES limit is claimed |
 
 Give at most one of `ref`, `branch` and `tag`. A bare name in `ref` is a branch: write a tag as `tag: v1`, `refs/tags/v1`
 or `tags/v1`. A bare path in `changed` is `modified`.
