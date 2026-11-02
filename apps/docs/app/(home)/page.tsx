@@ -10,8 +10,6 @@ import { Frame } from './frame';
  * against real runs, and the three ways to run it. Self-hosting joins when the image ships.
  */
 
-const LAB_URL = `${REPO_URL}/tree/main/fixtures/routes-lab`;
-
 const button = 'rounded-md px-4 py-2 font-medium';
 const code = 'rounded bg-fd-muted px-1 py-0.5 font-mono text-[0.9em]';
 
@@ -219,12 +217,12 @@ export default function HomePage() {
           <Stat value={ACCURACY.wrong} label="predicted wrongly" />
         </dl>
         <p className="mt-10 max-w-3xl text-lg">{ACCURACY.sentence}</p>
-        <a
-          href={LAB_URL}
+        <Link
+          href="/docs/accuracy"
           className="mt-6 inline-block font-medium text-fd-primary underline underline-offset-4"
         >
           How the lab measures it
-        </a>
+        </Link>
       </section>
 
       <section aria-labelledby="run-it" className="border-t border-fd-border py-20">
