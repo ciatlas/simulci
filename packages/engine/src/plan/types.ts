@@ -119,7 +119,7 @@ export interface MatrixReason {
 
 export interface LimitReason {
   kind: 'limit';
-  /** `nesting`, `workflows`, `matrix`, … per the platform profile. */
+  /** `nesting`, `workflows`, `actions-lock`, …; `unsupported` for a call limit under `platform: ghes`. */
   limit: string;
 }
 
