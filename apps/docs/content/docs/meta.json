@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "verdicts",
+    "remotes",
     "---CLI---",
     "...cli",
     "---Reference---",
