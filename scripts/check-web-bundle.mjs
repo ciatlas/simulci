@@ -27,8 +27,9 @@ const assets = join(dist, 'assets');
 const BUDGETS = [
   // The engine, @ciatlas/core, yaml, zod and @actions/*: 149.4 kB measured; 164.9 with the route tests' runner and
   // its assertions (156.5 before, synthesis § 5.11); 169.4 with remote workflows and actions planned, 170.6 with the
-  // remotes taken level by level from the page's pool (M4 § 5.3), and the budget stays 172.
-  { name: 'the engine worker', test: (f) => f.startsWith('engine.worker-'), kB: 172 },
+  // remotes taken level by level from the page's pool (M4 § 5.3), 171.3 with the remotes' lab fixes (0.5.0); the
+  // budget, 172 until then, is set again from that figure.
+  { name: 'the engine worker', test: (f) => f.startsWith('engine.worker-'), kB: 197 },
   // elkjs: 428.5 kB measured.
   { name: 'the layout worker', test: (f) => f.startsWith('layout.worker-'), kB: 493 },
   // React, the router, React Flow and its d3 modules, Base UI, the scenario form, the panels and the edit history,
