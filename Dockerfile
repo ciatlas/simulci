@@ -10,10 +10,11 @@ WORKDIR /repo
 # corepack installs the pnpm package.json names, without asking.
 ENV CI=true COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
-# The packages first, from the lockfile alone, so a change to the sources reuses them.
+# The packages first, from the lockfile alone (fetch reads nothing else), so a change to the sources reuses them;
+# the install below is --frozen-lockfile, so it fails rather than resolve anything the lockfile does not say.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches patches
-RUN pnpm fetch --frozen-lockfile
+RUN pnpm fetch
 COPY . .
 RUN pnpm install --offline --frozen-lockfile --filter @simulci/web... --filter @simulci/server...
 RUN pnpm --filter @simulci/web build && pnpm --filter @simulci/server build
