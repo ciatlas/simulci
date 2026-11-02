@@ -1,0 +1,55 @@
+{
+  "url": "https://api.github.com/repos/actions/checkout/pulls/2593",
+  "id": 4710941594,
+  "html_url": "https://github.com/actions/checkout/pull/2593",
+  "number": 2593,
+  "state": "open",
+  "locked": false,
+  "title": "Allow filter: none to disable the implicit blob:none for sparse checkout",
+  "user": {
+    "login": "a-contributor",
+    "type": "User"
+  },
+  "created_at": "2026-10-01T23:46:39Z",
+  "updated_at": "2026-10-06T11:19:28Z",
+  "merged_at": null,
+  "draft": false,
+  "head": {
+    "label": "a-contributor:sparse-checkout-filter-none",
+    "ref": "sparse-checkout-filter-none",
+    "sha": "4fba4c42afb21f2bb198a9da39b42fd97dc0d3e9",
+    "user": {
+      "login": "a-contributor"
+    },
+    "repo": {
+      "id": 1400829043,
+      "name": "checkout",
+      "full_name": "a-contributor/checkout",
+      "private": false,
+      "fork": true
+    }
+  },
+  "base": {
+    "label": "actions:main",
+    "ref": "main",
+    "sha": "f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a",
+    "user": {
+      "login": "actions"
+    },
+    "repo": {
+      "id": 197814629,
+      "name": "checkout",
+      "full_name": "actions/checkout",
+      "private": false,
+      "fork": false,
+      "default_branch": "main"
+    }
+  },
+  "author_association": "NONE",
+  "merged": false,
+  "mergeable": true,
+  "commits": 1,
+  "additions": 110,
+  "deletions": 22,
+  "changed_files": 8
+}

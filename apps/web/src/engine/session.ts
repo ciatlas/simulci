@@ -3,7 +3,7 @@ import { isProjectFile, isTestFile } from '../input/filter';
 import { debounce, scheduler, type Timers } from '../lib/debounce';
 import { hashFiles } from '../lib/hash';
 import { markEdit } from '../lib/marks';
-import { defaultBranchOf, defaultScenario, scenarioFor } from '../scenario/defaults';
+import { scenarioFor, sourceDefault } from '../scenario/defaults';
 import { remotePool, type SessionState, type SessionStore, type TestRun } from '../state/store';
 import { type CaseFormat, type CaseOutcome, requestCase } from '../testcase/case';
 import type { EngineClient, SimulateResult, TestResult } from '../worker/client';
@@ -284,7 +284,7 @@ export function createSession({
     loaded = epoch;
     // New files under the page's own scenario get the defaults for them, and a selection made in other files goes.
     if (fresh && store.getState().scenarioFrom === 'default') {
-      const d = defaultScenario(r.outline, defaultBranchOf(store.getState().source));
+      const d = sourceDefault(r.outline, store.getState().source);
       actions.setScenario(d.scenario, { assumed: d.assumed, from: 'default' });
       actions.select(d.focus, undefined);
       simulate.cancel();

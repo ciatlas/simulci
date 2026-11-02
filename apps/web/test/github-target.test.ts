@@ -34,11 +34,7 @@ describe('the repository field', () => {
     expect(parseRepoInput('octo/ship@dev')).not.toHaveProperty('segments');
   });
 
-  it('says why a pull request or another host does not open, and nothing of what is typed halfway', () => {
-    expect(parseRepoInput('https://github.com/octo/ship/pull/42')).toEqual({
-      ok: false,
-      message: 'simulci opens a pull request in a later version: open its repository at the branch for now.',
-    });
+  it('says why another host does not open, and nothing of what is typed halfway', () => {
     expect(parseRepoInput('https://ghe.example.com/octo/ship')).toEqual({
       ok: false,
       message: 'GitHub Enterprise Server needs a self-hosted simulci.',

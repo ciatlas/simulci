@@ -161,7 +161,12 @@ test.describe('axe finds nothing', () => {
     await dialog
       .getByRole('textbox', { name: 'Repository' })
       .fill(`https://github.com/${OWNER}/${REPO}/pull/1`);
-    await expect(dialog).toContainText('pull request');
+    await expect(dialog).toContainText('Pull request #1: Open reads it at its head commit');
+    await expectAxeClean(page, 'light: the dialog at a pull request');
+    await dialog
+      .getByRole('textbox', { name: 'Repository' })
+      .fill(`https://ghe.example.com/${OWNER}/${REPO}`);
+    await expect(dialog).toContainText('GitHub Enterprise Server needs a self-hosted simulci.');
     await expectAxeClean(page, 'light: the dialog saying why a link does not open');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await darkTheme(page);

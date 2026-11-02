@@ -8,7 +8,9 @@ import { type FakeGitHub, fakeGitHub, isElsewhere, OWNER, REPO, remotesRead, WOR
  * it cost, edit it and get the edit back after a reload without a request (failure mode 14), be asked before leaving,
  * take its patch with the commands that apply it, Fetch again when nothing moved and when a file did, the sentence a
  * spent rate limit gets, a link that offers a repository and asks GitHub nothing before the click (failure mode 15),
- * a link to the repository stored here that opens it offline, and the CSP refusing any other host even when routed.
+ * a link to the repository stored here that opens it offline, a pull request from a fork opened at its head as the
+ * scenario (M4 synthesis § 5.8), one past GitHub's 3,000 listed files, and the CSP refusing any other host even when
+ * routed.
  */
 
 const NAME = `${OWNER}/${REPO}`;
@@ -224,6 +226,81 @@ test('a link to the repository stored here opens it offline, and Dismiss lets an
   await expect(offer).toHaveCount(0);
   await expect(page).not.toHaveURL(/elsewhere/);
   expect(github.requests.length).toBe(before);
+});
+
+/** docs.yml at the pull request's head: it now runs on a pull request that changes the docs. */
+const DOCS = '.github/workflows/docs.yml';
+const docsOnPulls = (): string =>
+  WORKFLOWS[DOCS]!.replace(
+    '  workflow_dispatch:',
+    "  pull_request:\n    paths: ['apps/docs/**']\n  workflow_dispatch:",
+  );
+const docsNode = (page: Page): Locator => page.locator(`.react-flow__node-workflow[data-id="${DOCS}"]`);
+
+/** The dialog, a pull request's link pasted, then Open: the pull request's head, its status line. */
+async function openPull(page: Page, github: FakeGitHub, head: string): Promise<void> {
+  await page.goto('/');
+  await page.getByRole('main').getByRole('button', { name: 'Open GitHub repository…' }).click();
+  await dialog(page).getByRole('textbox', { name: 'Repository' }).fill(`https://github.com/${NAME}/pull/42`);
+  await expect(dialog(page)).toContainText(`${NAME} · public · default branch main`);
+  // A pull request opens at its head: no branch, tag or commit to choose.
+  await expect(dialog(page)).toContainText('Pull request #42: Open reads it at its head commit');
+  await expect(dialog(page).getByRole('combobox', { name: 'Branch, tag or commit' })).toHaveCount(0);
+  await dialog(page).getByRole('button', { name: 'Open' }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(nav(page)).toContainText(`${NAME} #42 (head ${head.slice(0, 7)}) · ${FILES} files`);
+  await remotesRead(page, github);
+}
+
+test('opens a pull request from a fork at its head, as the scenario, with the files it changes', async ({
+  page,
+}) => {
+  const github = await fakeGitHub(page);
+  const head = github.pull(42, { [DOCS]: docsOnPulls(), 'apps/docs/index.mdx': '# Docs\n' });
+  await openPull(page, github, head);
+  // The pull request, its head's trees and files (through this repository, the fork's own blob too), its files.
+  expect(github.requests.filter((r) => !isElsewhere(r))).toEqual([
+    `/repos/${NAME}`,
+    `/repos/${NAME}/pulls/42`,
+    `/repos/${NAME}/git/trees/${head}`,
+    expect.stringMatching(new RegExp(`^/repos/${NAME}/git/trees/\\w{40}\\?recursive=1$`)),
+    ...Array.from({ length: FILES }, () =>
+      expect.stringMatching(new RegExp(`^/repos/${NAME}/git/blobs/\\w{40}$`)),
+    ),
+    `/repos/${NAME}/pulls/42/files?per_page=100&page=1`,
+  ]);
+  await expect(page.getByRole('combobox', { name: 'Event' })).toHaveValue('pull_request');
+  await expect(page.getByRole('textbox', { name: 'Base branch' })).toHaveValue('main');
+  await expect(page.getByRole('textbox', { name: 'Head branch' })).toHaveValue('feature');
+  await expect(page.getByRole('spinbutton', { name: 'Number' })).toHaveValue('42');
+  await expect(page.getByRole('switch', { name: 'From a fork' })).toBeChecked();
+  await expect(page.getByLabel(/^Changed files/)).toHaveValue(`${DOCS}\napps/docs/index.mdx`);
+  // The head's docs.yml listens to pull requests, and the docs changed.
+  await expect(docsNode(page)).toHaveAttribute('aria-label', /^runs Docs/);
+  await expect(page).toHaveURL(/[?&]event=pull_request(&|$)/);
+
+  // The source and the scenario come back after a reload, without a request.
+  const before = github.requests.length;
+  await page.reload();
+  await expect(nav(page)).toContainText(`${NAME} #42 (head ${head.slice(0, 7)})`);
+  await expect(page.getByLabel(/^Changed files/)).toHaveValue(`${DOCS}\napps/docs/index.mdx`);
+  expect(github.requests.length).toBe(before);
+});
+
+test('past the 3,000 files GitHub lists, asks for none and leaves paths filters unknown', async ({
+  page,
+}) => {
+  const github = await fakeGitHub(page);
+  const head = github.pull(42, { [DOCS]: docsOnPulls() }, 3412);
+  await openPull(page, github, head);
+  expect(github.requests.some((r) => r.includes('/files'))).toBe(false);
+  const changed = page.getByLabel(/^Changed files/);
+  await expect(changed).toHaveValue('');
+  await expect(page.getByText(/^Changed files · unknown/)).toBeVisible();
+  await expect(page.getByRole('main')).toContainText(
+    'GitHub lists at most 3,000 files of a pull request, and #42 changes 3,412: which ones is unknown, so paths filters cannot decide.',
+  );
+  await expect(docsNode(page)).toHaveAttribute('aria-label', /^might run Docs/);
 });
 
 test('the CSP lets the page reach api.github.com and refuses any other host, a routed one too', async ({
