@@ -10,6 +10,7 @@ import { gridCells, stripRows } from '../size';
 import { CARD, type JobModel } from '../types';
 import { HoverCard } from './HoverCard';
 import { LegGrid, SkippedGrid } from './LegGrid';
+import { RemoteStubView } from './RemoteStub';
 import { StepList } from './StepList';
 import { StepStrip } from './StepStrip';
 
@@ -28,7 +29,7 @@ const HANDLE = { top: CARD.header / 2 };
  * step-list toggle), the subline (the verdict word and the deciding clause when it does not plainly run, `×count`,
  * the `uses:` glyph, the check), the representative leg's steps as a strip, the legs as a grid, then the open step
  * list. A skipped job keeps the strip's and the grid's room, the grid drawn as skipped cells. A call job's callee is
- * a node of its own placed below them. Runs have a solid border in the run colour, skipped ones a thin dimmed one,
+ * a node of its own placed below them; a remote callee the plan does not simulate is a dashed stub in its place. Runs have a solid border in the run colour, skipped ones a thin dimmed one,
  * might-run ones the only dashed border. The toggle is a tab stop only on the card that holds the selection. In edit
  * mode a card of the workflow being edited also has + on its right edge, which adds a job after it (`a` does the same),
  * and a double-click on its title renames the job (F2 does the same).
@@ -64,6 +65,7 @@ function JobNodeView({ data, width }: NodeProps<JobFlowNode>) {
         onPick={act.select}
         editable={editable}
       />
+      {job.stub && <RemoteStubView job={job} stub={job.stub} tabStop={state.selected} />}
       <Handle type="source" position={Position.Right} isConnectable={editable} style={HANDLE} />
       {editable && (
         <button

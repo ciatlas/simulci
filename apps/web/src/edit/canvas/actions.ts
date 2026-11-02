@@ -9,6 +9,7 @@ import { type CatalogAction, catalogAction } from '../catalog';
 import { type Dispatched, dispatch } from '../dispatch';
 import { documents } from '../documents';
 import { type Gestures, pendingEdges } from '../gestures';
+import { refuseRemote } from '../remote';
 import { dependentsOf, needsOf, needsTransitively } from '../needs';
 import { type Target, targetOf } from '../selection';
 import { moveStep, removeStep, stepTarget } from '../steps/actions';
@@ -272,21 +273,25 @@ export function checkoutOf(
 
 /** The gestures the page asks for, answered on this store with this host's popovers and questions. */
 export function gesturesOf(store: SessionStore, ui: GestureUi): Gestures {
+  // A gesture on a job or step of a remote callee refuses with where to make it (edit/remote.ts).
+  const remote = (): boolean => refuseRemote(store, (seq, node) => ui.refused(seq, cardElement(node)));
   return {
-    addJob: (after) => openAddJob(store, ui, after),
-    needs: () => openNeeds(store, ui),
-    palette: (at) => openPalette(store, ui, at),
+    addJob: (after) => (after === undefined && remote()) || openAddJob(store, ui, after),
+    needs: () => remote() || openNeeds(store, ui),
+    palette: (at) => (at === undefined && remote()) || openPalette(store, ui, at),
     remove: () => {
+      if (remote()) return true;
       const target = selected(store);
       if (target?.step)
         return removeStep(store, ui, target, { anchor: anchorFor(stepCard(target.file, target.job)) });
       return target !== undefined && removeSelectedJob(store, ui, target);
     },
     move: (by) => {
+      if (remote()) return true;
       const target = selected(store);
       return target?.step !== undefined && moveStep(store, ui, target, target.step.index + by);
     },
-    rename: (at) => (at ? renameRow(store, ui, at.node, at.anchor) : openRename(store, ui)),
+    rename: (at) => (at ? renameRow(store, ui, at.node, at.anchor) : remote() || openRename(store, ui)),
     canConnect: (source, target) => canConnect(store, source, target),
     connect: (source, target) => connect(store, ui, source, target),
     disconnect: (source, target) => disconnect(store, ui, source, target),

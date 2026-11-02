@@ -218,9 +218,14 @@ function emitCallee(ctx: Context, job: JobModel, faded: boolean): void {
   const callee = job.callee === undefined ? undefined : ctx.model.scopes[job.callee];
   const size = callee?.collapsed ? CARD.collapsed : callee && ctx.layout.scopes[callee.id];
   if (!callee || !size) return;
-  const place = { position: calleeOffset(job), parentId: job.id, width: size.width, height: size.height };
+  const width = callee.collapsed ? size.width : Math.max(size.width, roomIn(ctx, job));
+  const place = { position: calleeOffset(job), parentId: job.id, width, height: size.height };
   emitScope(ctx, callee, place, faded);
 }
+
+/** A callee is as wide as its card lets it be: a card widened for a remote's title bar widens the frame with it. */
+const roomIn = (ctx: Context, job: JobModel): number =>
+  (ctx.layout.cards[job.id]?.width ?? 0) - 2 * CARD.callPadding;
 
 function stateOf(ctx: Context, id: NodeId, path: CardState['path']): CardState {
   const selected = ctx.card === id;

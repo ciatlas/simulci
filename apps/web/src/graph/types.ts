@@ -1,4 +1,5 @@
 import type { NodeId, Tri } from '@simulci/engine';
+import type { RemoteStub } from './remote';
 
 /**
  * The shapes and measures every graph module shares. The canvas holds workflow instances (a depth-0 workflow, or the
@@ -28,6 +29,8 @@ export interface ScopeModel {
    * dimmed under the banner that says so (app/UntriggeredBanner.tsx).
    */
   dimmed?: true;
+  /** A remote callee: `octo/ship · deploy.yml @ v1` and the commit it was read at (`4a7c0e1`). */
+  remote?: { title: string; sha: string };
   /** In declaration order. */
   jobs: NodeId[];
   edges: EdgeModel[];
@@ -70,6 +73,13 @@ export interface JobModel {
   expanded: boolean;
   /** The scope of the workflow the representative leg calls. */
   callee?: NodeId;
+  /** A remote callee's title bar, `octo/ship · deploy.yml @ v1 (4a7c0e1)`: the card is at least wide enough for it. */
+  calleeHeader?: string;
+  /**
+   * In its place, for a call that might run and whose remote callee the plan does not simulate (not fetched, not
+   * read, past a cap, a file that does not parse): a dashed stub that says so.
+   */
+  stub?: RemoteStub;
 }
 
 export interface LegCell {
@@ -179,6 +189,8 @@ export const CARD = {
   callPadding: 12,
   /** An untriggered root or a closed callee. */
   collapsed: { width: 320, height: 44 },
+  /** A remote callee's stub: its title line and a sentence of up to two lines, inset by `callPadding`. */
+  stub: { width: 296, height: 58 },
   /** Between depth-0 workflows in the root stack. */
   rootGap: 24,
   /** ELK `elk.padding` of a workflow compound: room for its title bar. */

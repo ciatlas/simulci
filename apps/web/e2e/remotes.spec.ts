@@ -88,7 +88,7 @@ test('a pasted workflow asks GitHub nothing until Fetch, then plans the remote w
   const requests = await calledRepositories(page);
   await paste(page);
   await expect(chip(page)).toContainText(
-    '1 remote workflow and 1 action not fetched · Fetch from api.github.com',
+    '1 remote workflow · 1 workflow and 1 action not fetched · Fetch from api.github.com',
   );
   // Past the reads' quiet, still nothing asked.
   await page.waitForTimeout(1500);
@@ -124,9 +124,9 @@ test('the pasted files restored by a reload, or with a link, ask GitHub nothing 
   await expect.poll(() => requests.length).toBe(4);
 
   await page.reload();
-  await expect(chip(page)).toContainText('1 remote workflow and 1 action not fetched');
+  await expect(chip(page)).toContainText('1 remote workflow · 1 workflow and 1 action not fetched');
   await page.goto('/?event=push');
-  await expect(chip(page)).toContainText('1 remote workflow and 1 action not fetched');
+  await expect(chip(page)).toContainText('1 remote workflow · 1 workflow and 1 action not fetched');
   await page.waitForTimeout(1500);
   expect(requests).toHaveLength(4);
 });

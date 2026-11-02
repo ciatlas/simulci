@@ -17,7 +17,8 @@ import {
  * A skipped job has no legs and no steps in the plan, so the room is kept from what does not depend on the verdict:
  * every job that is not a call has at least one strip row, and a matrix job's grid is as large as its matrix. What
  * the plan alone cannot give still moves: more than one strip row of a job that turns skipped, the open list of a
- * skipped job, and the callee of a call job, which exists only while it might run.
+ * skipped job, and the callee of a call job, which exists only while it might run. A remote callee the plan does not
+ * simulate is a stub of a fixed size in its place, below the content.
  */
 
 /** Room in the header besides the title: the mark and its gap before it, the badges after it. */
@@ -25,6 +26,9 @@ const TITLE_LEAD = 28;
 const TITLE_TRAIL = 24;
 /** The step a header's width goes up in: the narrowest and the widest card are whole steps. */
 const TITLE_STEP = 8;
+/** A remote callee's title bar besides its header: mark, glyph, counts, `called by …`, gaps and padding. */
+const REMOTE_BAR = 200;
+const REMOTE_MAX = 640;
 const VALUE_CELL: Size = { width: 72, height: 20 };
 const INDEX_CELL: Size = { width: 26, height: 18 };
 /** Cells show the values up to this many legs, a mark and an index above it. */
@@ -65,12 +69,23 @@ export function callFrame(job: JobModel, metrics: Metrics): { min: Size; extra: 
   const title = stepUp(TITLE_LEAD + metrics.width(job.label, 'title') + TITLE_TRAIL);
   const cells = gridCells(job);
   const grid = cells > 0 ? legGrid(cells).width + 2 * CARD.padding : 0;
-  const width = Math.max(clamp(title, CARD.minWidth, CARD.maxWidth), grid);
-  const height = contentHeight(job) + CARD.padding;
+  const stub = job.stub ? CARD.stub.width + 2 * CARD.callPadding : 0;
+  const width = Math.max(clamp(title, CARD.minWidth, CARD.maxWidth), grid, stub, headerWidth(job, metrics));
+  const height = contentHeight(job) + CARD.padding + (job.stub ? CARD.stub.height + CARD.callPadding : 0);
   return {
     min: { width, height },
     extra: { width: 2 * CARD.callPadding, height: height + CARD.callPadding },
   };
+}
+
+/**
+ * Room for a remote callee's title bar, whose repository, file, ref and commit say what it is: the bar's mark, glyph,
+ * counts and caller beside them, inside the card's call padding. Up to a cap, past which the bar cuts it short.
+ */
+function headerWidth(job: Pick<JobModel, 'calleeHeader'>, metrics: Metrics): number {
+  if (job.calleeHeader === undefined) return 0;
+  const bar = stepUp(metrics.width(job.calleeHeader, 'title') + REMOTE_BAR);
+  return Math.min(bar, REMOTE_MAX) + 2 * CARD.callPadding;
 }
 
 /** Where a call job's callee sits inside its card, relative to the card's top-left corner. */

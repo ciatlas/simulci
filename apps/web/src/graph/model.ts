@@ -12,6 +12,7 @@ import type {
 } from '@simulci/engine';
 import { formatReason, formatValue } from '@simulci/engine/render';
 import type { Derived } from '../worker/protocol';
+import { type RemoteStub, remoteAt, remoteStub, remoteTitle, shortSha } from './remote';
 import { shapeHash } from './shape';
 import type { EdgeModel, GraphModel, GraphUi, JobModel, LegCell, ScopeModel, StepMark } from './types';
 
@@ -23,6 +24,7 @@ import type { EdgeModel, GraphModel, GraphUi, JobModel, LegCell, ScopeModel, Ste
  */
 export function graphModel(plan: RunPlan, derived: Derived, ui: GraphUi): GraphModel {
   const b: Build = {
+    plan,
     derived,
     ui,
     model: { roots: [], scopes: {}, jobs: {} },
@@ -45,6 +47,7 @@ const onlyIn = (plan: RunPlan, only: string | undefined): string | undefined =>
   only !== undefined && plan.workflows.some((wf) => wf.depth === 0 && wf.path === only) ? only : undefined;
 
 interface Build {
+  plan: RunPlan;
   derived: Derived;
   ui: GraphUi;
   model: GraphModel;
@@ -73,6 +76,7 @@ function scopeOf(b: Build, wf: WorkflowPlan, caller: NodeId | undefined): NodeId
     caller,
     collapsed,
     dimmed: dimmed || undefined,
+    remote: wf.remote && { title: remoteTitle(wf.remote.ref), sha: shortSha(wf.remote.sha) },
     jobs: [],
     edges: [],
     shape: '',
@@ -114,8 +118,26 @@ function jobOf(b: Build, job: JobPlan, scope: NodeId): JobModel {
     expanded: b.expanded.has(job.id),
   });
   b.model.jobs[job.id] = model;
-  if (rep?.call) model.callee = scopeOf(b, rep.call, job.id);
+  if (rep?.call) Object.assign(model, calleeOf(b, rep.call, job.id));
+  const stub = stubOf(b.plan, job, rep);
+  if (stub) model.stub = stub;
   return model;
+}
+
+/** The scope a job's leg calls; for a remote one, the title bar its card makes room for too. */
+function calleeOf(b: Build, call: WorkflowPlan, caller: NodeId): Pick<JobModel, 'callee' | 'calleeHeader'> {
+  const callee = scopeOf(b, call, caller);
+  const { remote } = call;
+  return remote
+    ? { callee, calleeHeader: `${remoteTitle(remote.ref)} (${shortSha(remote.sha)})` }
+    : { callee };
+}
+
+/** The stub of a call that might run and whose remote callee the plan does not simulate (graph/remote.ts). */
+function stubOf(plan: RunPlan, job: JobPlan, rep: LegPlan | undefined): RemoteStub | undefined {
+  if (!rep || rep.call || job.uses === undefined || job.runs.verdict === 'no') return undefined;
+  const row = remoteAt(plan, rep.id);
+  return row && remoteStub(row);
 }
 
 /** What the card says about the job: its name, verdict, the clause unless it plainly runs, the badge, the subline. */
