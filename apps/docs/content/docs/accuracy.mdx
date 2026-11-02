@@ -1,0 +1,78 @@
+---
+title: Accuracy
+description: How often simulci's plans match what GitHub did, measured on real runs of a lab repository.
+---
+
+{accuracy.sentence}
+
+| Predicted                         | Outcomes            |
+| --------------------------------- | ------------------- |
+| exactly                           | {accuracy.exact}    |
+| “might”, naming the unknown       | {accuracy.maybe}    |
+| wrongly                           | {accuracy.wrong}    |
+
+Every number on this page is read from
+[`accuracy.json`](https://github.com/ciatlas/simulci/blob/main/fixtures/routes-lab/accuracy.json) when the site is
+built. `pnpm lab:accuracy` writes that file from the captured runs, and CI fails while it is stale.
+
+## Remote workflows and actions
+
+{remote.sentence}
+
+These are graded apart from the figure above: they come from another capture, of lab cases that call reusable
+workflows and actions in a second repository, and a refused dispatch counts as a workflow that did not trigger.
+
+## What is compared
+
+| Kind     | Status cases               | Remote cases               | An outcome is                                                       |
+| -------- | -------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| triggers | {compared.triggers}       | {remote.compared.triggers}       | whether a workflow ran on a push or dispatch                        |
+| checks   | {compared.checks}       | {remote.compared.checks}       | whether a job's check ran, by its name; a name not predicted is wrong |
+| jobs     | {compared.jobs}       | {remote.compared.jobs}       | a job's conclusion                                                  |
+| steps    | {compared.steps}       | {remote.compared.steps}       | a step's conclusion, GitHub's own set-up and post steps aside       |
+| probes   | {compared.probes}       | {remote.compared.probes}       | a value a step printed: an output, `needs.<id>.result`, `toJSON(…)` |
+
+An outcome is graded **exact** when the plan predicted the observed value for certain, **might** when the plan left
+it unknown and the observed value is among the ones it named, and **wrong** otherwise: a certain value that differs,
+an unknown whose candidates leave the observed value out, or a check or step the plan does not have.
+
+## How it is measured
+
+1. **The lab.** [`ciatlas/simulci-lab`](https://github.com/ciatlas/simulci-lab) holds one small workflow per case,
+   each testing one claim about how GitHub routes a run: filters, `needs`, `if:`, matrices, `continue-on-error`,
+   reusable workflows, composite actions. Its remote cases call workflows and actions in the public
+   [`ciatlas/simulci-lab-remote`](https://github.com/ciatlas/simulci-lab-remote).
+2. **The runs.** The lab was pushed to (branches, a tag, `[skip ci]` commits), opened a pull request and was
+   dispatched. A script captured every completed run from GitHub's API: its jobs and steps with their conclusions,
+   the check runs it created, and the `probe:` lines its steps echoed, read from the job logs. A table of the pushes
+   records which workflows each push started, so "did not trigger" is measured too.
+3. **The plans.** Each run is replayed as a [scenario](/docs/reference/scenarios) through the engine, with the lab's
+   files as they were when it ran. Only what a run knows and a plan cannot is given: which scripted steps fail on
+   purpose. A remote case is fed the remote files as a host reads them, and every commit GitHub recorded for its
+   jobs must be the one the plan read.
+4. **The grade.** Every observed outcome is compared with the plan and graded as above. Nothing in the capture is
+   typed by hand.
+
+The captures, the cases with the claim each tests and what GitHub did, and the harness are in
+[`fixtures/routes-lab`](https://github.com/ciatlas/simulci/tree/main/fixtures/routes-lab) and
+[`packages/engine/test/lab.ts`](https://github.com/ciatlas/simulci/blob/main/packages/engine/test/lab.ts). The
+engine's tests fail on any wrong prediction.
+
+## Limits
+
+- **A lab, not a sample.** The workflows are small and written to probe one rule each, so the figure says how
+  faithfully simulci follows GitHub's routing rules, not how often a plan of your workflows is right.
+- **Given which scripted steps failed.** simulci does not predict whether a script exits non-zero; the lab tells it.
+  What it measures is everything that follows from that.
+- **One platform.** `ubuntu-latest` runners on github.com. GitHub Enterprise Server is not measured.
+- **Timing.** Two observed values depend on timing: the conclusion of a step in a matrix leg that `fail-fast`
+  cancelled, which simulci leaves as “might”, and the key order of `toJSON(needs.<id>.outputs)`, compared in any
+  order.
+- **Remote cases.** The remote files are fed in as a host reads them, then checked against the commits GitHub
+  recorded, so the figure measures planning, not fetching. One probe, echoed by a JavaScript action's own script,
+  which a plan never runs, is left out. Not captured yet: the actions a remote workflow's own `actions.lock` pins, a
+  same-repository ref called from a pull request, and `actions.lock` pins reached through local composite actions.
+- **Found and fixed.** The remote cases first found six wrong predictions, all fixed in 0.5.0:
+  [#113](https://github.com/ciatlas/simulci/pull/113) (a workflow `actions.lock` covers is refused when a pin is
+  missing), [#114](https://github.com/ciatlas/simulci/pull/114) (a remote step's `./` is the job's workspace) and
+  [#115](https://github.com/ciatlas/simulci/pull/115) (`actions.lock` pins per running file).
