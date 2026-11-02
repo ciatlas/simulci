@@ -83,6 +83,15 @@ export interface UrlState {
 /** Beyond this many characters of JSON the assume entries stay in the store and leave the URL. */
 export const ASSUME_URL_LIMIT = 8 * 1024;
 
+/** The same for the changed files: a pull request's can run to thousands, past what a host takes in a URL. */
+export const CHANGED_URL_LIMIT = 8 * 1024;
+
+/** Whether a scenario key's value goes in the URL: not an empty one, nor changed files too long for it. */
+const inUrl = (key: ScenarioKey, value: unknown): boolean =>
+  value !== undefined &&
+  !isEmpty(value) &&
+  (key !== 'changed' || JSON.stringify(value).length <= CHANGED_URL_LIMIT);
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -151,7 +160,7 @@ export function writeSearch(state: UrlState): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (state.scenario) {
     const s = state.scenario as unknown as Record<string, unknown>;
-    for (const key of SCENARIO_KEYS) if (s[key] !== undefined && !isEmpty(s[key])) out[key] = s[key];
+    for (const key of SCENARIO_KEYS) if (inUrl(key, s[key])) out[key] = s[key];
   }
   if (state.assume?.length && JSON.stringify(state.assume).length <= ASSUME_URL_LIMIT) out.a = state.assume;
   if (state.wf) out.wf = state.wf;

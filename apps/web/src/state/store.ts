@@ -61,8 +61,24 @@ export interface GitHubSource {
   /** As GitHub said when it was opened: only a repository seen public has its files cached or put in the URL. */
   private: boolean;
   readAt: number;
-  /** The pull request it was opened for (WP). */
-  pull?: number;
+  /** The pull request it was opened for, at its head commit (`sha`, which is also `ref`). */
+  pull?: PullFacts;
+}
+
+/**
+ * What GitHub said of a pull request a source was opened for (M4 synthesis § 5.8): what its scenario needs. GitHub
+ * lists at most 3,000 of its files; past that `changed` is absent, so its `paths` filters read as unknown.
+ */
+export interface PullFacts {
+  number: number;
+  /** The branch it merges into, and its head's branch (in the head's own repository). */
+  base: string;
+  head: string;
+  /** Its head is in another repository, or in one since deleted: GitHub withholds the secrets. */
+  fork: boolean;
+  /** How many files it changes, as GitHub counts them. */
+  files: number;
+  changed?: NonNullable<ScenarioInput['changed']>;
 }
 
 export interface Issue {

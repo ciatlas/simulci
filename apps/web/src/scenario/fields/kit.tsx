@@ -25,6 +25,8 @@ export interface FieldContext {
   requested?: FieldRequest | undefined;
   patch: (patch: Partial<ScenarioInput>) => void;
   setScenario: (scenario: ScenarioInput) => void;
+  /** Why the source cannot say which files changed, when it knows they did: a pull request past GitHub's list. */
+  unlisted?: string | undefined;
 }
 
 export interface GroupProps {

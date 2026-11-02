@@ -1,6 +1,6 @@
 import { debounce, type Timers } from '../lib/debounce';
 import { isTarget } from '../lib/repo-words';
-import { type DefaultScenario, defaultBranchOf, defaultScenario } from '../scenario/defaults';
+import { type DefaultScenario, sourceDefault } from '../scenario/defaults';
 import { initialSessionState, type SessionActions, type SessionState, type SessionStore } from './store';
 import { ASSUME_URL_LIMIT, readSearch, type UrlState, urlSliceChanged, urlStateOf, writeSearch } from './url';
 
@@ -98,7 +98,7 @@ export function createUrlSync({
 export function pageDefault(s: Pick<SessionState, 'project' | 'source'>): DefaultScenario {
   const outline = s.project.outline;
   return outline
-    ? defaultScenario(outline, defaultBranchOf(s.source))
+    ? sourceDefault(outline, s.source)
     : { scenario: initialSessionState().scenario, assumed: [] };
 }
 

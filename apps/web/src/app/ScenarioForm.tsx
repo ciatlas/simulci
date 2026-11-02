@@ -7,6 +7,7 @@ import {
   showsChanged,
   showsRef,
 } from '../scenario/derive';
+import { unlistedSentence } from '../lib/repo-words';
 import { ActivityTypeField } from '../scenario/fields/ActivityType';
 import { AdvancedFields } from '../scenario/fields/Advanced';
 import { ChangedFilesField } from '../scenario/fields/ChangedFiles';
@@ -59,6 +60,8 @@ const TriggerRows = lazy(() => import('../edit/edit').then((m) => ({ default: m.
 export function ScenarioForm() {
   const outline = useSession((s) => s.project.outline);
   const editing = useSession((s) => s.edit.on);
+  // Why the source cannot say which files changed: a pull request past what GitHub lists (M4 synthesis § 5.8).
+  const unlisted = useSession((s) => unlistedSentence(s.source));
   // The fields go with the project and come back with the next one, so what they keep in view (the Ref or the
   // changed files under the caret, Merged, the fork) is decided afresh for it, as on a first mount.
   if (!outline) return null;
@@ -68,14 +71,22 @@ export function ScenarioForm() {
       <Suspense fallback={<p className="text-muted text-xs">loading the editor…</p>}>
         <TriggerRows />
       </Suspense>
-      <Fields outline={outline} without="event" />
+      <Fields outline={outline} unlisted={unlisted} without="event" />
     </>
   ) : (
-    <Fields outline={outline} />
+    <Fields outline={outline} unlisted={unlisted} />
   );
 }
 
-function Fields({ outline, without }: { outline: Outline; without?: GroupId }) {
+function Fields({
+  outline,
+  unlisted,
+  without,
+}: {
+  outline: Outline;
+  unlisted: string | undefined;
+  without?: GroupId;
+}) {
   const scenario = useSession((s) => s.scenario);
   const from = useSession((s) => s.scenarioFrom);
   const assumed = useSession((s) => s.assumed);
@@ -103,6 +114,7 @@ function Fields({ outline, without }: { outline: Outline; without?: GroupId }) {
     requested: requestedField(request, model.fields),
     patch,
     setScenario: (next) => setScenario(next),
+    unlisted,
   };
   return (
     <form

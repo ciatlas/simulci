@@ -11,7 +11,8 @@ import { expect, type Page, type Route } from '@playwright/test';
  * commit with changed files, make a branch or a tag at the commit `main` is at, or spend the limit. A ref resolves as
  * git resolves one: a full SHA, `refs/heads/…` and `refs/tags/…`, then a bare name, a tag before a branch. Any other
  * repository is one the workflows call (M4 synthesis § 5.3): each ref resolves to a commit of its own, and each file
- * at a commit is a node action or a reusable workflow.
+ * at a commit is a node action or a reusable workflow. A test can open a pull request from a fork: its head is a
+ * commit of the opened repository that no ref names, as GitHub keeps a fork's head in the base (fixtures README).
  */
 
 const here = import.meta.dirname;
@@ -87,6 +88,17 @@ export interface FakeGitHub {
   tag(name: string): void;
   /** Spends the hour's requests: every request now answers 403. */
   spend(): void;
+  /**
+   * Pull request `number` from a fork, at a head commit of its own (on no branch here) where these files hold these
+   * texts, changing `files` files: these paths, then made-up ones up to the count. Returns the head commit.
+   */
+  pull(number: number, changed: Record<string, string>, files?: number): string;
+}
+
+/** A pull request as the fake serves it: the recorded answer's shape, this test's facts. */
+interface Pull {
+  body: string;
+  files: { filename: string; status: string }[];
 }
 
 export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
@@ -105,7 +117,6 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
 
   let files = { ...WORKFLOWS };
   let commits = 0;
-  let commit = '';
   const trees = new Map<string, Entry[]>();
   const commitShas = new Set<string>();
   const branches = new Map<string, string>();
@@ -117,9 +128,10 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     if (qualified) return (qualified[1] === 'heads' ? heads() : tags).get(qualified[2]!);
     return tags.get(ref) ?? heads().get(ref);
   };
-  const build = (): void => {
+  /** A commit where the `.github` files hold these texts; no ref moves. */
+  const build = (texts: Record<string, string>): string => {
     const others = recorded.tree.filter((e) => !e.path.startsWith('workflows/'));
-    const workflows = Object.entries(files).map(([path, text]) => ({
+    const workflows = Object.entries(texts).map(([path, text]) => ({
       path: path.slice('.github/'.length),
       mode: '100644',
       type: 'blob',
@@ -128,15 +140,21 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     }));
     const github: Entry[] = [...others, ...workflows];
     const githubSha = shaOf('tree', Buffer.from(JSON.stringify(github)));
-    commit = shaOf('commit', Buffer.from(`${++commits} ${githubSha}`));
-    commitShas.add(commit);
+    const sha = shaOf('commit', Buffer.from(`${++commits} ${githubSha}`));
+    commitShas.add(sha);
     trees.set(githubSha, github);
     trees.set(
-      commit,
+      sha,
       root.tree.map((e) => (e.path === '.github' ? { ...e, sha: githubSha } : e)),
     );
+    return sha;
   };
-  build();
+  let commit = build(files);
+  const pulls = new Map<number, Pull>();
+  const recordedPull = json('pull.json') as Record<string, unknown> & {
+    head: Record<string, unknown> & { repo: Record<string, unknown> };
+    base: Record<string, unknown> & { repo: Record<string, unknown> };
+  };
 
   const requests: string[] = [];
   let remaining = 60;
@@ -164,7 +182,19 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
       const body = named.map(([name, sha]) => ({ name, commit: { sha, url: `${API}/commits/${sha}` } }));
       return { status: 200, body: JSON.stringify(body), type: 'application/json' };
     }
-    return undefined;
+    return pullAnswer(path);
+  };
+
+  /** A pull request, and its files 100 a page as GitHub lists them (at most 3,000). */
+  const pullAnswer = (path: string): Answer | undefined => {
+    const asked = /^\/pulls\/(\d+)(?:\/files\?per_page=100&page=(\d+))?$/.exec(path);
+    const pull = asked && pulls.get(Number(asked[1]));
+    if (!asked || !pull) return undefined;
+    const listed = Number(asked[2] ?? 0);
+    const body = listed
+      ? JSON.stringify(pull.files.slice(0, 3000).slice((listed - 1) * 100, listed * 100))
+      : pull.body;
+    return { status: 200, body, type: 'application/json' };
   };
 
   /** A tree or a blob, by SHA. */
@@ -226,7 +256,7 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     commit: () => commit,
     push: (changed) => {
       files = { ...files, ...changed };
-      build();
+      commit = build(files);
     },
     branch: (name) => {
       branches.set(name, commit);
@@ -236,6 +266,35 @@ export async function fakeGitHub(page: Page): Promise<FakeGitHub> {
     },
     spend: () => {
       remaining = 0;
+    },
+    pull: (number, changed, count = Object.keys(changed).length) => {
+      const head = build({ ...files, ...changed });
+      const listed = Object.keys(changed).map((filename) => ({ filename, status: 'modified' }));
+      for (let i = listed.length; i < count; i++)
+        listed.push({ filename: `src/file-${i}.ts`, status: 'added' });
+      const { head: h, base: b } = recordedPull;
+      const body = {
+        ...recordedPull,
+        url: `${API}/pulls/${number}`,
+        html_url: `https://github.com/${OWNER}/${REPO}/pull/${number}`,
+        number,
+        head: {
+          ...h,
+          label: 'a-contributor:feature',
+          ref: 'feature',
+          sha: head,
+          repo: { ...h.repo, name: REPO, full_name: `a-contributor/${REPO}` },
+        },
+        base: {
+          ...b,
+          label: `${OWNER}:main`,
+          sha: commit,
+          repo: { ...b.repo, name: REPO, full_name: `${OWNER}/${REPO}` },
+        },
+        changed_files: count,
+      };
+      pulls.set(number, { body: JSON.stringify(body), files: listed });
+      return head;
     },
   };
 }

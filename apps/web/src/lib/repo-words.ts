@@ -55,11 +55,17 @@ export const shortSha = (sha: string): string => sha.slice(0, 7);
 export const repoName = (source: Pick<GitHubSource, 'owner' | 'repo'>): string =>
   `${source.owner}/${source.repo}`;
 
-/** `octo/ship @ main (3f2a9c1)`, or `octo/ship @ 3f2a9c1` when the ref is the commit: the status line's name of it. */
-export const repoAt = (source: GitHubSource): string =>
-  source.ref === source.sha
-    ? `${repoName(source)} @ ${shortSha(source.sha)}`
-    : `${repoName(source)} @ ${source.ref} (${shortSha(source.sha)})`;
+/**
+ * `octo/ship @ main (3f2a9c1)`, `octo/ship @ 3f2a9c1` when the ref is the commit, `octo/ship #42 (head 9b1e2c3)` for a
+ * pull request: the status line's name of it.
+ */
+export function repoAt(source: GitHubSource): string {
+  const sha = shortSha(source.sha);
+  if (source.pull) return `${repoName(source)} #${source.pull.number} (head ${sha})`;
+  return source.ref === source.sha
+    ? `${repoName(source)} @ ${sha}`
+    : `${repoName(source)} @ ${source.ref} (${sha})`;
+}
 
 /** `octo-ship-3f2a9c1.patch`, or `simulci-changes.patch`. */
 export const patchName = (source: Source): string =>
@@ -78,3 +84,9 @@ export const applyCommands = (source: GitHubSource): string =>
 /** The note the first edit of a GitHub source gets: where its edits can go. */
 export const githubNote = (source: GitHubSource): string =>
   `Read from ${repoName(source)} at ${shortSha(source.sha)}. Download a patch and apply it in your checkout.`;
+
+/** Why a pull request's changed files are unknown: GitHub lists at most 3,000 of them (M4 synthesis § 5.8). */
+export const unlistedSentence = (source: Source): string | undefined =>
+  source.kind === 'github' && source.pull && !source.pull.changed
+    ? `GitHub lists at most 3,000 files of a pull request, and #${source.pull.number} changes ${source.pull.files.toLocaleString('en')}: which ones is unknown, so paths filters cannot decide.`
+    : undefined;
