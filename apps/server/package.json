@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@hono/node-server": "2.1.5",
+    "@hono/node-server": "2.1.6",
     "hono": "4.13.16",
     "tsdown": "0.23.1",
     "zod": "^4.6.7"
