@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/ciatlas/simulci/compare/v0.5.0...v0.6.0) (2026-11-13)
+
+
+### Features
+
+* **docs:** remote workflows and actions ([#126](https://github.com/ciatlas/simulci/issues/126)) ([fa91a96](https://github.com/ciatlas/simulci/commit/fa91a9627d0d60152ce5e1efa15d4a9c1a29dc97))
+* **engine:** the GHES platform profile ([#125](https://github.com/ciatlas/simulci/issues/125)) ([5e3e69c](https://github.com/ciatlas/simulci/commit/5e3e69c6cd22e694d73a488f50faeefda889c968))
+* **server:** serve the app from one container ([#127](https://github.com/ciatlas/simulci/issues/127)) ([da5a2e1](https://github.com/ciatlas/simulci/commit/da5a2e1fe27abaec532f0de57d1cbf83f94a6fec))
+* **web:** open a pull request ([#129](https://github.com/ciatlas/simulci/issues/129)) ([4736221](https://github.com/ciatlas/simulci/commit/4736221f44499eefec93bbe86ebbae45197c602a))
+* **web:** show remote workflows on the canvas ([#130](https://github.com/ciatlas/simulci/issues/130)) ([391464e](https://github.com/ciatlas/simulci/commit/391464e21276b25dd6b966f722752969070386a2))
+
 ## [0.5.0](https://github.com/ciatlas/simulci/compare/v0.4.0...v0.5.0) (2026-11-01)
 
 
