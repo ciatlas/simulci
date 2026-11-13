@@ -646,7 +646,7 @@
   {
     "uses": "docker/login-action",
     "ref": "v4",
-    "sha": "81c6f93d4bc991e510b342a00b419b3bb4efc5c6",
+    "sha": "8aa5831fb8d48d8f76594c7ddde61ae58019f550",
     "name": "Docker Login",
     "description": "GitHub Action to login against a Docker registry",
     "inputs": [
@@ -1498,7 +1498,7 @@
   {
     "uses": "ruby/setup-ruby",
     "ref": "v1",
-    "sha": "de492cf36cbab201753d720ce4f4e336cd688c94",
+    "sha": "b3aaceaef7e0ee231b499e7b5f49c03fc1d32199",
     "name": "Setup Ruby, JRuby and TruffleRuby",
     "description": "Download a prebuilt Ruby and add it to the PATH in 5 seconds",
     "inputs": [
@@ -1559,7 +1559,7 @@
   {
     "uses": "softprops/action-gh-release",
     "ref": "v3",
-    "sha": "efb35369e0ad2afab669f228072c1b0d510eae64",
+    "sha": "8a0cd651e5b2365bd640854a3fa5dfc70e4875f3",
     "name": "GH Release",
     "description": "Github Action for creating Github Releases",
     "inputs": [
@@ -2071,7 +2071,7 @@
   {
     "uses": "actions/setup-dotnet",
     "ref": "v6",
-    "sha": "a98b56852c35b8e3190ac28c8c2271da59106c68",
+    "sha": "0f4a354dd5547a28c70b7853dbd95d5b67886e73",
     "name": "Setup .NET Core SDK",
     "description": "Used to build and publish .NET source. Set up a specific version of the .NET and authentication to private NuGet repository",
     "inputs": [
@@ -2089,6 +2089,12 @@
         "id": "dotnet-channel",
         "required": false,
         "description": "Optional channel for the installation. The possible values are: STS, LTS, A.B (e.g. 8.0), A.B.Cxx (e.g. 8.0.1xx, available since 5.0). To b…"
+      },
+      {
+        "id": "skip-lts-prepass",
+        "required": false,
+        "default": "false",
+        "description": "Optional. When true, skips the LTS runtime pre-pass and installs only the requested dotnet-version. Default: false."
       },
       {
         "id": "global-json-file",
@@ -2130,6 +2136,11 @@
         "id": "architecture",
         "required": false,
         "description": "Optional architecture for the .NET install. Supported values: x64, x86, arm64, amd64, arm, s390x, ppc64le, riscv64. If not set, the install…"
+      },
+      {
+        "id": "check-latest",
+        "required": false,
+        "description": "Optional, defaults to true. When false, a locally installed SDK that satisfies the requested version is reused without any network calls, o…"
       }
     ],
     "outputs": [
@@ -2141,7 +2152,7 @@
   {
     "uses": "peter-evans/create-pull-request",
     "ref": "v8",
-    "sha": "5f6978faf089d4d20b00c7766989d076bb2fc7f1",
+    "sha": "3ffccacd46053766916f087ce41d627c0b8cf2d1",
     "name": "Create Pull Request",
     "description": "Creates a pull request for changes to your repository in the actions workspace",
     "inputs": [
@@ -3111,7 +3122,7 @@
   {
     "uses": "pnpm/action-setup",
     "ref": "v6",
-    "sha": "0977fd99725f1db4007ccb2928dbb4e90d06cc86",
+    "sha": "73e46992e05b19abd31f2f3c20e0e7370d762115",
     "name": "Setup pnpm",
     "description": "Install pnpm package manager",
     "inputs": [
@@ -3154,7 +3165,7 @@
         "id": "standalone",
         "required": false,
         "default": "false",
-        "description": "When set to true, @pnpm/exe, which is a Node.js bundled package, will be installed, enabling using pnpm without Node.js."
+        "description": "When set to true for pnpm v11 and earlier, install @pnpm/exe to use pnpm without Node.js. pnpm v12 uses the plain pnpm package's native exe…"
       }
     ],
     "outputs": [
@@ -4115,7 +4126,7 @@
   {
     "uses": "github/codeql-action/init",
     "ref": "v4",
-    "sha": "9b3254085494b55a0f7c4c2b3d2d52cc712ce370",
+    "sha": "33d7b85da1a04171e211befe2c739303b9a4c066",
     "name": "CodeQL: Init",
     "description": "Set up CodeQL",
     "inputs": [
@@ -4259,7 +4270,7 @@
   {
     "uses": "github/codeql-action/analyze",
     "ref": "v4",
-    "sha": "9b3254085494b55a0f7c4c2b3d2d52cc712ce370",
+    "sha": "33d7b85da1a04171e211befe2c739303b9a4c066",
     "name": "CodeQL: Finish",
     "description": "Finalize CodeQL database",
     "inputs": [
@@ -4448,7 +4459,7 @@
   {
     "uses": "cypress-io/github-action",
     "ref": "v7",
-    "sha": "4ce68f262a3888d22cf3175d62010a145ba737ee",
+    "sha": "18016a55674bd02cabf197de5762a1710cb5577c",
     "name": "Cypress.io",
     "description": "GitHub Action for running Cypress end-to-end and component tests",
     "inputs": [
@@ -4863,7 +4874,7 @@
   {
     "uses": "amannn/action-semantic-pull-request",
     "ref": "v6",
-    "sha": "48f256284bd46cdaab1048c3721360e808335d50",
+    "sha": "2252a14e810aa9b85c2d560bd7070c802206ecf6",
     "name": "semantic-pull-request",
     "description": "Ensure your PR title matches the Conventional Commits spec (https://www.conventionalcommits.org/).",
     "inputs": [
