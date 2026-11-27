@@ -5,7 +5,7 @@
 #   docker build -t simulci . && docker run --rm --read-only -p 8080:8080 simulci
 
 # Build: the web app (apps/web/dist) and the server's one-file bundle (apps/server/dist/server.mjs).
-FROM node:24-trixie@sha256:8c761eca2bf7eec965f946cf47b8090143cb41f45f2f8699af0cc0298d2d2d19 AS build
+FROM node:24-trixie@sha256:770709aad57b8fdddbad76e76ce88139b9f8411eff7339bb0d923558498550b4 AS build
 WORKDIR /repo
 # corepack installs the pnpm package.json names, without asking.
 ENV CI=true COREPACK_ENABLE_DOWNLOAD_PROMPT=0
